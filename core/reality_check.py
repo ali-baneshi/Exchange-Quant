@@ -1,0 +1,102 @@
+#!/usr/bin/env python3
+
+"""
+White's Reality Check — now with block bootstrap and Bonferroni correction.
+
+Delegates to validation.py for the heavy lifting.
+"""
+
+from validation import block_bootstrap_pvalue, bonferroni_correct, N_HYPOTHESES_TOTAL
+
+
+def reality_check(errors_c, errors_q, n_bootstrap=10000, seed=42):
+    """
+    White's Reality Check with block bootstrap (handles autocorrelation).
+    Applies Bonferroni correction for multiple testing.
+
+    H0: quantum_win_rate <= 0.5  (quantum does not outperform)
+    HA: quantum_win_rate > 0.5   (quantum outperforms)
+
+    Returns dict with win_rate, raw_p_value, corrected_p_value, interpretation.
+    """
+    if not errors_c or not errors_q or len(errors_c) != len(errors_q):
+        return {"error": "Need equal-length error arrays"}
+
+    n = len(errors_c)
+    wins = sum(1 for ec, eq in zip(errors_c, errors_q) if eq < ec)
+    ties = sum(1 for ec, eq in zip(errors_c, errors_q) if ec == eq)
+    losses = n - wins - ties
+    win_rate = wins / n
+
+    raw_p = block_bootstrap_pvalue(errors_c, errors_q, n_bootstrap, seed)
+    corrected_p, sig_005, sig_001 = bonferroni_correct(raw_p)
+
+    if sig_001:
+        interpretation = "HIGHLY_SIGNIFICANT"
+    elif sig_005:
+        interpretation = "SIGNIFICANT"
+    elif corrected_p < 0.10:
+        interpretation = "MARGINAL"
+    else:
+        interpretation = "NOT_SIGNIFICANT"
+
+    return {
+        "n_observations": n,
+        "wins": wins,
+        "ties": ties,
+        "losses": losses,
+        "win_rate": round(win_rate, 4),
+        "raw_p_value": round(raw_p, 4),
+        "corrected_p_value": round(corrected_p, 4),
+        "n_tests_corrected": N_HYPOTHESES_TOTAL,
+        "n_bootstrap": n_bootstrap,
+        "interpretation": interpretation,
+    }
+
+
+def main():
+    import sys
+
+    c_errs = [
+        0.093, 0.088, 0.084, 0.070, 0.069, 0.068, 0.068, 0.068,
+        0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067,
+        0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067,
+        0.067, 0.067, 0.067, 0.067, 0.067, 0.067,
+        0.034, 0.049, 0.059, 0.063, 0.062, 0.054, 0.056,
+        0.109, 0.021, 0.022, 0.042, 0.266, 0.162, 0.231,
+    ]
+    q_errs = [
+        0.356, 0.198, 0.160, 0.122, 0.084, 0.047, 0.040, 0.033,
+        0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
+        0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
+        0.000, 0.000, 0.000, 0.000, 0.000, 0.000,
+        0.033, 0.031, 0.029, 0.026, 0.024, 0.022, 0.020,
+        0.184, 0.280, 0.293, 0.307, 0.020, 0.398, 0.064,
+    ]
+
+    results = reality_check(c_errs, q_errs, n_bootstrap=10000)
+
+    print()
+    print("=" * 60)
+    print("  WHITE'S REALITY CHECK — Quantum vs Classical Ensemble")
+    print("=" * 60)
+    print(f"  Observations:       {results['n_observations']}")
+    print(f"  Quantum wins:       {results['wins']}  ({results['wins']/results['n_observations']*100:.1f}%)")
+    print(f"  Losses:             {results['losses']}  ({results['losses']/results['n_observations']*100:.1f}%)")
+    print(f"  Ties:               {results['ties']}")
+    print(f"  Win rate:           {results['win_rate']:.4f}")
+    print(f"  Raw bootstrap p:    {results['raw_p_value']:.4f}")
+    print(f"  Bonferroni p:       {results['corrected_p_value']:.4f}  "
+          f"(corrected for {results['n_tests_corrected']} tests)")
+    print(f"  Interpretation:     {results['interpretation']}")
+    if results['interpretation'] == 'HIGHLY_SIGNIFICANT':
+        print(f"  -> Quantum outperforms classical (Bonferroni-corrected p<0.01)")
+    elif results['interpretation'] == 'SIGNIFICANT':
+        print(f"  -> Quantum outperforms classical (Bonferroni-corrected p<0.05)")
+    else:
+        print(f"  -> Not enough evidence after correction")
+    print()
+
+
+if __name__ == "__main__":
+    main()

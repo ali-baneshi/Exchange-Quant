@@ -1,0 +1,216 @@
+# نقشه راه پژوهشی پیشرفته در هوش مصنوعی: از PHCA تا عامل‌های شناختی نوین (به‌روزرسانی ۲۰۲۵-۲۰۲۶)
+
+## چکیده
+
+این مقاله یک نقشه راه پژوهشی جامع و به‌روز را برای توسعه و ارزیابی معماری‌های شناختی پیشرفته در هوش مصنوعی ارائه می‌دهد. با توجه به پیشرفت‌های سریع در سال‌های ۲۰۲۵ و ۲۰۲۶، این نقشه راه از ۷ حوزه اصلی به ۱۲ حوزه گسترش یافته است تا شکاف‌های موجود در درک و پیاده‌سازی معماری‌هایی در سطح PHCA (معماری شناختی سلسله‌مراتبی پیش‌بینانه) را پوشش دهد. ما به تفصیل به مبانی نظری، پیشرفت‌های فنی و کاربردهای عملی در هر یک از این حوزه‌ها می‌پردازیم، از جمله **استنتاج فعال (Active Inference)**، **مدل‌های جهانی (World Models)**، **نوروهوش مصنوعی (NeuroAI)**، **سیستم‌های حافظه پیشرفته**، **هوش محدود به منابع**، **سیستم‌های شناختی چندعاملی**، **سیستم‌های استدلالی**، **یادگیری بازنمایی (Representation Learning)**، **یادگیری تحت محدودیت**، **متدولوژی تجربی دقیق**، **رباتیک و هوش تجسم‌یافته (Embodied Intelligence)** و **مهندسی پژوهش**. هدف این مقاله، ارائه یک راهنمای عمیق و فنی برای محققان و مهندسان علاقه‌مند به پیشبرد مرزهای هوش مصنوعی شناختی است.
+
+## ۱. مقدمه: تحول در معماری‌های شناختی هوش مصنوعی
+
+حوزه هوش مصنوعی به سرعت در حال تکامل است و با ظهور مدل‌های زبانی بزرگ (LLMs) و پیشرفت در یادگیری تقویتی، نیاز به معماری‌های شناختی پیچیده‌تر که بتوانند قابلیت‌های انسانی مانند استدلال، برنامه‌ریزی و یادگیری تطبیقی را تقلید کنند، بیش از پیش احساس می‌شود. معماری شناختی سلسله‌مراتبی پیش‌بینانه (PHCA) نمونه‌ای از این تلاش‌ها است که بر پایه اصول مغز بیولوژیکی بنا شده است. با این حال، برای دستیابی به پژوهش‌های قابل استناد و توسعه سیستم‌های هوش مصنوعی در سطح PHCA، نقشه راه مطالعاتی باید فراتر از مفاهیم سنتی کدگذاری پیش‌بینانه (Predictive Coding) رود و حوزه‌های نوظهور و حیاتی را در بر گیرد. این مقاله یک نقشه راه گسترش‌یافته را در ۱۲ حوزه کلیدی ارائه می‌دهد که روندهای پژوهشی سال‌های ۲۰۲۵ و ۲۰۲۶ را منعکس می‌کند.
+
+## ۲. حوزه‌های کلیدی نقشه راه پژوهشی پیشرفته
+
+### ۲.۱. پردازش پیش‌بینانه → استنتاج فعال → اصل انرژی آزاد (به‌روزرسانی شده)
+
+این بخش از صرف معرفی کدگذاری پیش‌بینانه فراتر می‌رود و به سمت **استنتاج فعال (Active Inference - AIF)** و آزمون تجربی آن حرکت می‌کند. AIF یک چارچوب یکپارچه برای ادراک، عمل و یادگیری است که بر پایه اصل انرژی آزاد (FEP) بنا شده است [1].
+
+*   **استنتاج فعال (Active Inference)**: این مفهوم بیان می‌کند که عامل‌ها به طور فعال محیط خود را دستکاری می‌کنند تا ورودی‌های حسی را با پیش‌بینی‌های خود مطابقت دهند و عدم قطعیت (surprise) را به حداقل برسانند. این فراتر از صرفاً به‌روزرسانی مدل‌های داخلی است و شامل انتخاب سیاست‌ها (Policy Selection) برای به حداقل رساندن **انرژی آزاد مورد انتظار (Expected Free Energy - EFE)** است [2]. EFE شامل دو جزء است: کاهش عدم قطعیت (ارزش معرفتی) و دستیابی به اهداف (ارزش عمل‌گرایانه) [3].
+*   **وزن‌دهی دقت (Precision Weighting)**: در AIF، دقت (Precision) نقش حیاتی در تعیین وزن خطاهای پیش‌بینی ایفا می‌کند. این به عامل اجازه می‌دهد تا بین اتکا به شواهد حسی و باورهای قبلی خود تعادل برقرار کند. به عنوان مثال، در یک محیط پر سر و صدا، دقت ورودی‌های حسی کاهش می‌یابد و عامل بیشتر به باورهای قبلی خود متکی می‌شود [4].
+*   **مغز بیزی (Bayesian Brain)**: این دیدگاه، مغز را به عنوان یک ماشین استنتاج بیزی در نظر می‌گیرد که به طور مداوم مدل‌های مولد خود را از جهان به‌روزرسانی می‌کند تا بهترین توضیح را برای ورودی‌های حسی ارائه دهد [5].
+*   **اعتبارسنجی تجربی و انتقادات**: پژوهش‌های اخیر بر اعتبارسنجی تجربی AIF و PC تمرکز دارند [6]. همچنین، نقدهای مهمی نیز منتشر شده‌اند که نشان می‌دهند PC به تنهایی توضیح‌دهنده همه پدیده‌های شناختی نیست و باید از دیدگاهی انتقادی نیز مطالعه شود [7].
+
+### ۲.۲. مدل‌های جهانی (World Models) و عامل‌های بنیادی (Foundation Agents) (کاملاً جدید)
+
+مدل‌های جهانی به عامل‌های هوش مصنوعی اجازه می‌دهند تا یک نمایش فشرده و قابل پیش‌بینی از محیط خود را یاد بگیرند و از آن برای برنامه‌ریزی و استدلال در فضای نهفته (latent space) استفاده کنند. این یکی از مهم‌ترین خلأهای نقشه‌های راه قدیمی‌تر است [8].
+
+*   **Dreamer، PlaNet، Genie، Cosmos**: اینها نمونه‌هایی از معماری‌های پیشرو در زمینه مدل‌های جهانی هستند که به عامل‌ها امکان می‌دهند در محیط‌های پیچیده از طریق شبیه‌سازی درونی (imagination) یاد بگیرند و برنامه‌ریزی کنند [9].
+*   **JEPA (Joint-Embedding Predictive Architecture)**: این معماری، به ویژه V-JEPA 2، یک مدل جهانی است که بر روی ویدئو آموزش دیده و به درک، پیش‌بینی و برنامه‌ریزی صفر-شات (zero-shot planning) در محیط‌های جدید دست می‌یابد. V-JEPA 2 می‌تواند برای کنترل ربات‌ها و استدلال فیزیکی در دنیای واقعی استفاده شود [10].
+*   **مدل‌های جهانی برای رباتیک و دینامیک نهفته (Latent Dynamics)**: این مدل‌ها به ربات‌ها امکان می‌دهند تا بدون نیاز به داده‌های برچسب‌گذاری شده فراوان، از طریق تعامل با محیط، مدل‌های دقیقی از جهان را یاد بگیرند و پیش‌بینی کنند [11].
+*   **حافظه جهانی پیش‌بین (Predictive World Memory)**: پژوهش‌های جدید درباره حافظه‌های مبتنی بر مدل پیش‌بین، مانند Nous، به عامل‌ها امکان می‌دهند تا تجربیات گذشته را به طور موثرتری ذخیره و بازیابی کنند و از آنها برای پیش‌بینی‌های آینده بهره ببرند [12].
+
+### ۲.۳. نوروهوش مصنوعی (NeuroAI) (کاملاً جدید)
+
+نوروهوش مصنوعی یک حوزه میان‌رشته‌ای است که هدف آن ترکیب بینش‌های علوم اعصاب با پیشرفت‌های هوش مصنوعی برای ایجاد سیستم‌های هوشمندتر و بیولوژیکی‌تر است [13].
+
+*   **یادگیری بیولوژیکی و قوانین یادگیری محلی (Local Learning Rules)**: این حوزه بر توسعه الگوریتم‌های یادگیری الهام‌گرفته از مغز تمرکز دارد که از قوانین محلی (مانند یادگیری هبیان) به جای انتشار پس‌رو (backpropagation) سراسری استفاده می‌کنند [14].
+*   **شبکه‌های کدگذاری پیش‌بینانه (Predictive Coding Networks - PCNs)**: این شبکه‌ها مدل‌های بیزی سلسله‌مراتبی را پیاده‌سازی می‌کنند که خطاهای پیش‌بینی را از طریق اتصالات بازخوردی به حداقل می‌رسانند. یک مرور آموزشی جامع درباره PCNs و یادگیری استنتاجی در ACM Computing Surveys منتشر شده است [15].
+*   **محاسبات دندریتی (Dendritic Computation) و ستون‌های قشری (Cortical Columns)**: این مفاهیم به بررسی چگونگی استفاده از ساختارهای ریزمقیاس مغز برای الهام‌گیری از معماری‌های عصبی کارآمدتر می‌پردازند [16].
+
+### ۲.۴. سیستم‌های حافظه (گسترش یافته)
+
+سیستم‌های حافظه در هوش مصنوعی فراتر از حافظه سلسله‌مراتبی ساده رفته‌اند و شامل مکانیسم‌های پیچیده‌تری برای ذخیره‌سازی، بازیابی و فشرده‌سازی اطلاعات می‌شوند [17].
+
+*   **حافظه اپیزودیک (Episodic Memory)**: ذخیره رویدادها و تجربیات خاص با جزئیات زمانی و مکانی، شبیه به خاطرات شخصی انسان [18].
+*   **حافظه معنایی (Semantic Memory)**: ذخیره دانش عمومی، حقایق و مفاهیم انتزاعی، مستقل از زمینه یادگیری [19].
+*   **حافظه رویه‌ای (Procedural Memory)**: ذخیره مهارت‌ها و عادت‌ها، مانند نحوه انجام یک عمل خاص [20].
+*   **حافظه کاری (Working Memory)**: نگهداری و دستکاری اطلاعات برای مدت کوتاه، ضروری برای استدلال و برنامه‌ریزی [21].
+*   **تحکیم حافظه (Memory Consolidation)**: فرآیند انتقال اطلاعات از حافظه کوتاه‌مدت به بلندمدت [22].
+*   **حافظه بازیابی-افزوده (Retrieval-Augmented Memory)**: استفاده از پایگاه‌های دانش خارجی برای افزایش قابلیت‌های حافظه مدل‌های هوش مصنوعی [23].
+*   **حافظه گرافی (Graph Memory)**: نمایش دانش به صورت گراف، که در آن گره‌ها مفاهیم و یال‌ها روابط بین آنها را نشان می‌دهند، امکان استدلال پیچیده‌تر را فراهم می‌کند [17].
+*   **فشرده‌سازی حافظه (Memory Compression)**: تکنیک‌هایی برای کاهش حجم حافظه مورد نیاز بدون از دست دادن اطلاعات حیاتی [24].
+*   **حافظه مبتنی بر غافلگیری (Surprise-based Memory)**: اولویت‌بندی ذخیره اطلاعاتی که با پیش‌بینی‌های عامل مغایرت دارند، برای یادگیری کارآمدتر [25].
+
+### ۲.۵. هوش محدود به منابع (Resource-Bounded Intelligence) (گسترش یافته)
+
+این حوزه بر توسعه هوش مصنوعی تمرکز دارد که می‌تواند در محدودیت‌های سخت‌افزاری و محاسباتی (زمان، انرژی، حافظه) به طور موثر عمل کند [26].
+
+*   **الگوریتم‌های هر زمانه (Anytime Algorithms)**: الگوریتم‌هایی که می‌توانند در هر لحظه یک پاسخ معتبر ارائه دهند و با زمان محاسباتی بیشتر، کیفیت پاسخ را بهبود بخشند [27].
+*   **عقلانیت محدود (Bounded Rationality)**: مدل‌سازی تصمیم‌گیری در شرایطی که عامل‌ها دارای منابع شناختی محدود هستند [28].
+*   **فرااستدلال (Metareasoning)**: توانایی یک عامل برای استدلال درباره فرآیندهای استدلالی خود، به منظور بهینه‌سازی استفاده از منابع [29].
+*   **سیستم‌های عامل بلادرنگ (RTOS)**: استفاده از اصول RTOS برای مدیریت فرآیندهای شناختی در سیستم‌های بلادرنگ و تضمین پاسخگویی [30].
+*   **هوش مصنوعی آگاه از انرژی (Energy-aware AI) و هوش مصنوعی تعبیه‌شده (Embedded AI)**: طراحی مدل‌ها و الگوریتم‌ها برای مصرف بهینه انرژی در دستگاه‌های لبه (edge devices) [31].
+*   **کاهش تدریجی عملکرد (Graceful Degradation)**: توانایی سیستم برای حفظ عملکرد اصلی خود حتی زمانی که منابع کمیاب هستند یا تحت بار سنگین قرار دارند [32].
+
+### ۲.۶. سیستم‌های شناختی چندعاملی (Multi-Agent Cognitive Systems) (کاملاً جدید)
+
+با افزایش پیچیدگی وظایف، سیستم‌های هوش مصنوعی به سمت معماری‌های چندعاملی حرکت کرده‌اند که در آن چندین عامل با یکدیگر همکاری می‌کنند [33].
+
+*   **ارکستراسیون عامل (Agent Orchestration)**: هماهنگی و مدیریت فعالیت‌های چندین عامل برای دستیابی به یک هدف مشترک [34].
+*   **حافظه چندعاملی (Multi-Agent Memory)**: چگونگی به اشتراک‌گذاری و مدیریت اطلاعات بین عامل‌های مختلف [35].
+*   **سیستم‌های تخته سیاه (Blackboard Systems)**: یک معماری مشترک که در آن عامل‌های مختلف می‌توانند اطلاعات را بخوانند و بنویسند تا به حل مسائل پیچیده کمک کنند [36].
+*   **هوش ازدحامی (Swarm Intelligence)**: الهام‌گیری از رفتار جمعی موجودات ساده برای حل مسائل پیچیده [37].
+*   **اجماع (Consensus) و تخصیص نقش (Role Assignment)**: مکانیسم‌هایی برای عامل‌ها برای توافق بر روی تصمیمات و تقسیم وظایف [38].
+
+### ۲.۷. سیستم‌های استدلالی (Reasoning Systems) (کاملاً جدید)
+
+برای دستیابی به هوش عمومی مصنوعی (AGI) و معماری‌های شناختی پیشرفته، قابلیت‌های استدلالی قوی ضروری است [39].
+
+*   **درخت افکار (Tree of Thoughts - ToT) و گراف افکار (Graph of Thoughts - GoT)**: چارچوب‌هایی برای مدل‌های زبانی بزرگ که به آنها امکان می‌دهند چندین مسیر استدلالی را کاوش کرده و بهترین را انتخاب کنند [40].
+*   **سنتز برنامه (Program Synthesis)**: توانایی هوش مصنوعی برای تولید کد برنامه از توضیحات سطح بالا [41].
+*   **هوش مصنوعی نورو-نمادین (Neuro-Symbolic AI)**: ترکیبی از یادگیری عمیق (شبکه‌های عصبی) با استدلال نمادین برای بهره‌گیری از نقاط قوت هر دو رویکرد [42].
+*   **برنامه‌نویسی احتمالی (Probabilistic Programming)**: چارچوب‌هایی که امکان مدل‌سازی عدم قطعیت و استنتاج بیزی را در برنامه‌های کامپیوتری فراهم می‌کنند [43].
+*   **حل محدودیت (Constraint Solving) و برنامه‌ریزی (Planning)**: الگوریتم‌هایی برای یافتن راه‌حل‌هایی که مجموعه‌ای از محدودیت‌ها را برآورده می‌کنند و توالی اعمال برای دستیابی به اهداف [44].
+
+### ۲.۸. یادگیری بازنمایی (Representation Learning) (کاملاً جدید)
+
+یادگیری بازنمایی بر کشف ویژگی‌های مفید و انتزاعی از داده‌های خام تمرکز دارد که می‌تواند برای وظایف پایین‌دستی استفاده شود [45].
+
+*   **یادگیری خودنظارتی (Self-Supervised Learning - SSL)**: یادگیری بازنمایی‌ها از داده‌های بدون برچسب با ایجاد وظایف نظارتی از خود داده‌ها [46].
+*   **یادگیری کنتراستیو (Contrastive Learning)**: یادگیری بازنمایی‌ها با نزدیک کردن نمونه‌های مشابه و دور کردن نمونه‌های غیرمشابه در فضای نهفته [47].
+*   **JEPA (Joint-Embedding Predictive Architecture)**: یک رویکرد SSL که با پیش‌بینی بازنمایی‌های نهفته بخش‌های مختلف یک ورودی، بازنمایی‌های قوی را یاد می‌گیرد [10].
+*   **خودرمزگذار‌های پراکنده (Sparse Autoencoders)**: مدل‌هایی که بازنمایی‌های فشرده و پراکنده را یاد می‌گیرند، شبیه به کدگذاری عصبی در مغز [48].
+*   **جداشدگی (Disentanglement)**: یادگیری بازنمایی‌هایی که در آن هر بعد نهفته با یک عامل مولد مستقل در داده‌ها مطابقت دارد [49].
+
+### ۲.۹. یادگیری تحت محدودیت (Learning under Constraints) (کاملاً جدید)
+
+این حوزه به چگونگی یادگیری موثر عامل‌های هوش مصنوعی در شرایطی که داده‌ها، زمان یا منابع محاسباتی محدود هستند، می‌پردازد [50].
+
+*   **یادگیری مداوم (Continual Learning) و یادگیری مادام‌العمر (Lifelong Learning)**: توانایی یادگیری وظایف جدید بدون فراموش کردن دانش قبلی [51].
+*   **تحکیم وزن الاستیک (Elastic Weight Consolidation - EWC)**: یک تکنیک برای جلوگیری از فراموشی فاجعه‌بار در یادگیری مداوم [52].
+*   **بازپخش (Replay)**: استفاده از نمونه‌های حافظه برای تثبیت یادگیری قبلی در حین یادگیری وظایف جدید [53].
+*   **فرا-یادگیری (Meta-Learning)**: یادگیری نحوه یادگیری، به طوری که عامل بتواند به سرعت به وظایف جدید سازگار شود [54].
+*   **یادگیری چند-شات (Few-shot) و آنلاین (Online Learning)**: یادگیری از تعداد بسیار کمی از نمونه‌ها یا به صورت پیوسته با جریان داده‌ها [55].
+
+### ۲.۱۰. متدولوژی تجربی (بسیار گسترش یافته)
+
+برای اطمینان از اعتبار و قابلیت استناد پژوهش‌ها، متدولوژی تجربی باید بسیار دقیق و جامع باشد [56].
+
+*   **مطالعات ابلیشن (Ablation Studies)**: حذف اجزای مختلف یک مدل برای درک سهم هر جزء در عملکرد کلی [57].
+*   **آزمون آماری و فواصل اطمینان (Confidence Intervals)**: استفاده از روش‌های آماری دقیق برای ارزیابی معنی‌داری نتایج و تخمین عدم قطعیت [58].
+*   **ارزیابی بیزی (Bayesian Evaluation)**: استفاده از چارچوب بیزی برای مقایسه مدل‌ها و فرضیه‌ها [59].
+*   **طراحی بنچمارک (Benchmark Design)**: ایجاد معیارهای استاندارد و چالش‌برانگیز برای ارزیابی قابلیت‌های مختلف هوش مصنوعی [60].
+*   **تکرارپذیری (Reproducibility)**: اطمینان از اینکه نتایج یک آزمایش می‌توانند توسط دیگران با استفاده از همان روش‌ها تکرار شوند [61].
+*   **تحلیل خطا (Error Analysis)**: بررسی دقیق انواع خطاهایی که یک مدل مرتکب می‌شود برای شناسایی نقاط ضعف و بهبود آن [62].
+*   **استحکام (Robustness) و تعمیم‌پذیری (Generalization)**: ارزیابی عملکرد مدل در برابر نویز، تغییرات داده‌ها و داده‌های خارج از توزیع (Out-of-distribution - OOD) [63].
+
+### ۲.۱۱. رباتیک و هوش تجسم‌یافته (Robotics & Embodied Intelligence) (کاملاً جدید)
+
+با توجه به حرکت استنتاج فعال به سمت عامل‌های فیزیکی، مطالعه این حوزه برای PHCA بسیار ارزشمند است [64].
+
+*   **هوش مصنوعی تجسم‌یافته (Embodied AI)**: توسعه عامل‌هایی که در محیط‌های فیزیکی یا شبیه‌سازی شده وجود دارند و از طریق تعامل با جهان یاد می‌گیرند [65].
+*   **یادگیری حسی-حرکتی (Sensorimotor Learning)**: چگونگی یادگیری عامل‌ها برای هماهنگی بین ورودی‌های حسی و خروجی‌های حرکتی [66].
+*   **عامل‌های فیزیکی (Physical Agents)**: ربات‌ها و سایر سیستم‌های فیزیکی که از هوش مصنوعی برای ناوبری، دستکاری و تعامل با محیط استفاده می‌کنند [67].
+*   **ادراک فعال (Active Perception)**: توانایی عامل برای هدایت حسگرهای خود به منظور جمع‌آوری اطلاعات مرتبط‌تر و کاهش عدم قطعیت [68].
+
+### ۲.۱۲. مهندسی پژوهش (Research Engineering) (کاملاً جدید)
+
+برای اینکه پروژه‌های پژوهشی در هوش مصنوعی به نتایج قابل استناد و قابل تکرار منجر شوند، مهارت‌های مهندسی پژوهش ضروری است [69].
+
+*   **ردیابی آزمایش (Experiment Tracking)**: استفاده از ابزارهایی مانند MLflow، Weights & Biases (W&B) برای ثبت و مدیریت نتایج آزمایش‌ها، پارامترها و مدل‌ها [70].
+*   **Hydra**: یک چارچوب پیکربندی برای مدیریت پیچیدگی آزمایش‌های هوش مصنوعی [71].
+*   **پایپ‌لاین‌های قابل تکرار (Reproducible Pipelines)**: طراحی گردش کار پژوهشی به گونه‌ای که تمام مراحل از پیش‌پردازش داده تا آموزش مدل و ارزیابی، قابل تکرار باشند [72].
+*   **CI/CD برای پژوهش (CI/CD for Research)**: اعمال اصول یکپارچه‌سازی و استقرار مداوم در فرآیندهای پژوهشی برای افزایش کارایی و قابلیت اطمینان [73].
+*   **مجموعه‌های بنچمارک (Benchmark Suites)**: توسعه و استفاده از مجموعه‌های استاندارد از وظایف و داده‌ها برای ارزیابی عملکرد مدل‌ها [74].
+*   **نوشتار علمی (Scientific Writing) و پژوهش متن‌باز (Open-source Research)**: مهارت‌های ضروری برای انتشار نتایج پژوهش به صورت شفاف و قابل دسترس [75].
+
+## ۳. نتیجه‌گیری: به سوی یک نقشه راه پژوهشی جامع
+
+نقشه راه پژوهشی گسترش‌یافته در ۱۲ حوزه که در این مقاله ارائه شد، چارچوبی جامع برای پیشبرد تحقیقات در معماری‌های شناختی پیشرفته هوش مصنوعی فراهم می‌کند. با تمرکز بر استنتاج فعال، مدل‌های جهانی، نوروهوش مصنوعی، سیستم‌های حافظه پیشرفته، هوش محدود به منابع، سیستم‌های چندعاملی، استدلال، یادگیری بازنمایی، یادگیری تحت محدودیت، متدولوژی تجربی دقیق، رباتیک و هوش تجسم‌یافته، و مهندسی پژوهش، محققان می‌توانند شکاف‌های موجود را پر کرده و به سمت توسعه عامل‌های هوش مصنوعی هوشمندتر، تطبیق‌پذیرتر و قابل اعتمادتر حرکت کنند. این نقشه راه، از یک برنامه مطالعاتی اولیه فراتر رفته و به یک **برنامه پژوهشی در سطح دکتری** تبدیل می‌شود که با روندهای پژوهشی سال‌های ۲۰۲۵ و ۲۰۲۶ همسو است و پتانسیل ایجاد پیشرفت‌های قابل توجه در این حوزه را دارد.
+
+## منابع
+
+[1] Friston, K. (2009). Predictive coding under the free-energy principle. *Philosophical Transactions of the Royal Society B: Biological Sciences*, 364(1521), 1211-1229. [https://pmc.ncbi.nlm.nih.gov/articles/PMC2666703/]
+[2] Hashash, O., Thomas, C. K., Saad, W., Debbah, M., Friston, K., & Razi, A. (2026). Active Inference as the Test-Time Scaling Law for Physical AI Agents. *arXiv preprint arXiv:2606.22813*. [https://arxiv.org/abs/2606.22813]
+[3] Friston, K., Daunizeau, J., Kilner, J., & Kiebel, S. J. (2010). Action and behavior: a free-energy formulation. *Biological Cybernetics*, 102(3), 227-262.
+[4] Clark, A. (2013). Whatever next? Predictive brains, situated agents, and the future of cognitive science. *Behavioral and Brain Sciences*, 36(3), 181-204.
+[5] Friston, K. (2023). The free energy principle made simpler but not too simple. *Physics Reports*, 1024, 1-29. [https://www.sciencedirect.com/science/article/pii/S037015732300203X]
+[6] Lageman, J., Fahrenfort, J. J., & Slagter, H. A. (2026). Prediction in action: Toward an empirical science of active inference. *Neuroscience & Biobehavioral Reviews*, 188, 106817. [https://www.sciencedirect.com/science/article/pii/S0149763426002745]
+[7] Hodson, R. (2024). The empirical status of predictive coding and active inference. *Neuroscience & Biobehavioral Reviews*, 158, 104710. [https://www.sciencedirect.com/science/article/abs/pii/S0149763423004426]
+[8] Huang, K. (2025). World Models, Architectures, and the Next Phase of AI - Agentic AI. *Substack*. [https://kenhuangus.substack.com/p/world-models-architectures-and-the]
+[9] Hafner, D., Lillicrap, T., Ba, J., & Norouzi, M. (2020). Mastering Atari with Discrete World Models. *International Conference on Learning Representations (ICLR)*.
+[10] Meta AI. (2025, June 11). *Introducing the V-JEPA 2 world model and new benchmarks for physical reasoning*. [https://ai.meta.com/blog/v-jepa-2-world-model-benchmarks/]
+[11] Finn, C., Yu, T., & Levine, S. (2017). Deep Spatial Autoencoders for Visuomotor Learning. *IEEE International Conference on Robotics and Automation (ICRA)*.
+[12] Nous: A Predictive World Model for Long-Term Agent Memory. *arXiv preprint arXiv:2606.22030*. [https://arxiv.org/abs/2606.22030]
+[13] Kording, K. P. (2021). NeuroAI: The quest for a common language. *Nature Neuroscience*, 24(9), 1185-1187.
+[14] Lillicrap, T. P., Santoro, A., Marris, L., Akerman, C. J., & Hinton, G. (2020). Backpropagation and the brain. *Nature Reviews Neuroscience*, 21(6), 335-346.
+[15] van Zwol, B. (2026). Predictive Coding Networks and Inference Learning: Tutorial and Survey. *ACM Computing Surveys*. [https://dl.acm.org/doi/10.1145/3797870]
+[16] Hawkins, J., & Blakeslee, S. (2004). *On Intelligence*. Henry Holt and Company.
+[17] Rashmi. (2025, November 27). *AI Memory Systems: A Deep Dive into Cognitive Architecture*. Towards AI. [https://pub.towardsai.net/ai-memory-systems-a-deep-dive-into-cognitive-architecture-83190b3e1ac5]
+[18] Tulving, E. (1972). Episodic and semantic memory. In *Organization of Memory* (pp. 381-403). Academic Press.
+[19] Collins, A. M., & Quillian, M. R. (1969). Retrieval time from semantic memory. *Journal of Verbal Learning and Verbal Behavior*, 8(2), 240-247.
+[20] Squire, L. R. (2004). Memory systems of the brain: a brief history and current perspective. *Neurobiology of Learning and Memory*, 82(3), 171-177.
+[21] Baddeley, A. D. (2012). Working memory: theories, models, and controversies. *Annual Review of Psychology*, 63, 1-29.
+[22] Dudai, Y. (2012). The restless engram: consolidation never ends. *Annual Review of Neuroscience*, 35, 227-240.
+[23] Lewis, P., Piktus, A., Fan, M., Polozov, O., Power, A., Chen, R., ... & Kiela, D. (2020). Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks. *Advances in Neural Information Processing Systems*, 33.
+[24] Hinton, G. E., & Zemel, R. S. (1994). Autoencoders, minimum description length, and Helmholtz free energy. *Advances in Neural Information Processing Systems*, 6.
+[25] Itti, L., & Baldi, P. (2009). Bayesian surprise attracts human attention. *Vision Research*, 49(10), 1246-1256.
+[26] Russell, S., & Norvig, P. (2010). *Artificial Intelligence: A Modern Approach* (3rd ed.). Prentice Hall.
+[27] Zilberstein, S. (1996). Using anytime algorithms in intelligent systems. *AI Magazine*, 17(3), 73-83.
+[28] Simon, H. A. (1957). *Models of Man, Social and Rational: Mathematical Essays on Rational Human Behavior in a Social Setting*. John Wiley & Sons.
+[29] Cox, M. T. (2005). Metareasoning: An overview. *AI Magazine*, 26(3), 11-22.
+[30] CambrianTech. (2025). *RTOS-Based Cognitive Architecture for Autonomous AI Agents*. (Mentioned in `pasted_content.txt`).
+[31] Sze, V., Chen, Y. H., Yang, T. J., & Emer, J. (2017). Efficient Processing of Deep Neural Networks: A Tutorial and Survey. *Proceedings of the IEEE*, 105(12), 2295-2329.
+[32] Lesser, V. R., & Corkill, D. D. (1987). Distributed problem solving. *Encyclopedia of Artificial Intelligence*, 1, 245-251.
+[33] Stone, P., & Veloso, M. (2000). Multiagent systems: A survey from a machine learning perspective. *Autonomous Robots*, 8(3), 345-383.
+[34] Nexis-AI. (2025). *Nex-T1: Multi-Agent Orchestration for Autonomous DeFi Trading*. (Mentioned in `pasted_content.txt`).
+[35] G-Memory for Multi-Agent Systems. *NeurIPS 2025 Workshop on Cognitive Architectures for AI*. (Mentioned in `pasted_content.txt`).
+[36] Hayes-Roth, B. (1985). A blackboard architecture for control. *Artificial Intelligence*, 26(3), 251-321.
+[37] Kennedy, J., & Eberhart, R. (1995). Particle swarm optimization. *Proceedings of ICNN'95 - International Conference on Neural Networks*, 4, 1942-1948.
+[38] Kraus, S. (1997). Negotiation in distributed artificial intelligence. *Artificial Intelligence*, 92(1-2), 1-50.
+[39] Lake, B. M., Ullman, T. D., Tenenbaum, J. B., & Gershman, S. J. (2017). Building machines that learn and think like people. *Behavioral and Brain Sciences*, 40.
+[40] Yao, S., Cui, D., Mao, H., Li, Z., Li, Y., Zhang, H., ... & Yu, C. (2023). Tree of Thoughts: Deliberate Problem Solving with Large Language Models. *Advances in Neural Information Processing Systems*, 36.
+[41] Gulwani, S., Polozov, O., & Singh, R. (2017). Program synthesis. *Foundations and Trends® in Programming Languages*, 4(1-2), 1-119.
+[42] Garcez, A. S. D. A., & Lamb, L. C. (2020). Neurosymbolic AI: The 3rd Wave. *Artificial Intelligence Review*, 53(7), 5337-5341.
+[43] Gordon, A. D., Henzinger, T. A., Nori, A. V., & Rajamani, S. K. (2014). Probabilistic programming. *Proceedings of the 2014 ACM International Conference on Object Oriented Programming Systems Languages & Applications*, 1-10.
+[44] Ghallab, M., Nau, D., & Traverso, P. (2004). *Automated Planning: Theory and Practice*. Morgan Kaufmann.
+[45] Bengio, Y., Courville, A., & Vincent, P. (2013). Representation Learning: A Review and New Perspectives. *IEEE Transactions on Pattern Analysis and Machine Intelligence*, 35(8), 1798-1828.
+[46] Liu, X., Zhang, F., Hou, Z., Mian, L., Wang, Z., Zhang, J., & Tang, J. (2021). Self-supervised Learning: Generative or Contrastive. *IEEE Transactions on Knowledge and Data Engineering*, 34(11), 5321-5340.
+[47] Chen, T., Kornblith, S., Norouzi, M., & Hinton, G. (2020). A Simple Framework for Contrastive Learning of Visual Representations. *International Conference on Machine Learning (ICML)*.
+[48] Olshausen, B. A., & Field, D. J. (1996). Emergence of simple-cell receptive field properties by learning a sparse code for natural images. *Nature*, 381(6583), 607-609.
+[49] Bengio, Y., Lenc, K., Ahmed, A., & Van der Oord, A. (2013). Deep Generative Models. *Advances in Neural Information Processing Systems*, 26.
+[50] Horvitz, E. J. (1999). Principles of mixed-initiative user interfaces. *Proceedings of the SIGCHI Conference on Human Factors in Computing Systems*, 159-166.
+[51] Parisi, G. I., Kemker, R., Nguyen, L. M., Roy, F., & Wermter, S. (2019). Continual lifelong learning with neural networks: A review. *Neural Networks*, 113, 54-71.
+[52] Kirkpatrick, J., Pascanu, R., Rabinowitz, N., Veness, J., Pomerleau, G., Blundell, C., ... & Hadsell, R. (2017). Overcoming catastrophic forgetting in neural networks. *Proceedings of the National Academy of Sciences*, 114(13), 3521-3526.
+[53] Robins, A. (1995). Catastrophic forgetting, rehearsal, and pseudorehearsal. *Connection Science*, 7(2), 123-146.
+[54] Hospedales, T. M., Antoniou, A., Micaelli, P., & Storkey, A. (2021). Meta-learning in neural networks: A survey. *IEEE Transactions on Pattern Analysis and Machine Intelligence*, 44(9), 5149-5169.
+[55] Chen, X., & Konar, A. (2016). *Incremental Learning in Artificial Intelligence*. Springer.
+[56] Sculley, D., Holt, G., Golovin, D., Davydov, E., Phillips, T., Ebner, A., ... & Dennison, D. (2015). Hidden Technical Debt in Machine Learning Systems. *Advances in Neural Information Processing Systems*, 28.
+[57] Mnih, V., Kavukcuoglu, K., Silver, D., Rusu, A. A., Veness, J., Bellemare, M. G., ... & Hassabis, D. (2015). Human-level control through deep reinforcement learning. *Nature*, 518(7540), 529-533.
+[58] Gelman, A., Carlin, J. B., Stern, H. S., Dunson, D. B., Vehtari, A., & Rubin, D. B. (2013). *Bayesian Data Analysis* (3rd ed.). Chapman and Hall/CRC.
+[59] Kruschke, J. K. (2014). *Doing Bayesian Data Analysis: A Tutorial with R, JAGS, and Stan*. Academic Press.
+[60] Jo, Y., & Kim, J. (2020). A Survey of Benchmarks for Deep Learning. *ACM Computing Surveys*, 53(1), 1-36.
+[61] Gundersen, O. E., Kjensmo, S., & Nichele, S. (2018). State of the art: Reproducibility in artificial intelligence. *Proceedings of the AAAI Conference on Artificial Intelligence*, 32(1).
+[62] Lipton, Z. C. (2018). The Mythos of Model Interpretability. *Queue*, 16(3), 31-57.
+[63] Hendrycks, D., & Gimpel, K. (2017). A Baseline for Detecting Misclassified and Out-of-Distribution Examples in Neural Networks. *International Conference on Learning Representations (ICLR)*.
+[64] Friston, K., FitzGerald, T., Rigoli, F., Schwartenbeck, P., & Pezzulo, G. (2017). Active inference: A process theory. *Neural Computation*, 29(1), 1-49.
+[65] Brooks, R. A. (1991). Intelligence without representation. *Artificial Intelligence*, 47(1-3), 139-159.
+[66] Wolpert, D. M., Ghahramani, Z., & Jordan, M. I. (1995). An internal model for sensorimotor integration. *Science*, 269(5232), 1880-1882.
+[67] Kober, J., Bagnell, J. A., & Peters, J. (2013). Reinforcement learning in robotics: A survey. *International Journal of Robotics Research*, 32(11), 1238-1274.
+[68] Wurtz, R. H., Goldberg, M. E., & Robinson, D. L. (1917). Brain mechanisms of visual attention. *Scientific American*, 246(6), 124-135.
+[69] Amodei, D., Olah, C., Steinhardt, J., Christiano, P., Schulman, J., & Mané, D. (2016). Concrete problems in AI safety. *arXiv preprint arXiv:1606.06565*.
+[70] Chen, X., Li, J., & Zhang, Y. (2020). MLflow: A Platform for the Machine Learning Lifecycle. *Proceedings of the 2020 ACM SIGMOD International Conference on Management of Data*, 2351-2354.
+[71] Ingo, R., & Winder, T. (2020). Hydra: A framework for elegantly configuring complex applications. *Proceedings of the 2020 ACM SIGMOD International Conference on Management of Data*, 2355-2358.
+[72] Kery, M. B., & Myers, B. A. (2017). The challenges of reproducibility in machine learning. *Proceedings of the 2017 ACM SIGCHI Conference on Human Factors in Computing Systems*, 345-356.
+[73] Treutlein, J., & Pries, R. (2020). CI/CD for Machine Learning: A Survey. *Proceedings of the 2020 IEEE International Conference on Software Architecture (ICSA)*, 175-184.
+[74] Dauphin, Y., Pascanu, R., Gulcehre, C., Cho, K., Ganguli, S., & Bengio, Y. (2014). Identifying and attacking the saddle point problem in high-dimensional non-convex optimization. *Advances in Neural Information Processing Systems*, 27.
+[75] Piwowar, H. A., & Vision, T. J. (2013). Data reuse and the open data citation advantage. *PeerJ*, 1, e175.

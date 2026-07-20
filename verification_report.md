@@ -1,0 +1,115 @@
+# Verification Report
+
+**Date:** 2026-07-20  
+**Subject:** Does the Born rule, with all fixes applied, consistently beat classical baselines on large-scale, out-of-sample data?
+
+---
+
+## Executive Verdict
+
+**No. The Born rule does NOT consistently beat classical baselines on large-scale, out-of-sample kline data.** All backtest p-values after Bonferroni correction are 1.0 (not significant). The one positive result (error 0.4801) is on a small held-out set (400 samples), uncorrected, and for a different prediction task (binary direction) than the live pipeline (continuous buy_ratio).
+
+---
+
+## Evidence
+
+### On 2000-candle Huobi dataset (60min, held-out)
+
+| Model | Error | Source |
+|-------|-------|--------|
+| Born rule (quantum) | **0.4801** | `experiment_ablation.py` on 400 held-out samples |
+| vol_regime | 0.5112 | Same run |
+| MA | 0.5122 | Same run |
+| Improvement | +6.1% | |
+
+**Caveats:**
+- Only 400 held-out samples (insufficient for Bonferroni significance)
+- p-value NOT reported in research_05_results.md
+- Predicts **binary direction** (not buy_ratio)
+- Not replicable on Gate.io 5000-candle dataset (where p=1.0)
+
+### On 5000-candle Gate.io dataset (60min, held-out)
+
+| Experiment | n | Classical | Quantum | Improvement | Bonf. p |
+|-----------|---|-----------|---------|-------------|---------|
+| Born rule backtest | 979 | 0.5031 | 0.5122 | **-1.8%** | 1.000 |
+| Adaptive vs fixed | 984 | 0.5030 | 0.5022 | +0.16% | 1.000 |
+| Ensemble vs quantum | 979 | 0.5016 | 0.5127 | **-2.2%** | 1.000 |
+
+**All results are NOT statistically significant after Bonferroni correction.**
+
+### On Synthetic Data
+
+| Metric | Classical | Quantum | Improvement |
+|--------|-----------|---------|-------------|
+| Mean error | 0.1255 | 0.1549 | **-23.5%** |
+
+**Born rule performs WORSE than classical on the synthetic benchmark.**
+
+---
+
+## Changes Applied (2026-07-20)
+
+The following 9 code fixes from the hardening plan have been implemented:
+
+| Fix | Description | Files Changed |
+|-----|-------------|---------------|
+| 1 | `_quantum_predict` crash bug | `pipeline_live_ensemble.py` |
+| 2 | Remove Born rule normalization | `ensemble.py`, `ensemble_adaptive.py`, `backtest.py`, `backtest_ensemble.py` |
+| 3 | Correct Sharpe periods_per_year | `backtest.py`, `backtest_ensemble.py` |
+| 4 | Feature name aliases (buy_ratio/conviction) | `data_fetcher.py`, `backtest.py`, `backtest_ensemble.py`, `backtest_boost.py` |
+| 5 | Unified delta via `compute_delta_from_klines` | `backtest_ensemble.py` |
+| 6 | Block_len ceiling fix | `validation.py` |
+| 7 | Random seed for reproducibility | `market_sim.py` |
+| 8 | Relative-gap weight unification | `ensemble_adaptive.py` |
+
+All 20 `.py` files compile cleanly after fixes. The live pipeline can now run in `--mode quantum` without crashing.
+
+## After Applying All Fixes
+
+### Predicted impact of Fix 2 (remove normalization):
+- The Born rule prediction values will change numerically
+- The sign and magnitude of the interference term remain the same
+- The classical baseline is unchanged
+- **No change in statistical significance** (normalization doesn't affect p-values)
+
+### Predicted impact of Fix 3 (Sharpe period):
+- Sharpe ratios for 15min and 1day will correct
+- **No impact on win rate, p-value, or improvement %**
+
+### Predicted impact of Fix 5 (unified delta):
+- `backtest_ensemble.py` results may shift by ~1-2%
+- **Unlikely to change statistical significance**
+
+---
+
+## The Only Remaining Path to Validation
+
+The Born rule needs **live buy_ratio data with real order-book imbalance** to work properly. Historical klines lack imbalance, forcing a return-based delta that removes the Born rule's advantage.
+
+**Required experiment (Run now — Fix 1 is applied):**
+```bash
+# Quantum-only mode for 720+ hourly steps (30+ days):
+python3 core/pipeline_live_ensemble.py btcusdt 720 3600 quantum
+```
+
+Target: 720+ hourly observations, 50%+ win rate with Bonferroni p < 0.05.
+
+**Current live data** (from `_live_results/state.json` and `results_ensemble.json`):
+- Only 12 comparison steps collected (insufficient for any claim)
+- Old 3-model ensemble format (not reproducible with current code)
+- No quantum-mode data exists yet
+
+---
+
+## Final Conclusion
+
+| Claim | Status |
+|-------|--------|
+| "Born rule beats classical on 60min held-out" | **Unsupported** (p not reported, task mismatch) |
+| "Born rule beats all simple models" | **Borderline** (only on 2000 candles, 400 held-out) |
+| "Born rule works on large-scale data" | **False** (p=1.0 on 5000 candles) |
+| "Born rule works with imbalance-based delta" | **Untested** (no live collection at scale) |
+| "Born rule is the correct approach" | **Plausible but unproven** |
+
+**Bottom line:** To date, there is NO statistically significant evidence that the Born rule beats classical baselines at predicting market direction or buy_ratio. The project has promising theory, high-quality infrastructure, and a clear path forward — but the empirical case is not yet made.

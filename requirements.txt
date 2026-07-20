@@ -1,0 +1,7 @@
+# Exchange-Q uses Python 3.8+ standard library only.
+# No third-party packages required.
+#
+# Tested on Python 3.10, 3.11, 3.12
+#
+# To verify your setup:
+#   python3 -c "import math, cmath, statistics, http.client, ssl, json, os, sys, time, concurrent.futures, subprocess, signal; print('All stdlib modules available')"
