@@ -15,7 +15,31 @@ import math
 import statistics
 import random
 
-from config import N_HYPOTHESES_TOTAL
+from config import N_HYPOTHESES_TOTAL, N_HYPOTHESES_LIVE
+
+
+def _validate_paired_errors(errors_c, errors_q):
+    if len(errors_c) != len(errors_q):
+        raise ValueError("Paired error arrays must have equal length")
+    for label, values in (("classical", errors_c), ("model", errors_q)):
+        for value in values:
+            if not isinstance(value, (int, float)) or not math.isfinite(value):
+                raise ValueError(f"{label} errors must contain finite numbers")
+            if value < 0:
+                raise ValueError(f"{label} errors must be non-negative")
+
+
+def _percentile(values, probability):
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    position = (len(ordered) - 1) * probability
+    lower = int(math.floor(position))
+    upper = int(math.ceil(position))
+    if lower == upper:
+        return ordered[lower]
+    weight = position - lower
+    return ordered[lower] * (1 - weight) + ordered[upper] * weight
 
 
 def bonferroni_correct(p_value, n_tests=N_HYPOTHESES_TOTAL):
@@ -93,56 +117,77 @@ def profit_factor(errors_q, errors_c):
     return win_sum / loss_sum
 
 
-def block_bootstrap_pvalue(errors_c, errors_q, n_bootstrap=10000, seed=42):
+def paired_moving_block_test(errors_c, errors_q, n_bootstrap=10000, seed=42):
     """
-    White's Reality Check with block bootstrap to handle autocorrelation.
-    Uses non-overlapping blocks of size block_len = ceil(n^(1/3)).
-    H0: win_rate <= 0.5
+    One-sided paired moving-block bootstrap on mean loss differential.
+
+    loss_diff = model_error - classical_error
+    H0: E[loss_diff] >= 0
+    HA: E[loss_diff] < 0
     """
+    _validate_paired_errors(errors_c, errors_q)
     n = len(errors_c)
     if n < 2:
-        return 0.5
+        return {
+            "p_value": 0.5,
+            "mean_loss_diff": 0.0 if not errors_c else errors_q[0] - errors_c[0],
+            "ci_low": 0.0,
+            "ci_high": 0.0,
+            "block_len": 1,
+            "n_bootstrap": n_bootstrap,
+            "method": "paired_moving_block_bootstrap_mean_loss",
+        }
 
-    wins = sum(1 for ec, eq in zip(errors_c, errors_q) if eq < ec)
-    win_rate = wins / n
-
-    block_len = max(1, int(n ** (1/3)) + 1)
-    # Ceiling to avoid floating-point floor errors (e.g. 64**(1/3)=3.999...)
+    block_len = max(1, math.ceil(n ** (1 / 3)))
     n_blocks = (n + block_len - 1) // block_len
-
     diffs = [eq - ec for ec, eq in zip(errors_c, errors_q)]
+    observed_mean = statistics.mean(diffs)
+    centered = [value - observed_mean for value in diffs]
 
     rng = random.Random(seed)
     count_extreme = 0
+    bootstrap_means = []
 
     for _ in range(n_bootstrap):
         sample_diffs = []
-        for b in range(n_blocks):
-            if rng.random() < 0.5:
-                start = b * block_len
-                end = min(start + block_len, n)
-                for idx in range(start, end):
-                    sample_diffs.append(diffs[idx])
-            else:
-                start = b * block_len
-                end = min(start + block_len, n)
-                for idx in range(start, end):
-                    sample_diffs.append(-diffs[idx])
-        sample_diffs = sample_diffs[:n]
-        sample_wins = sum(1 for d in sample_diffs if d < 0)
-        sample_rate = sample_wins / n
-        if sample_rate >= win_rate:
+        raw_sample = []
+        for _block in range(n_blocks):
+            start = rng.randrange(n)
+            for offset in range(block_len):
+                idx = (start + offset) % n
+                sample_diffs.append(centered[idx])
+                raw_sample.append(diffs[idx])
+        null_mean = statistics.mean(sample_diffs[:n])
+        raw_mean = statistics.mean(raw_sample[:n])
+        bootstrap_means.append(raw_mean)
+        if null_mean <= observed_mean:
             count_extreme += 1
 
     p_value = (count_extreme + 1) / (n_bootstrap + 1)
-    return p_value
+    return {
+        "p_value": p_value,
+        "mean_loss_diff": observed_mean,
+        "ci_low": _percentile(bootstrap_means, 0.025),
+        "ci_high": _percentile(bootstrap_means, 0.975),
+        "block_len": block_len,
+        "n_bootstrap": n_bootstrap,
+        "method": "paired_moving_block_bootstrap_mean_loss",
+    }
 
 
-def comprehensive_report(errors_c, errors_q, label="", periods_per_year=8760):
+def block_bootstrap_pvalue(errors_c, errors_q, n_bootstrap=10000, seed=42):
+    """Backward-compatible p-value wrapper for paired_moving_block_test."""
+    return paired_moving_block_test(
+        errors_c, errors_q, n_bootstrap=n_bootstrap, seed=seed
+    )["p_value"]
+
+
+def comprehensive_report(errors_c, errors_q, label="", periods_per_year=8760, live=False):
     """
     Produce an honest, comprehensive comparison report.
     Includes all corrections and financial metrics.
     """
+    _validate_paired_errors(errors_c, errors_q)
     n = len(errors_c)
     if n == 0:
         return {}
@@ -156,14 +201,10 @@ def comprehensive_report(errors_c, errors_q, label="", periods_per_year=8760):
     mean_q = statistics.mean(errors_q)
     imprv = (mean_c - mean_q) / mean_c * 100 if mean_c != 0 else 0
 
-    raw_p = block_bootstrap_pvalue(errors_c, errors_q)
-    corrected_p, sig_005, sig_001 = bonferroni_correct(raw_p)
-
-    mdd_q = max_drawdown_from_errors(errors_q)
-    mdd_c = max_drawdown_from_errors(errors_c)
-    sharpe_q = sharpe_ratio(errors_q, periods_per_year)
-    sharpe_c = sharpe_ratio(errors_c, periods_per_year)
-    pf = profit_factor(errors_q, errors_c)
+    test_result = paired_moving_block_test(errors_c, errors_q)
+    raw_p = test_result["p_value"]
+    n_tests = N_HYPOTHESES_LIVE if live else N_HYPOTHESES_TOTAL
+    corrected_p, sig_005, sig_001 = bonferroni_correct(raw_p, n_tests=n_tests)
 
     return {
         "label": label,
@@ -179,12 +220,16 @@ def comprehensive_report(errors_c, errors_q, label="", periods_per_year=8760):
         "bonferroni_p": round(corrected_p, 4),
         "significant_005": sig_005,
         "significant_001": sig_001,
-        "max_drawdown_q": round(mdd_q, 4),
-        "max_drawdown_c": round(mdd_c, 4),
-        "max_drawdown_reduction": round((mdd_c - mdd_q) / mdd_c * 100, 2) if mdd_c > 0 else 0,
-        "sharpe_q": round(sharpe_q, 4),
-        "sharpe_c": round(sharpe_c, 4),
-        "profit_factor": round(pf, 4),
+        "n_tests_corrected": n_tests,
+        "mean_loss_diff": round(test_result["mean_loss_diff"], 6),
+        "mean_loss_diff_ci_95": [
+            round(test_result["ci_low"], 6),
+            round(test_result["ci_high"], 6),
+        ],
+        "block_len": test_result["block_len"],
+        "n_bootstrap": test_result["n_bootstrap"],
+        "test_method": test_result["method"],
+        "financial_metrics_valid": False,
     }
 
 
@@ -203,17 +248,17 @@ def print_report(r, detail=True):
     print(f"  Win rate:         {r['win_rate']:.2%}  ({r['wins']}/{r['n']})")
     print(f"  Ties:             {r['ties']}")
     print(f"  Raw p-value:      {r['raw_p_value']}")
-    print(f"  Bonferroni p:     {r['bonferroni_p']}  (n_tests={N_HYPOTHESES_TOTAL})")
+    n_tests = r.get("n_tests_corrected", N_HYPOTHESES_TOTAL)
+    print(f"  Bonferroni p:     {r['bonferroni_p']}  (n_tests={n_tests})")
     print(f"  Sig at 0.05:      {r['significant_005']}")
     print(f"  Sig at 0.01:      {r['significant_001']}")
     if detail:
-        print(f"\n  Financial metrics:")
-        print(f"  Max DD (classical): {r['max_drawdown_c']:.4f}")
-        print(f"  Max DD (quantum):   {r['max_drawdown_q']:.4f}")
-        print(f"  DD reduction:       {r['max_drawdown_reduction']:+.2f}%")
-        print(f"  Sharpe (classical): {r['sharpe_c']}")
-        print(f"  Sharpe (quantum):   {r['sharpe_q']}")
-        print(f"  Profit factor:      {r['profit_factor']}")
+        ci_low, ci_high = r["mean_loss_diff_ci_95"]
+        print(f"\n  Paired loss inference:")
+        print(f"  Mean model-classical loss: {r['mean_loss_diff']:+.6f}")
+        print(f"  95% block-bootstrap CI:    [{ci_low:+.6f}, {ci_high:+.6f}]")
+        print(f"  Block length:              {r['block_len']}")
+        print(f"  Method:                    {r['test_method']}")
     print(f"{'='*60}\n")
 
 

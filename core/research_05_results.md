@@ -31,7 +31,7 @@ All results use:
 P = |√(p_high · μ_high) + √(p_low · μ_low) · e^(iδ)|²
 ```
 
-**Delta from order book (live):** δ=0 for strong imbalance, δ=π for high uncertainty
+**Delta from order book (live):** δ ∈ **[0, π/2]** via `compute_delta()` — 0 for strong imbalance (constructive), π/2 for high uncertainty (neutral). Negative interference is gated (`fallback_reason: destructive_interference`). See [docs/STATISTICS.md](../docs/STATISTICS.md) for claim thresholds.
 
 ## Results Summary (Historical — for reference only)
 

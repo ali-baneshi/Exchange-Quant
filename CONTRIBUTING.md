@@ -18,7 +18,7 @@ make test
 cd core && python -m pytest test_*.py -v
 ```
 
-CI (`.github/workflows/test.yml`) runs on Python 3.10 and 3.12.
+CI (`.github/workflows/test.yml`) runs on Python 3.10 and 3.12. Current suite: **68 tests**.
 
 ### Optional pre-commit check
 
@@ -43,6 +43,7 @@ Weekly drift detection: `.github/workflows/validation-weekly.yml` (Mondays 06:00
 - [ ] Born rule predictions go through `quantum_core.born_rule_predict` only
 - [ ] Do not re-enable Born rule on kline backtests without order-book imbalance
 - [ ] Statistical claims include sample size and Bonferroni correction
+- [ ] Update [docs/SCHEMA_V5.md](./docs/SCHEMA_V5.md) if prediction JSON fields change
 - [ ] New constants are documented at module level
 - [ ] One pending forecast at a time in live pipelines
 
@@ -67,6 +68,6 @@ These metrics are **not directly comparable**.
 Priority areas when changing code:
 
 1. `test_validation.py` — any change to significance metrics
-2. `test_quantum_core.py` — Born rule or delta logic
+2. `test_quantum_core.py` — Born rule, delta logic, destructive-interference gate
 3. `test_live_protocol.py` — resolve timing contract
 4. `test_data_historical.py` — candle ordering regressions

@@ -11,5 +11,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - run: pip install pytest
-      - run: cd core && python -m pytest test_*.py -v
+      - run: pip install -r requirements-dev.txt
+      - run: make test
+      - run: make compile
+      - run: for file in scripts/*.sh; do sh -n "$file"; done

@@ -21,8 +21,23 @@ import ssl
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+import re
+
+from config import (
+    MAX_ENDPOINT_SKEW_MS,
+    MIN_FORWARD_WINDOW_TRADES,
+    min_forward_trades,
+)
+
 HUOBI_BASE = "https://api.huobi.pro"
 _CTX = ssl.create_default_context()
+_SYMBOL_RE = re.compile(r"^[a-z0-9]+$")
+
+
+def _validate_symbol(symbol):
+    if not symbol or not _SYMBOL_RE.match(symbol):
+        raise ValueError(f"Invalid symbol {symbol!r}; expected lowercase alphanumeric (e.g. btcusdt)")
+    return symbol
 
 
 def _api_get(url, timeout=3):
@@ -30,13 +45,22 @@ def _api_get(url, timeout=3):
     path = url.split("api.huobi.pro")[-1]
     last_err = None
     for attempt in range(2):
+        conn = None
         try:
             conn = http.client.HTTPSConnection(host, timeout=timeout, context=_CTX)
             conn.request("GET", path, headers={"User-Agent": "Mozilla/5.0", "Connection": "close"})
             resp = conn.getresponse()
-            body = resp.read()
+            body = resp.read(2_000_001)
+            if resp.status < 200 or resp.status >= 300:
+                last_err = f"HTTP {resp.status} {resp.reason}"
+                continue
+            if len(body) > 2_000_000:
+                last_err = "response body exceeds 2 MB"
+                continue
             data = json.loads(body)
-            conn.close()
+            if not isinstance(data, dict):
+                last_err = f"unexpected JSON type {type(data).__name__}"
+                continue
             if data.get("status") == "ok":
                 return data
             last_err = f"API status={data.get('status')!r} err={data.get('err-msg') or data.get('message')!r}"
@@ -46,6 +70,9 @@ def _api_get(url, timeout=3):
             if attempt < 1:
                 time.sleep(0.2)
             continue
+        finally:
+            if conn is not None:
+                conn.close()
     if last_err:
         print(f"[data_fetcher] _api_get {path}: {last_err}", file=sys.stderr)
     return None
@@ -81,11 +108,13 @@ class HuobiData:
         return {
             "bids": tick.get("bids", []),
             "asks": tick.get("asks", []),
+            "ts": raw.get("ts", 0),
         }
 
     def fetch_trades(self, symbol="btcusdt", size=50):
+        size = max(1, min(int(size), 2000))
         raw = _api_get(
-            f"{HUOBI_BASE}/market/history/trade?symbol={symbol}&size={min(size, 100)}"
+            f"{HUOBI_BASE}/market/history/trade?symbol={symbol}&size={size}"
         )
         if raw is None:
             return []
@@ -93,12 +122,13 @@ class HuobiData:
         for item in raw.get("data", []):
             for t in item.get("data", []):
                 trades.append({
+                    "trade_id": t.get("id") or t.get("trade-id"),
                     "price": float(t.get("price", 0)),
                     "amount": float(t.get("amount", 0)),
                     "ts": t.get("ts", 0),
                     "direction": t.get("direction", "buy"),
                 })
-        return trades[:size]
+        return sorted(trades[:size], key=lambda trade: trade.get("ts", 0))
 
     def fetch_klines(self, symbol="btcusdt", period="1min", limit=100):
         raw = _api_get(
@@ -118,17 +148,25 @@ class HuobiData:
                 "vol": float(k.get("vol", 0)),
                 "count": k.get("count", 0),
             })
-        return result
+        return sorted(result, key=lambda candle: candle.get("id", 0))
 
-    def fetch_all(self, symbol="btcusdt"):
+    def fetch_all(self, symbol="btcusdt", trade_size=30):
+        symbol = _validate_symbol(symbol)
         with ThreadPoolExecutor(max_workers=4) as ex:
             ft = {ex.submit(self.fetch_ticker, symbol): "ticker",
                   ex.submit(self.fetch_depth, symbol, 20): "depth",
-                  ex.submit(self.fetch_trades, symbol, 30): "trades",
+                  ex.submit(self.fetch_trades, symbol, trade_size): "trades",
                   ex.submit(self.fetch_klines, symbol, "1min", 5): "klines"}
             results = {}
             for fut in as_completed(ft):
-                results[ft[fut]] = fut.result()
+                name = ft[fut]
+                try:
+                    results[name] = fut.result()
+                except Exception as exc:
+                    print(
+                        f"[data_fetcher] {name} fetch failed: {type(exc).__name__}: {exc}",
+                        file=sys.stderr,
+                    )
         return (
             results.get("ticker"),
             results.get("depth", {"bids": [], "asks": []}),
@@ -137,14 +175,47 @@ class HuobiData:
         )
 
     def fetch_features(self, symbol="btcusdt", max_attempts=3):
+        features, _ = self.fetch_features_with_trades(symbol, max_attempts=max_attempts)
+        return features
+
+    def fetch_features_with_trades(self, symbol="btcusdt", max_attempts=3,
+                                   trade_size=30):
+        symbol = _validate_symbol(symbol)
         for attempt in range(max_attempts):
-            t, d, tr, k = self.fetch_all(symbol)
+            t, d, tr, k = self.fetch_all(symbol, trade_size=trade_size)
             f = compute_live_features(t, d, tr, k)
             if f is not None:
-                return f
+                return f, tr
             if attempt < max_attempts - 1:
                 time.sleep(min(2 ** attempt, 30))
-        return None
+        return None, []
+
+
+def compute_buy_ratio_for_window(trades, start_ms, end_ms, min_trades=None):
+    """
+    Buy/sell count and volume ratios for trades with ts in [start_ms, end_ms].
+    Returns (result_dict, trade_count) or (None, trade_count) when below min_trades.
+    """
+    if min_trades is None:
+        min_trades = MIN_FORWARD_WINDOW_TRADES
+    window = [
+        t for t in trades
+        if start_ms <= t.get("ts", 0) <= end_ms
+    ]
+    count = len(window)
+    if count < min_trades:
+        return None, count
+    buy_count = sum(1 for t in window if t.get("direction") == "buy")
+    buy_ratio = buy_count / count
+    buy_amount = sum(t.get("amount", 0) for t in window if t.get("direction") == "buy")
+    sell_amount = sum(t.get("amount", 0) for t in window if t.get("direction") != "buy")
+    total_amount = buy_amount + sell_amount
+    buy_ratio_volume = buy_amount / total_amount if total_amount > 0 else buy_ratio
+    return {
+        "buy_ratio": round(buy_ratio, 4),
+        "buy_ratio_volume": round(buy_ratio_volume, 4),
+        "trade_count": count,
+    }, count
 
 
 def _best_bid_ask(ticker):
@@ -163,6 +234,15 @@ def compute_live_features(ticker, depth, trades, klines):
     if ba is None:
         return None
     bid_px, ask_px = ba
+    numeric_inputs = [
+        ticker.get("close"),
+        ticker.get("high"),
+        ticker.get("low"),
+        bid_px,
+        ask_px,
+    ]
+    if any(not isinstance(value, (int, float)) or not math.isfinite(value) for value in numeric_inputs):
+        return None
     total_trades = len(trades)
     buy_count = sum(1 for t in trades if t["direction"] == "buy")
     buy_ratio = buy_count / total_trades if total_trades > 0 else 0.5
@@ -185,6 +265,13 @@ def compute_live_features(ticker, depth, trades, klines):
     spread = (ask_px - bid_px) / price
     trade_ts = [t["ts"] for t in trades if t.get("ts")]
     unique_trade_ts = len(set(trade_ts))
+    trade_window_start_ms = min(trade_ts) if trade_ts else None
+    trade_window_end_ms = max(trade_ts) if trade_ts else None
+    trade_window_span_ms = (
+        trade_window_end_ms - trade_window_start_ms
+        if trade_window_start_ms is not None and trade_window_end_ms is not None
+        else 0
+    )
     quality_flags = []
     if total_trades == 0:
         quality_flags.append("no_trades")
@@ -194,6 +281,13 @@ def compute_live_features(ticker, depth, trades, klines):
         quality_flags.append("empty_depth")
     if ticker.get("ts", 0) == 0:
         quality_flags.append("missing_timestamp")
+    if ask_px < bid_px:
+        quality_flags.append("crossed_market")
+    ticker_ts = ticker.get("ts", 0)
+    depth_ts = depth.get("ts", 0)
+    if ticker_ts and depth_ts:
+        if abs(ticker_ts - depth_ts) > MAX_ENDPOINT_SKEW_MS:
+            quality_flags.append("endpoint_skew")
 
     return {
         "timestamp": ticker.get("ts", 0),
@@ -208,6 +302,11 @@ def compute_live_features(ticker, depth, trades, klines):
         "spread": round(spread, 6),
         "trade_count": total_trades,
         "unique_trade_ts": unique_trade_ts,
+        "trade_window_start_ms": trade_window_start_ms,
+        "trade_window_end_ms": trade_window_end_ms,
+        "trade_window_span_ms": trade_window_span_ms,
+        "ticker_timestamp_ms": ticker.get("ts", 0),
+        "depth_timestamp_ms": depth.get("ts", 0),
         "quality_flags": quality_flags,
     }
 

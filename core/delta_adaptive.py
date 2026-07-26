@@ -55,13 +55,13 @@ def compute_delta_from_orderbook_features(history, lambda_smooth=0.3):
     """
     Compute delta from market context (order book imbalance + volatility).
 
-    Maps market context to an interference phase:
+    Maps market context to an interference phase (live order-book only):
       - Strong directional conviction (|imbalance| -> 1) => delta -> 0 (constructive)
-      - Uncertainty (|imbalance| -> 0, high vol) => delta -> pi (destructive)
-      - Mixed => delta -> pi/2 (no interference)
+      - Weak context => delta -> pi/2 (neutral, cos=0, no interference effect)
+      - Range is [0, pi/2] — destructive pi regime excluded for live prediction.
 
     Returns:
-        delta: interference phase in [0, 2*pi]
+        delta: interference phase in [0, pi/2]
         confidence: magnitude of interference effect |cos(delta)|
     """
     if not history:
@@ -79,7 +79,7 @@ def compute_delta_from_orderbook_features(history, lambda_smooth=0.3):
     context_factor = avg_imbalance * (1 - avg_vol)
     context_factor = _clamp(context_factor)
 
-    delta = math.pi * (1 - context_factor)
+    delta = (math.pi / 2) * (1 - context_factor)
 
     confidence = abs(math.cos(delta))
 

@@ -1,0 +1,1552 @@
+  QUANTUM-ONLY LIVE PIPELINE
+  symbol=btcusdt  max_resolved=500  max_fetches=unlimited  max_runtime=unlimited
+  horizon=60.0s  sample_interval=5.0s  window=15
+  output=/home/manjaruhp/Pictures/Autonomous-AI-june2026/Exchange-Q/core/_live_results/btcusdt-quantum-1785042351.json
+  database=/home/manjaruhp/Pictures/Autonomous-AI-june2026/Exchange-Q/core/_live_results/btcusdt-quantum-1785042351.sqlite3
+  PID=1479554
+  Started at 2026-07-26 08:35:51
+
+  [    0] 08:35:52 WARMUP (1/15)
+  [    1] 08:35:58 WARMUP (2/15)
+  [    2] 08:36:04 WARMUP (3/15)
+  [    3] 08:36:10 WARMUP (4/15)
+  [    4] 08:36:16 WARMUP (5/15)
+  [    5] 08:36:21 WARMUP (6/15)
+  [    6] 08:36:27 WARMUP (7/15)
+  [    7] 08:36:33 WARMUP (8/15)
+  [    8] 08:36:39 WARMUP (9/15)
+  [    9] 08:36:45 WARMUP (10/15)
+  [   10] 08:36:50 WARMUP (11/15)
+  [   11] 08:36:56 WARMUP (12/15)
+  [   12] 08:37:02 WARMUP (13/15)
+  [   13] 08:37:08 WARMUP (14/15)
+  WARMUP complete — creating predictions for horizon=60.0s
+  [   14] 08:37:13 p=64510.7 c=0.499 q=0.596 δ=0.87 status=pending fallback=none target=08:38:13
+  [   15] 08:37:19 SKIP forecast — pending unresolved
+  [   16] 08:37:26 SKIP forecast — pending unresolved
+  [   17] 08:37:31 SKIP forecast — pending unresolved
+  [   18] 08:37:37 SKIP forecast — pending unresolved
+  [   19] 08:37:43 SKIP forecast — pending unresolved
+  [   20] 08:37:49 SKIP forecast — pending unresolved
+  [   21] 08:37:54 SKIP forecast — pending unresolved
+  [   22] 08:38:00 SKIP forecast — pending unresolved
+  [   23] 08:38:06 SKIP forecast — pending unresolved
+  [   24] 08:38:12 SKIP forecast — pending unresolved
+  [   25] 08:38:17 RESOLVED id=btcusdt-14-1785042433833 act=0.700 c_err=0.201 q_err=0.104 ret=+0.00000
+  [   25] 08:38:17 p=64513.3 c=0.660 q=0.943 δ=0.73 status=pending fallback=none target=08:39:17
+  [   26] 08:38:23 SKIP forecast — pending unresolved
+  [   27] 08:38:29 SKIP forecast — pending unresolved
+  [   28] 08:38:34 SKIP forecast — pending unresolved
+  [   29] 08:38:40 SKIP forecast — pending unresolved
+  [   30] 08:38:46 SKIP forecast — pending unresolved
+  [   31] 08:38:52 SKIP forecast — pending unresolved
+  [   32] 08:38:58 SKIP forecast — pending unresolved
+  [   33] 08:39:04 SKIP forecast — pending unresolved
+  [   34] 08:39:10 SKIP forecast — pending unresolved
+  [   35] 08:39:16 SKIP forecast — pending unresolved
+  [   36] 08:39:21 RESOLVED id=btcusdt-25-1785042497838 act=0.700 c_err=0.040 q_err=0.243 ret=-0.00200
+  [   36] 08:39:21 p=64513.3 c=0.692 q=1.000 δ=0.89 status=pending fallback=none target=08:40:21
+  [   37] 08:39:27 SKIP forecast — pending unresolved
+  [   38] 08:39:33 SKIP forecast — pending unresolved
+  [   39] 08:39:39 SKIP forecast — pending unresolved
+  [   40] 08:39:45 SKIP forecast — pending unresolved
+  [   41] 08:39:50 SKIP forecast — pending unresolved
+  [   42] 08:39:56 SKIP forecast — pending unresolved
+  [   43] 08:40:02 SKIP forecast — pending unresolved
+  [   44] 08:40:08 SKIP forecast — pending unresolved
+  [   45] 08:40:14 SKIP forecast — pending unresolved
+  [   46] 08:40:19 SKIP forecast — pending unresolved
+  [   47] 08:40:25 RESOLVED id=btcusdt-36-1785042561967 act=0.700 c_err=0.008 q_err=0.300 ret=-0.00205
+  [   47] 08:40:25 p=64510.3 c=0.692 q=1.000 δ=0.86 status=pending fallback=none target=08:41:25
+  [   48] 08:40:31 SKIP forecast — pending unresolved
+  [   49] 08:40:37 SKIP forecast — pending unresolved
+  [   50] 08:40:42 SKIP forecast — pending unresolved
+  [   51] 08:40:48 SKIP forecast — pending unresolved
+  [   52] 08:40:54 SKIP forecast — pending unresolved
+  [   53] 08:41:00 SKIP forecast — pending unresolved
+  [   54] 08:41:06 SKIP forecast — pending unresolved
+  [   55] 08:41:12 SKIP forecast — pending unresolved
+  [   56] 08:41:18 SKIP forecast — pending unresolved
+  [   57] 08:41:23 SKIP forecast — pending unresolved
+  [   58] 08:41:29 RESOLVED id=btcusdt-47-1785042625613 act=0.667 c_err=0.025 q_err=0.333 ret=-0.00196
+  [   58] 08:41:29 p=64512.7 c=0.669 q=1.000 δ=0.81 status=pending fallback=none target=08:42:29
+  [   59] 08:41:35 SKIP forecast — pending unresolved
+  [   60] 08:41:41 SKIP forecast — pending unresolved
+  [   61] 08:41:47 SKIP forecast — pending unresolved
+  [   62] 08:41:53 SKIP forecast — pending unresolved
+  [   63] 08:41:58 SKIP forecast — pending unresolved
+  [   64] 08:42:04 SKIP forecast — pending unresolved
+  [   65] 08:42:10 SKIP forecast — pending unresolved
+  [   66] 08:42:16 SKIP forecast — pending unresolved
+  [   67] 08:42:21 SKIP forecast — pending unresolved
+  [   68] 08:42:27 SKIP forecast — pending unresolved
+  [   69] 08:42:33 RESOLVED id=btcusdt-58-1785042689759 act=0.600 c_err=0.069 q_err=0.400 ret=-0.00175
+  [   69] 08:42:33 p=64529.0 c=0.624 q=1.000 δ=0.58 status=pending fallback=none target=08:43:33
+  [   70] 08:42:39 SKIP forecast — pending unresolved
+  [   71] 08:42:45 SKIP forecast — pending unresolved
+  [   72] 08:42:50 SKIP forecast — pending unresolved
+  [   73] 08:42:56 SKIP forecast — pending unresolved
+  [   74] 08:43:02 SKIP forecast — pending unresolved
+  [   75] 08:43:08 SKIP forecast — pending unresolved
+  [   76] 08:43:14 SKIP forecast — pending unresolved
+  [   77] 08:43:19 SKIP forecast — pending unresolved
+  [   78] 08:43:25 SKIP forecast — pending unresolved
+  [   79] 08:43:31 SKIP forecast — pending unresolved
+  [   80] 08:43:37 RESOLVED id=btcusdt-69-1785042753508 act=0.567 c_err=0.057 q_err=0.433 ret=-0.00199
+  [   80] 08:43:37 p=64529.5 c=0.582 q=1.000 δ=0.65 status=pending fallback=none target=08:44:37
+  [   81] 08:43:43 SKIP forecast — pending unresolved
+  [   82] 08:43:49 SKIP forecast — pending unresolved
+  [   83] 08:43:55 SKIP forecast — pending unresolved
+  [   84] 08:44:00 SKIP forecast — pending unresolved
+  [   85] 08:44:06 SKIP forecast — pending unresolved
+  [   86] 08:44:12 SKIP forecast — pending unresolved
+  [   87] 08:44:18 SKIP forecast — pending unresolved
+  [   88] 08:44:24 SKIP forecast — pending unresolved
+  [   89] 08:44:30 SKIP forecast — pending unresolved
+  [   90] 08:44:36 SKIP forecast — pending unresolved
+  [   91] 08:44:41 RESOLVED id=btcusdt-80-1785042817752 act=0.567 c_err=0.016 q_err=0.433 ret=-0.00200
+  [   91] 08:44:41 p=64529.5 c=0.585 q=0.814 δ=0.57 status=pending fallback=none target=08:45:41
+  [   92] 08:44:47 SKIP forecast — pending unresolved
+  [   93] 08:44:53 SKIP forecast — pending unresolved
+  [   94] 08:44:58 SKIP forecast — pending unresolved
+  [   95] 08:45:04 SKIP forecast — pending unresolved
+  [   96] 08:45:10 SKIP forecast — pending unresolved
+  [   97] 08:45:16 SKIP forecast — pending unresolved
+  [   98] 08:45:21 SKIP forecast — pending unresolved
+  [   99] 08:45:27 SKIP forecast — pending unresolved
+  [  100] 08:45:33 SKIP forecast — pending unresolved
+  [  101] 08:45:39 SKIP forecast — pending unresolved
+  [  102] 08:45:45 RESOLVED id=btcusdt-91-1785042881814 act=0.567 c_err=0.018 q_err=0.247 ret=-0.00200
+  [  102] 08:45:45 p=64529.5 c=0.585 q=1.000 δ=0.66 status=pending fallback=none target=08:46:45
+  [  103] 08:45:50 SKIP forecast — pending unresolved
+  [  104] 08:45:57 SKIP forecast — pending unresolved
+  [  105] 08:46:02 SKIP forecast — pending unresolved
+  [  106] 08:46:09 SKIP forecast — pending unresolved
+  [  107] 08:46:14 SKIP forecast — pending unresolved
+  [  108] 08:46:20 SKIP forecast — pending unresolved
+  [  109] 08:46:26 SKIP forecast — pending unresolved
+  [  110] 08:46:31 SKIP forecast — pending unresolved
+  [  111] 08:46:37 SKIP forecast — pending unresolved
+  [  112] 08:46:43 SKIP forecast — pending unresolved
+  [  113] 08:46:49 RESOLVED id=btcusdt-102-1785042945095 act=0.400 c_err=0.185 q_err=0.600 ret=-0.00214
+  [  113] 08:46:49 p=64520.2 c=0.475 q=1.000 δ=0.87 status=pending fallback=none target=08:47:49
+  [  114] 08:46:55 SKIP forecast — pending unresolved
+  [  115] 08:47:01 SKIP forecast — pending unresolved
+  [  116] 08:47:06 SKIP forecast — pending unresolved
+  [  117] 08:47:12 SKIP forecast — pending unresolved
+  [  118] 08:47:18 SKIP forecast — pending unresolved
+  [  119] 08:47:24 SKIP forecast — pending unresolved
+  [  120] 08:47:30 SKIP forecast — pending unresolved
+  [  121] 08:47:36 SKIP forecast — pending unresolved
+  [  122] 08:47:42 SKIP forecast — pending unresolved
+  [  123] 08:47:47 SKIP forecast — pending unresolved
+  [  124] 08:47:53 RESOLVED id=btcusdt-113-1785043009606 act=0.300 c_err=0.175 q_err=0.700 ret=-0.00205
+  [  124] 08:47:53 p=64517.0 c=0.380 q=0.564 δ=0.92 status=pending fallback=none target=08:48:53
+  [  125] 08:47:59 SKIP forecast — pending unresolved
+  [  126] 08:48:05 SKIP forecast — pending unresolved
+  [  127] 08:48:11 SKIP forecast — pending unresolved
+  [  128] 08:48:17 SKIP forecast — pending unresolved
+  [  129] 08:48:22 SKIP forecast — pending unresolved
+  [  130] 08:48:28 SKIP forecast — pending unresolved
+  [  131] 08:48:34 SKIP forecast — pending unresolved
+  [  132] 08:48:40 SKIP forecast — pending unresolved
+  [  133] 08:48:45 SKIP forecast — pending unresolved
+  [  134] 08:48:51 SKIP forecast — pending unresolved
+  [  135] 08:48:57 RESOLVED id=btcusdt-124-1785043073862 act=0.333 c_err=0.047 q_err=0.230 ret=+0.00000
+  [  135] 08:48:57 p=64517.0 c=0.395 q=0.514 δ=0.95 status=pending fallback=none target=08:49:57
+  [  136] 08:49:03 SKIP forecast — pending unresolved
+  [  137] 08:49:09 SKIP forecast — pending unresolved
+  [  138] 08:49:15 SKIP forecast — pending unresolved
+  [  139] 08:49:20 SKIP forecast — pending unresolved
+  [  140] 08:49:26 SKIP forecast — pending unresolved
+  [  141] 08:49:32 SKIP forecast — pending unresolved
+  [  142] 08:49:39 SKIP forecast — pending unresolved
+  [  143] 08:49:45 SKIP forecast — pending unresolved
+  [  144] 08:49:50 SKIP forecast — pending unresolved
+  [  145] 08:49:56 SKIP forecast — pending unresolved
+  [  146] 08:50:02 RESOLVED id=btcusdt-135-1785043137499 act=0.400 c_err=0.005 q_err=0.114 ret=+0.00000
+  [  146] 08:50:02 p=64516.6 c=0.449 q=1.000 δ=0.97 status=pending fallback=none target=08:51:02
+  [  147] 08:50:08 SKIP forecast — pending unresolved
+  [  148] 08:50:14 SKIP forecast — pending unresolved
+  [  149] 08:50:19 SKIP forecast — pending unresolved
+  [  150] 08:50:25 SKIP forecast — pending unresolved
+  [  151] 08:50:31 SKIP forecast — pending unresolved
+  [  152] 08:50:37 SKIP forecast — pending unresolved
+  [  153] 08:50:43 SKIP forecast — pending unresolved
+  [  154] 08:50:49 SKIP forecast — pending unresolved
+  [  155] 08:50:55 SKIP forecast — pending unresolved
+  [  156] 08:51:01 SKIP forecast — pending unresolved
+  [  157] 08:51:06 RESOLVED id=btcusdt-146-1785043202391 act=0.400 c_err=0.049 q_err=0.600 ret=-0.00200
+  [  157] 08:51:06 p=64516.6 c=0.450 q=1.000 δ=0.72 status=pending fallback=none target=08:52:06
+  [  158] 08:51:12 SKIP forecast — pending unresolved
+  [  159] 08:51:18 SKIP forecast — pending unresolved
+  [  160] 08:51:24 SKIP forecast — pending unresolved
+  [  161] 08:51:30 SKIP forecast — pending unresolved
+  [  162] 08:51:36 SKIP forecast — pending unresolved
+  [  163] 08:51:42 SKIP forecast — pending unresolved
+  [  164] 08:51:47 SKIP forecast — pending unresolved
+  [  165] 08:51:53 SKIP forecast — pending unresolved
+  [  166] 08:51:59 SKIP forecast — pending unresolved
+  [  167] 08:52:05 SKIP forecast — pending unresolved
+  [  168] 08:52:11 RESOLVED id=btcusdt-157-1785043266808 act=0.367 c_err=0.083 q_err=0.633 ret=-0.00200
+  [  168] 08:52:11 p=64516.6 c=0.417 q=0.620 δ=0.82 status=pending fallback=none target=08:53:11
+  [  169] 08:52:16 SKIP forecast — pending unresolved
+  [  170] 08:52:22 SKIP forecast — pending unresolved
+  [  171] 08:52:29 SKIP forecast — pending unresolved
+  [  172] 08:52:35 SKIP forecast — pending unresolved
+  [  173] 08:52:41 SKIP forecast — pending unresolved
+  [  174] 08:52:47 SKIP forecast — pending unresolved
+  [  175] 08:52:53 SKIP forecast — pending unresolved
+  [  176] 08:52:58 SKIP forecast — pending unresolved
+  [  177] 08:53:04 SKIP forecast — pending unresolved
+  [  178] 08:53:11 SKIP forecast — pending unresolved
+  [  179] 08:53:16 RESOLVED id=btcusdt-168-1785043331038 act=0.367 c_err=0.050 q_err=0.253 ret=-0.00200
+  [  179] 08:53:16 p=64516.6 c=0.423 q=0.634 δ=0.70 status=pending fallback=none target=08:54:16
+  [  180] 08:53:22 SKIP forecast — pending unresolved
+  [  181] 08:53:28 SKIP forecast — pending unresolved
+  [  182] 08:53:34 SKIP forecast — pending unresolved
+  [  183] 08:53:40 SKIP forecast — pending unresolved
+  [  184] 08:53:45 SKIP forecast — pending unresolved
+  [  185] 08:53:51 SKIP forecast — pending unresolved
+  [  186] 08:53:57 SKIP forecast — pending unresolved
+  [  187] 08:54:03 SKIP forecast — pending unresolved
+  [  188] 08:54:08 SKIP forecast — pending unresolved
+  [  189] 08:54:14 SKIP forecast — pending unresolved
+  [  190] 08:54:20 RESOLVED id=btcusdt-179-1785043396972 act=0.367 c_err=0.056 q_err=0.268 ret=-0.00200
+  [  190] 08:54:20 p=64516.6 c=0.423 q=1.000 δ=0.66 status=pending fallback=none target=08:55:20
+  [  191] 08:54:26 SKIP forecast — pending unresolved
+  [  192] 08:54:32 SKIP forecast — pending unresolved
+  [  193] 08:54:40 SKIP forecast — pending unresolved
+  [  194] 08:54:46 SKIP forecast — pending unresolved
+  [  195] 08:54:53 SKIP forecast — pending unresolved
+  [  196] 08:54:58 SKIP forecast — pending unresolved
+  [  197] 08:55:04 SKIP forecast — pending unresolved
+  [  198] 08:55:10 SKIP forecast — pending unresolved
+  [  199] 08:55:16 SKIP forecast — pending unresolved
+  [  200] 08:55:21 RESOLVED id=btcusdt-190-1785043460547 act=0.367 c_err=0.056 q_err=0.633 ret=-0.00200
+  [  200] 08:55:21 p=64516.6 c=0.423 q=1.000 δ=0.45 status=pending fallback=none target=08:56:21
+  [  201] 08:55:28 SKIP forecast — pending unresolved
+  [  202] 08:55:34 SKIP forecast — pending unresolved
+  [  203] 08:55:40 SKIP forecast — pending unresolved
+  [  204] 08:55:46 SKIP forecast — pending unresolved
+  [  205] 08:55:51 SKIP forecast — pending unresolved
+  [  206] 08:55:57 SKIP forecast — pending unresolved
+  [  207] 08:56:03 SKIP forecast — pending unresolved
+  [  208] 08:56:09 SKIP forecast — pending unresolved
+  [  209] 08:56:15 SKIP forecast — pending unresolved
+  [  210] 08:56:20 SKIP forecast — pending unresolved
+  [  211] 08:56:26 RESOLVED id=btcusdt-200-1785043521889 act=0.500 c_err=0.077 q_err=0.500 ret=-0.00201
+  [  211] 08:56:26 p=64516.2 c=0.485 q=0.554 δ=0.58 status=pending fallback=none target=08:57:26
+  [  212] 08:56:32 SKIP forecast — pending unresolved
+  [  213] 08:56:39 SKIP forecast — pending unresolved
+  [  214] 08:56:44 SKIP forecast — pending unresolved
+  [  215] 08:56:50 SKIP forecast — pending unresolved
+  [  216] 08:56:56 SKIP forecast — pending unresolved
+  [  217] 08:57:02 SKIP forecast — pending unresolved
+  [  218] 08:57:08 SKIP forecast — pending unresolved
+  [  219] 08:57:14 SKIP forecast — pending unresolved
+  [  220] 08:57:19 SKIP forecast — pending unresolved
+  [  221] 08:57:25 SKIP forecast — pending unresolved
+  [  222] 08:57:31 RESOLVED id=btcusdt-211-1785043586736 act=0.433 c_err=0.051 q_err=0.121 ret=+0.00000
+  [  222] 08:57:31 p=64515.0 c=0.478 q=0.819 δ=0.70 status=pending fallback=none target=08:58:31
+  [  223] 08:57:37 SKIP forecast — pending unresolved
+  [  224] 08:57:43 SKIP forecast — pending unresolved
+  [  225] 08:57:49 SKIP forecast — pending unresolved
+  [  226] 08:57:55 SKIP forecast — pending unresolved
+  [  227] 08:58:01 SKIP forecast — pending unresolved
+  [  228] 08:58:06 SKIP forecast — pending unresolved
+  [  229] 08:58:12 SKIP forecast — pending unresolved
+  [  230] 08:58:18 SKIP forecast — pending unresolved
+  [  231] 08:58:25 SKIP forecast — pending unresolved
+  [  232] 08:58:30 SKIP forecast — pending unresolved
+  [  233] 08:58:36 RESOLVED id=btcusdt-222-1785043651627 act=0.433 c_err=0.044 q_err=0.386 ret=-0.00200
+  [  233] 08:58:36 p=64515.0 c=0.477 q=0.654 δ=0.84 status=pending fallback=none target=08:59:36
+  [  234] 08:58:42 SKIP forecast — pending unresolved
+  [  235] 08:58:48 SKIP forecast — pending unresolved
+  [  236] 08:58:54 SKIP forecast — pending unresolved
+  [  237] 08:58:59 SKIP forecast — pending unresolved
+  [  238] 08:59:05 SKIP forecast — pending unresolved
+  [  239] 08:59:11 SKIP forecast — pending unresolved
+  [  240] 08:59:17 SKIP forecast — pending unresolved
+  [  241] 08:59:22 SKIP forecast — pending unresolved
+  [  242] 08:59:28 SKIP forecast — pending unresolved
+  [  243] 08:59:34 SKIP forecast — pending unresolved
+  [  244] 08:59:40 RESOLVED id=btcusdt-233-1785043716676 act=0.467 c_err=0.010 q_err=0.187 ret=-0.00215
+  [  244] 08:59:40 p=64505.3 c=0.503 q=0.617 δ=0.84 status=pending fallback=none target=09:00:40
+  [  245] 08:59:46 SKIP forecast — pending unresolved
+  [  246] 08:59:52 SKIP forecast — pending unresolved
+  [  247] 08:59:59 SKIP forecast — pending unresolved
+  [  248] 09:00:06 SKIP forecast — pending unresolved
+  [  249] 09:00:12 SKIP forecast — pending unresolved
+  [  250] 09:00:18 SKIP forecast — pending unresolved
+  [  251] 09:00:23 SKIP forecast — pending unresolved
+  [  252] 09:00:29 SKIP forecast — pending unresolved
+  [  253] 09:00:35 SKIP forecast — pending unresolved
+  [  254] 09:00:41 RESOLVED id=btcusdt-244-1785043780753 act=0.467 c_err=0.036 q_err=0.150 ret=-0.00215
+  [  254] 09:00:41 p=64495.7 c=0.504 q=0.770 δ=0.86 status=pending fallback=none target=09:01:41
+  [  255] 09:00:47 SKIP forecast — pending unresolved
+  [  256] 09:00:53 SKIP forecast — pending unresolved
+  [  257] 09:01:00 SKIP forecast — pending unresolved
+  [  258] 09:01:06 SKIP forecast — pending unresolved
+  [  259] 09:01:12 SKIP forecast — pending unresolved
+  [  260] 09:01:17 SKIP forecast — pending unresolved
+  [  261] 09:01:23 SKIP forecast — pending unresolved
+  [  262] 09:01:29 SKIP forecast — pending unresolved
+  [  263] 09:01:35 SKIP forecast — pending unresolved
+  [  264] 09:01:41 RESOLVED id=btcusdt-254-1785043841501 act=0.433 c_err=0.070 q_err=0.337 ret=-0.00222
+  [  264] 09:01:41 p=64481.8 c=0.472 q=0.608 δ=0.93 status=pending fallback=none target=09:02:41
+  [  265] 09:01:47 SKIP forecast — pending unresolved
+  [  266] 09:01:53 SKIP forecast — pending unresolved
+  [  267] 09:01:59 SKIP forecast — pending unresolved
+  [  268] 09:02:05 SKIP forecast — pending unresolved
+  [  269] 09:02:11 SKIP forecast — pending unresolved
+  [  270] 09:02:16 SKIP forecast — pending unresolved
+  [  271] 09:02:22 SKIP forecast — pending unresolved
+  [  272] 09:02:28 SKIP forecast — pending unresolved
+  [  273] 09:02:34 SKIP forecast — pending unresolved
+  [  274] 09:02:40 SKIP forecast — pending unresolved
+  [  275] 09:02:46 RESOLVED id=btcusdt-264-1785043901813 act=0.400 c_err=0.072 q_err=0.208 ret=-0.00265
+  [  275] 09:02:46 p=64439.6 c=0.504 q=0.573 δ=0.70 status=pending fallback=none target=09:03:46
+  [  276] 09:02:53 SKIP forecast — pending unresolved
+  [  277] 09:02:59 SKIP forecast — pending unresolved
+  [  278] 09:03:05 SKIP forecast — pending unresolved
+  [  279] 09:03:11 SKIP forecast — pending unresolved
+  [  280] 09:03:17 SKIP forecast — pending unresolved
+  [  281] 09:03:23 SKIP forecast — pending unresolved
+  [  282] 09:03:29 SKIP forecast — pending unresolved
+  [  283] 09:03:35 SKIP forecast — pending unresolved
+  [  284] 09:03:40 SKIP forecast — pending unresolved
+  [  285] 09:03:46 RESOLVED id=btcusdt-275-1785043966327 act=0.333 c_err=0.171 q_err=0.240 ret=+0.00000
+  [  285] 09:03:46 p=64438.1 c=0.406 q=0.525 δ=0.95 status=pending fallback=none target=09:04:46
+  [  286] 09:03:52 SKIP forecast — pending unresolved
+  [  287] 09:03:58 SKIP forecast — pending unresolved
+  [  288] 09:04:04 SKIP forecast — pending unresolved
+  [  289] 09:04:09 SKIP forecast — pending unresolved
+  [  290] 09:04:16 SKIP forecast — pending unresolved
+  [  291] 09:04:22 SKIP forecast — pending unresolved
+  [  292] 09:04:27 SKIP forecast — pending unresolved
+  [  293] 09:04:34 SKIP forecast — pending unresolved
+  [  294] 09:04:40 SKIP forecast — pending unresolved
+  [  295] 09:04:45 SKIP forecast — pending unresolved
+  [  296] 09:04:51 RESOLVED id=btcusdt-285-1785044026926 act=0.767 c_err=0.361 q_err=0.242 ret=+0.00000
+  [  296] 09:04:51 p=64473.4 c=0.729 q=0.769 δ=1.16 status=pending fallback=none target=09:05:51
+  [  297] 09:04:57 SKIP forecast — pending unresolved
+  [  298] 09:05:03 SKIP forecast — pending unresolved
+  [  299] 09:05:08 SKIP forecast — pending unresolved
+  [  300] 09:05:14 SKIP forecast — pending unresolved
+  [  301] 09:05:20 SKIP forecast — pending unresolved
+
+  Signal 15 received, shutting down gracefully...
+
+  Stopped at 2026-07-26 09:05:22
+  Collected 302 observations, 27 predictions
+  Saved to /home/manjaruhp/Pictures/Autonomous-AI-june2026/Exchange-Q/core/_live_results/btcusdt-quantum-1785042351.json
+
+  FINAL: resolved=26; exploratory only — suppressing win/loss summary until n>=30
+
+  FINAL: exploratory only — need at least 30 resolved eligible predictions
+  QUANTUM-ONLY LIVE PIPELINE
+  symbol=btcusdt  max_resolved=500  max_fetches=unlimited  max_runtime=unlimited
+  horizon=60.0s  sample_interval=5.0s  window=15
+  output=/home/manjaruhp/Pictures/Autonomous-AI-june2026/Exchange-Q/core/_live_results/btcusdt-quantum-1785044328.json
+  database=/home/manjaruhp/Pictures/Autonomous-AI-june2026/Exchange-Q/core/_live_results/btcusdt-quantum-1785044328.sqlite3
+  PID=1486822
+  Started at 2026-07-26 09:08:48
+
+  [    0] 09:08:49 WARMUP (1/15)
+  [    1] 09:08:55 WARMUP (2/15)
+  [    2] 09:09:01 WARMUP (3/15)
+  [    3] 09:09:07 WARMUP (4/15)
+  [    4] 09:09:13 WARMUP (5/15)
+  [    5] 09:09:19 WARMUP (6/15)
+  [    6] 09:09:24 WARMUP (7/15)
+  [    7] 09:09:30 WARMUP (8/15)
+  [    8] 09:09:36 WARMUP (9/15)
+  [    9] 09:09:42 WARMUP (10/15)
+  [   10] 09:09:47 WARMUP (11/15)
+  [   11] 09:09:53 WARMUP (12/15)
+  [   12] 09:09:59 WARMUP (13/15)
+  [   13] 09:10:05 WARMUP (14/15)
+  WARMUP complete — creating predictions for horizon=60.0s
+  [   14] 09:10:11 p=64482.9 c=0.585 q=0.567 δ=0.78 status=pending fallback=saturation_gate target=09:11:11
+  [   15] 09:10:16 SKIP forecast — pending unresolved
+  [   16] 09:10:22 SKIP forecast — pending unresolved
+  [   17] 09:10:28 SKIP forecast — pending unresolved
+  [   18] 09:10:34 SKIP forecast — pending unresolved
+  [   19] 09:10:40 SKIP forecast — pending unresolved
+  [   20] 09:10:46 SKIP forecast — pending unresolved
+  [   21] 09:10:52 SKIP forecast — pending unresolved
+  [   22] 09:10:58 SKIP forecast — pending unresolved
+  [   23] 09:11:04 SKIP forecast — pending unresolved
+  [   24] 09:11:09 SKIP forecast — pending unresolved
+  [   25] 09:11:17 RESOLVED id=btcusdt-14-1785044411242 act=0.567 c_err=0.018 q_err=0.000 ret=+0.00000
+  [   25] 09:11:17 p=64482.9 c=0.585 q=0.567 δ=0.82 status=pending fallback=saturation_gate target=09:12:16
+  [   26] 09:11:23 SKIP forecast — pending unresolved
+  [   27] 09:11:29 SKIP forecast — pending unresolved
+  [   28] 09:11:34 SKIP forecast — pending unresolved
+  [   29] 09:11:40 SKIP forecast — pending unresolved
+  [   30] 09:11:46 SKIP forecast — pending unresolved
+  [   31] 09:11:52 SKIP forecast — pending unresolved
+  [   32] 09:11:58 SKIP forecast — pending unresolved
+  [   33] 09:12:04 SKIP forecast — pending unresolved
+  [   34] 09:12:10 SKIP forecast — pending unresolved
+  [   35] 09:12:16 SKIP forecast — pending unresolved
+  [   36] 09:12:23 RESOLVED id=btcusdt-25-1785044476816 act=0.100 c_err=0.485 q_err=0.467 ret=+0.00000
+  [   36] 09:12:23 p=64473.1 c=0.287 q=0.447 δ=0.81 status=pending fallback=saturation_gate target=09:13:22
+  [   37] 09:12:29 SKIP forecast — pending unresolved
+  [   38] 09:12:35 SKIP forecast — pending unresolved
+  [   39] 09:12:41 SKIP forecast — pending unresolved
+  [   40] 09:12:46 SKIP forecast — pending unresolved
+  [   41] 09:12:52 SKIP forecast — pending unresolved
+  [   42] 09:12:58 SKIP forecast — pending unresolved
+  [   43] 09:13:04 SKIP forecast — pending unresolved
+  [   44] 09:13:09 SKIP forecast — pending unresolved
+  [   45] 09:13:15 SKIP forecast — pending unresolved
+  [   46] 09:13:21 SKIP forecast — pending unresolved
+  [   47] 09:13:28 RESOLVED id=btcusdt-36-1785044542195 act=0.300 c_err=0.013 q_err=0.147 ret=+0.00000
+  [   47] 09:13:28 p=64480.4 c=0.368 q=0.317 δ=1.30 status=pending fallback=none target=09:14:27
+  [   48] 09:13:34 SKIP forecast — pending unresolved
+  [   49] 09:13:40 SKIP forecast — pending unresolved
+  [   50] 09:13:46 SKIP forecast — pending unresolved
+  [   51] 09:13:52 SKIP forecast — pending unresolved
+  [   52] 09:13:58 SKIP forecast — pending unresolved
+  [   53] 09:14:04 SKIP forecast — pending unresolved
+  [   54] 09:14:10 SKIP forecast — pending unresolved
+  [   55] 09:14:16 SKIP forecast — pending unresolved
+  [   56] 09:14:21 SKIP forecast — pending unresolved
+  [   57] 09:14:28 RESOLVED id=btcusdt-47-1785044607523 act=0.467 c_err=0.099 q_err=0.150 ret=+0.00000
+  [   57] 09:14:28 p=64483.2 c=0.489 q=0.526 δ=1.18 status=pending fallback=none target=09:15:27
+  [   58] 09:14:34 SKIP forecast — pending unresolved
+  [   59] 09:14:40 SKIP forecast — pending unresolved
+  [   60] 09:14:45 SKIP forecast — pending unresolved
+  [   61] 09:14:51 SKIP forecast — pending unresolved
+  [   62] 09:14:57 SKIP forecast — pending unresolved
+  [   63] 09:15:03 SKIP forecast — pending unresolved
+  [   64] 09:15:09 SKIP forecast — pending unresolved
+  [   65] 09:15:14 SKIP forecast — pending unresolved
+  [   66] 09:15:20 SKIP forecast — pending unresolved
+  [   67] 09:15:26 SKIP forecast — pending unresolved
+  [   68] 09:15:33 RESOLVED id=btcusdt-57-1785044667730 act=0.533 c_err=0.044 q_err=0.008 ret=+0.00000
+  [   68] 09:15:33 p=64475.7 c=0.550 q=0.493 δ=1.11 status=pending fallback=saturation_gate target=09:16:32
+  [   69] 09:15:39 SKIP forecast — pending unresolved
+  [   70] 09:15:45 SKIP forecast — pending unresolved
+  [   71] 09:15:51 SKIP forecast — pending unresolved
+  [   72] 09:15:56 SKIP forecast — pending unresolved
+  [   73] 09:16:02 SKIP forecast — pending unresolved
+  [   74] 09:16:08 SKIP forecast — pending unresolved
+  [   75] 09:16:14 SKIP forecast — pending unresolved
+  [   76] 09:16:20 SKIP forecast — pending unresolved
+  [   77] 09:16:25 SKIP forecast — pending unresolved
+  [   78] 09:16:31 SKIP forecast — pending unresolved
+  [   79] 09:16:38 RESOLVED id=btcusdt-68-1785044732213 act=0.567 c_err=0.017 q_err=0.073 ret=+0.00000
+  [   79] 09:16:38 p=64475.7 c=0.586 q=0.540 δ=1.16 status=pending fallback=saturation_gate target=09:17:37
+  [   80] 09:16:44 SKIP forecast — pending unresolved
+  [   81] 09:16:50 SKIP forecast — pending unresolved
+  [   82] 09:16:56 SKIP forecast — pending unresolved
+  [   83] 09:17:02 SKIP forecast — pending unresolved
+  [   84] 09:17:08 SKIP forecast — pending unresolved
+  [   85] 09:17:14 SKIP forecast — pending unresolved
+  [   86] 09:17:20 SKIP forecast — pending unresolved
+  [   87] 09:17:26 SKIP forecast — pending unresolved
+  [   88] 09:17:32 SKIP forecast — pending unresolved
+  [   89] 09:17:38 RESOLVED id=btcusdt-79-1785044797545 act=0.600 c_err=0.014 q_err=0.060 ret=+0.00000
+  [   89] 09:17:38 p=64475.8 c=0.601 q=0.655 δ=1.25 status=pending fallback=none target=09:18:37
+  [   90] 09:17:44 SKIP forecast — pending unresolved
+  [   91] 09:17:50 SKIP forecast — pending unresolved
+  [   92] 09:17:56 SKIP forecast — pending unresolved
+  [   93] 09:18:01 SKIP forecast — pending unresolved
+  [   94] 09:18:07 SKIP forecast — pending unresolved
+  [   95] 09:18:13 SKIP forecast — pending unresolved
+  [   96] 09:18:19 SKIP forecast — pending unresolved
+  [   97] 09:18:24 SKIP forecast — pending unresolved
+  [   98] 09:18:30 SKIP forecast — pending unresolved
+  [   99] 09:18:36 SKIP forecast — pending unresolved
+  [  100] 09:18:43 RESOLVED id=btcusdt-89-1785044857775 act=0.567 c_err=0.034 q_err=0.088 ret=-0.00207
+  [  100] 09:18:43 p=64471.0 c=0.582 q=0.587 δ=1.20 status=pending fallback=saturation_gate target=09:19:42
+  [  101] 09:18:49 SKIP forecast — pending unresolved
+  [  102] 09:18:55 SKIP forecast — pending unresolved
+  [  103] 09:19:01 SKIP forecast — pending unresolved
+  [  104] 09:19:08 SKIP forecast — pending unresolved
+  [  105] 09:19:13 SKIP forecast — pending unresolved
+  [  106] 09:19:19 SKIP forecast — pending unresolved
+  [  107] 09:19:25 SKIP forecast — pending unresolved
+  [  108] 09:19:31 SKIP forecast — pending unresolved
+  [  109] 09:19:37 SKIP forecast — pending unresolved
+  [  110] 09:19:44 RESOLVED id=btcusdt-100-1785044922245 act=0.533 c_err=0.049 q_err=0.053 ret=+0.00000
+  [  110] 09:19:44 p=64471.0 c=0.568 q=0.569 δ=1.07 status=pending fallback=saturation_gate target=09:20:43
+  [  111] 09:19:50 SKIP forecast — pending unresolved
+  [  112] 09:19:56 SKIP forecast — pending unresolved
+  [  113] 09:20:02 SKIP forecast — pending unresolved
+  [  114] 09:20:08 SKIP forecast — pending unresolved
+  [  115] 09:20:14 SKIP forecast — pending unresolved
+  [  116] 09:20:20 SKIP forecast — pending unresolved
+  [  117] 09:20:26 SKIP forecast — pending unresolved
+  [  118] 09:20:31 SKIP forecast — pending unresolved
+  [  119] 09:20:37 SKIP forecast — pending unresolved
+  [  120] 09:20:44 RESOLVED id=btcusdt-110-1785044983583 act=0.500 c_err=0.068 q_err=0.069 ret=+0.00000
+  [  120] 09:20:44 p=64471.0 c=0.530 q=0.533 δ=1.20 status=pending fallback=saturation_gate target=09:21:43
+  [  121] 09:20:50 SKIP forecast — pending unresolved
+  [  122] 09:20:56 SKIP forecast — pending unresolved
+  [  123] 09:21:02 SKIP forecast — pending unresolved
+  [  124] 09:21:08 SKIP forecast — pending unresolved
+  [  125] 09:21:13 SKIP forecast — pending unresolved
+  [  126] 09:21:19 SKIP forecast — pending unresolved
+  [  127] 09:21:25 SKIP forecast — pending unresolved
+  [  128] 09:21:31 SKIP forecast — pending unresolved
+  [  129] 09:21:37 SKIP forecast — pending unresolved
+  [  130] 09:21:43 SKIP forecast — pending unresolved
+  [  131] 09:21:50 RESOLVED id=btcusdt-120-1785045043830 act=0.467 c_err=0.064 q_err=0.067 ret=+0.00000
+  [  131] 09:21:50 p=64471.0 c=0.504 q=0.478 δ=1.08 status=pending fallback=saturation_gate target=09:22:49
+  [  132] 09:21:56 SKIP forecast — pending unresolved
+  [  133] 09:22:01 SKIP forecast — pending unresolved
+  [  134] 09:22:07 SKIP forecast — pending unresolved
+  [  135] 09:22:13 SKIP forecast — pending unresolved
+  [  136] 09:22:19 SKIP forecast — pending unresolved
+  [  137] 09:22:25 SKIP forecast — pending unresolved
+  [  138] 09:22:31 SKIP forecast — pending unresolved
+  [  139] 09:22:37 SKIP forecast — pending unresolved
+  [  140] 09:22:43 SKIP forecast — pending unresolved
+  [  141] 09:22:48 SKIP forecast — pending unresolved
+  [  142] 09:22:55 RESOLVED id=btcusdt-131-1785045109266 act=1.000 c_err=0.496 q_err=0.522 ret=+0.00000
+  [  142] 09:22:55 p=64459.9 c=0.406 q=0.393 δ=1.16 status=pending fallback=saturation_gate target=09:23:54
+  [  143] 09:23:01 SKIP forecast — pending unresolved
+  [  144] 09:23:07 SKIP forecast — pending unresolved
+  [  145] 09:23:13 SKIP forecast — pending unresolved
+  [  146] 09:23:18 SKIP forecast — pending unresolved
+  [  147] 09:23:25 SKIP forecast — pending unresolved
+  [  148] 09:23:31 SKIP forecast — pending unresolved
+  [  149] 09:23:36 SKIP forecast — pending unresolved
+  [  150] 09:23:42 SKIP forecast — pending unresolved
+  [  151] 09:23:49 SKIP forecast — pending unresolved
+  [  152] 09:23:56 RESOLVED id=btcusdt-142-1785045174793 act=0.367 c_err=0.039 q_err=0.027 ret=+0.00000
+  [  152] 09:23:56 p=64459.9 c=0.422 q=0.353 δ=1.13 status=pending fallback=saturation_gate target=09:24:55
+  [  153] 09:24:02 SKIP forecast — pending unresolved
+  [  154] 09:24:08 SKIP forecast — pending unresolved
+  [  155] 09:24:13 SKIP forecast — pending unresolved
+  [  156] 09:24:19 SKIP forecast — pending unresolved
+  [  157] 09:24:25 SKIP forecast — pending unresolved
+  [  158] 09:24:31 SKIP forecast — pending unresolved
+  [  159] 09:24:36 SKIP forecast — pending unresolved
+  [  160] 09:24:42 SKIP forecast — pending unresolved
+  [  161] 09:24:48 SKIP forecast — pending unresolved
+  [  162] 09:24:54 SKIP forecast — pending unresolved
+  [  163] 09:25:02 RESOLVED id=btcusdt-152-1785045235413 act=0.333 c_err=0.089 q_err=0.020 ret=+0.00000
+  [  163] 09:25:02 p=64454.1 c=0.400 q=0.353 δ=1.05 status=pending fallback=saturation_gate target=09:26:00
+  [  164] 09:25:08 SKIP forecast — pending unresolved
+  [  165] 09:25:14 SKIP forecast — pending unresolved
+  [  166] 09:25:20 SKIP forecast — pending unresolved
+  [  167] 09:25:26 SKIP forecast — pending unresolved
+  [  168] 09:25:31 SKIP forecast — pending unresolved
+  [  169] 09:25:37 SKIP forecast — pending unresolved
+  [  170] 09:25:43 SKIP forecast — pending unresolved
+  [  171] 09:25:49 SKIP forecast — pending unresolved
+  [  172] 09:25:55 SKIP forecast — pending unresolved
+  [  173] 09:26:01 RESOLVED id=btcusdt-163-1785045300322 act=0.300 c_err=0.100 q_err=0.053 ret=+0.00000
+  [  173] 09:26:01 p=64454.1 c=0.369 q=0.311 δ=1.01 status=pending fallback=saturation_gate target=09:27:01
+  [  174] 09:26:07 SKIP forecast — pending unresolved
+  [  175] 09:26:13 SKIP forecast — pending unresolved
+  [  176] 09:26:20 SKIP forecast — pending unresolved
+  [  177] 09:26:26 SKIP forecast — pending unresolved
+  [  178] 09:26:32 SKIP forecast — pending unresolved
+  [  179] 09:26:37 SKIP forecast — pending unresolved
+  [  180] 09:26:43 SKIP forecast — pending unresolved
+  [  181] 09:26:49 SKIP forecast — pending unresolved
+  [  182] 09:26:55 SKIP forecast — pending unresolved
+  [  183] 09:27:02 RESOLVED id=btcusdt-173-1785045361259 act=0.300 c_err=0.069 q_err=0.011 ret=+0.00000
+  [  183] 09:27:02 p=64454.1 c=0.369 q=0.300 δ=1.00 status=pending fallback=saturation_gate target=09:28:01
+  [  184] 09:27:08 SKIP forecast — pending unresolved
+  [  185] 09:27:14 SKIP forecast — pending unresolved
+  [  186] 09:27:20 SKIP forecast — pending unresolved
+  [  187] 09:27:26 SKIP forecast — pending unresolved
+  [  188] 09:27:32 SKIP forecast — pending unresolved
+  [  189] 09:27:38 SKIP forecast — pending unresolved
+  [  190] 09:27:43 SKIP forecast — pending unresolved
+  [  191] 09:27:49 SKIP forecast — pending unresolved
+  [  192] 09:27:55 SKIP forecast — pending unresolved
+  [  193] 09:28:02 RESOLVED id=btcusdt-183-1785045421371 act=0.467 c_err=0.098 q_err=0.167 ret=+0.00000
+  [  193] 09:28:02 p=64438.0 c=0.489 q=0.369 δ=0.98 status=pending fallback=saturation_gate target=09:29:01
+  [  194] 09:28:07 SKIP forecast — pending unresolved
+  [  195] 09:28:13 SKIP forecast — pending unresolved
+  [  196] 09:28:19 SKIP forecast — pending unresolved
+  [  197] 09:28:25 SKIP forecast — pending unresolved
+  [  198] 09:28:31 SKIP forecast — pending unresolved
+  [  199] 09:28:37 SKIP forecast — pending unresolved
+  [  200] 09:28:43 SKIP forecast — pending unresolved
+  [  201] 09:28:48 SKIP forecast — pending unresolved
+  [  202] 09:28:54 SKIP forecast — pending unresolved
+  [  203] 09:29:00 SKIP forecast — pending unresolved
+  [  204] 09:29:07 RESOLVED id=btcusdt-193-1785045481419 act=1.000 c_err=0.511 q_err=0.631 ret=+0.00000
+  [  204] 09:29:07 p=64435.0 c=0.556 q=0.507 δ=0.86 status=pending fallback=saturation_gate target=09:30:06
+  [  205] 09:29:12 SKIP forecast — pending unresolved
+  [  206] 09:29:18 SKIP forecast — pending unresolved
+  [  207] 09:29:24 SKIP forecast — pending unresolved
+  [  208] 09:29:30 SKIP forecast — pending unresolved
+  [  209] 09:29:36 SKIP forecast — pending unresolved
+  [  210] 09:29:41 SKIP forecast — pending unresolved
+  [  211] 09:29:47 SKIP forecast — pending unresolved
+  [  212] 09:29:53 SKIP forecast — pending unresolved
+  [  213] 09:29:58 SKIP forecast — pending unresolved
+  [  214] 09:30:09 RESOLVED id=btcusdt-204-1785045546282 act=0.667 c_err=0.111 q_err=0.160 ret=+0.00000
+  [  214] 09:30:09 p=64429.4 c=0.624 q=0.540 δ=0.82 status=pending fallback=saturation_gate target=09:31:08
+  [  215] 09:30:15 SKIP forecast — pending unresolved
+  [  216] 09:30:21 SKIP forecast — pending unresolved
+  [  217] 09:30:28 SKIP forecast — pending unresolved
+  [  218] 09:30:33 SKIP forecast — pending unresolved
+  [  219] 09:30:39 SKIP forecast — pending unresolved
+  [  220] 09:30:45 SKIP forecast — pending unresolved
+  [  221] 09:30:51 SKIP forecast — pending unresolved
+  [  222] 09:30:56 SKIP forecast — pending unresolved
+  [  223] 09:31:02 SKIP forecast — pending unresolved
+  [  224] 09:31:08 SKIP forecast — pending unresolved
+  [  225] 09:31:15 RESOLVED id=btcusdt-214-1785045608962 act=0.667 c_err=0.042 q_err=0.127 ret=+0.00000
+  [  225] 09:31:15 p=64429.4 c=0.665 q=0.647 δ=0.65 status=pending fallback=saturation_gate target=09:32:14
+  [  226] 09:31:21 SKIP forecast — pending unresolved
+  [  227] 09:31:27 SKIP forecast — pending unresolved
+  [  228] 09:31:33 SKIP forecast — pending unresolved
+  [  229] 09:31:38 SKIP forecast — pending unresolved
+  [  230] 09:31:44 SKIP forecast — pending unresolved
+  [  231] 09:31:50 SKIP forecast — pending unresolved
+  [  232] 09:31:56 SKIP forecast — pending unresolved
+  [  233] 09:32:02 SKIP forecast — pending unresolved
+  [  234] 09:32:08 SKIP forecast — pending unresolved
+  [  235] 09:32:13 SKIP forecast — pending unresolved
+  [  236] 09:32:20 RESOLVED id=btcusdt-225-1785045674598 act=0.667 c_err=0.002 q_err=0.020 ret=-0.00200
+  [  236] 09:32:20 p=64429.4 c=0.665 q=0.667 δ=0.52 status=pending fallback=saturation_gate target=09:33:19
+  [  237] 09:32:26 SKIP forecast — pending unresolved
+  [  238] 09:32:32 SKIP forecast — pending unresolved
+  [  239] 09:32:37 SKIP forecast — pending unresolved
+  [  240] 09:32:43 SKIP forecast — pending unresolved
+  [  241] 09:32:49 SKIP forecast — pending unresolved
+  [  242] 09:32:55 SKIP forecast — pending unresolved
+  [  243] 09:33:00 SKIP forecast — pending unresolved
+  [  244] 09:33:06 SKIP forecast — pending unresolved
+  [  245] 09:33:12 SKIP forecast — pending unresolved
+  [  246] 09:33:18 SKIP forecast — pending unresolved
+  [  247] 09:33:25 RESOLVED id=btcusdt-236-1785045739886 act=0.633 c_err=0.032 q_err=0.033 ret=-0.00202
+  [  247] 09:33:25 p=64427.8 c=0.643 q=0.653 δ=0.55 status=pending fallback=saturation_gate target=09:34:24
+  [  248] 09:33:31 SKIP forecast — pending unresolved
+  [  249] 09:33:37 SKIP forecast — pending unresolved
+  [  250] 09:33:43 SKIP forecast — pending unresolved
+  [  251] 09:33:49 SKIP forecast — pending unresolved
+  [  252] 09:33:54 SKIP forecast — pending unresolved
+  [  253] 09:34:00 SKIP forecast — pending unresolved
+  [  254] 09:34:06 SKIP forecast — pending unresolved
+  [  255] 09:34:12 SKIP forecast — pending unresolved
+  [  256] 09:34:17 SKIP forecast — pending unresolved
+  [  257] 09:34:23 SKIP forecast — pending unresolved
+  [  258] 09:34:30 RESOLVED id=btcusdt-247-1785045804440 act=0.833 c_err=0.190 q_err=0.180 ret=-0.00186
+  [  258] 09:34:30 p=64437.1 c=0.774 q=0.702 δ=0.66 status=pending fallback=saturation_gate target=09:35:29
+  [  259] 09:34:36 SKIP forecast — pending unresolved
+  [  260] 09:34:42 SKIP forecast — pending unresolved
+  [  261] 09:34:47 SKIP forecast — pending unresolved
+  [  262] 09:34:53 SKIP forecast — pending unresolved
+  [  263] 09:34:59 SKIP forecast — pending unresolved
+  [  264] 09:35:05 SKIP forecast — pending unresolved
+  [  265] 09:35:11 SKIP forecast — pending unresolved
+  [  266] 09:35:17 SKIP forecast — pending unresolved
+  [  267] 09:35:23 SKIP forecast — pending unresolved
+  [  268] 09:35:30 RESOLVED id=btcusdt-258-1785045869478 act=0.033 c_err=0.741 q_err=0.669 ret=-0.00231
+  [  268] 09:35:30 p=64417.0 c=0.212 q=0.436 δ=1.16 status=pending fallback=saturation_gate target=09:36:29
+  [  269] 09:35:36 SKIP forecast — pending unresolved
+  [  270] 09:35:41 SKIP forecast — pending unresolved
+  [  271] 09:35:47 SKIP forecast — pending unresolved
+  [  272] 09:35:53 SKIP forecast — pending unresolved
+  [  273] 09:35:59 SKIP forecast — pending unresolved
+  [  274] 09:36:04 SKIP forecast — pending unresolved
+  [  275] 09:36:10 SKIP forecast — pending unresolved
+  [  276] 09:36:16 SKIP forecast — pending unresolved
+  [  277] 09:36:22 SKIP forecast — pending unresolved
+  [  278] 09:36:27 SKIP forecast — pending unresolved
+  [  279] 09:36:34 RESOLVED id=btcusdt-268-1785045929632 act=0.067 c_err=0.145 q_err=0.369 ret=+0.00000
+  [  279] 09:36:34 p=64408.9 c=0.178 q=0.079 δ=1.00 status=pending fallback=none target=09:37:33
+  [  280] 09:36:40 SKIP forecast — pending unresolved
+  [  281] 09:36:46 SKIP forecast — pending unresolved
+  [  282] 09:36:52 SKIP forecast — pending unresolved
+  [  283] 09:36:57 SKIP forecast — pending unresolved
+  [  284] 09:37:03 SKIP forecast — pending unresolved
+  [  285] 09:37:09 SKIP forecast — pending unresolved
+  [  286] 09:37:16 SKIP forecast — pending unresolved
+  [  287] 09:37:21 SKIP forecast — pending unresolved
+  [  288] 09:37:27 SKIP forecast — pending unresolved
+  [  289] 09:37:33 SKIP forecast — pending unresolved
+  [  290] 09:37:39 RESOLVED id=btcusdt-279-1785045993615 act=0.067 c_err=0.111 q_err=0.012 ret=+0.00000
+  [  290] 09:37:39 p=64388.3 c=0.179 q=0.104 δ=0.98 status=pending fallback=none target=09:38:39
+  [  291] 09:37:45 SKIP forecast — pending unresolved
+  [  292] 09:37:51 SKIP forecast — pending unresolved
+  [  293] 09:37:57 SKIP forecast — pending unresolved
+  [  294] 09:38:03 SKIP forecast — pending unresolved
+  [  295] 09:38:08 SKIP forecast — pending unresolved
+  [  296] 09:38:14 SKIP forecast — pending unresolved
+  [  297] 09:38:20 SKIP forecast — pending unresolved
+  [  298] 09:38:26 SKIP forecast — pending unresolved
+  [  299] 09:38:32 SKIP forecast — pending unresolved
+  [  300] 09:38:37 SKIP forecast — pending unresolved
+  [  301] 09:38:44 RESOLVED id=btcusdt-290-1785046059162 act=0.267 c_err=0.088 q_err=0.163 ret=+0.00000
+  [  301] 09:38:44 p=64379.9 c=0.338 q=0.167 δ=0.62 status=pending fallback=none target=09:39:43
+  [  302] 09:38:50 SKIP forecast — pending unresolved
+  [  303] 09:38:56 SKIP forecast — pending unresolved
+  [  304] 09:39:02 SKIP forecast — pending unresolved
+  [  305] 09:39:08 SKIP forecast — pending unresolved
+  [  306] 09:39:14 SKIP forecast — pending unresolved
+  [  307] 09:39:19 SKIP forecast — pending unresolved
+  [  308] 09:39:25 SKIP forecast — pending unresolved
+  [  309] 09:39:31 SKIP forecast — pending unresolved
+  [  310] 09:39:36 SKIP forecast — pending unresolved
+  [  311] 09:39:42 SKIP forecast — pending unresolved
+  [  312] 09:39:48 RESOLVED id=btcusdt-301-1785046123614 act=0.300 c_err=0.038 q_err=0.133 ret=+0.00000
+  [  312] 09:39:48 p=64386.6 c=0.365 q=0.256 δ=0.62 status=pending fallback=saturation_gate target=09:40:48
+  [  313] 09:39:54 SKIP forecast — pending unresolved
+  [  314] 09:40:00 SKIP forecast — pending unresolved
+  [  315] 09:40:06 SKIP forecast — pending unresolved
+  [  316] 09:40:11 SKIP forecast — pending unresolved
+  [  317] 09:40:17 SKIP forecast — pending unresolved
+  [  318] 09:40:23 SKIP forecast — pending unresolved
+  [  319] 09:40:29 SKIP forecast — pending unresolved
+  [  320] 09:40:35 SKIP forecast — pending unresolved
+  [  321] 09:40:40 SKIP forecast — pending unresolved
+  [  322] 09:40:47 SKIP forecast — pending unresolved
+  [  323] 09:40:53 RESOLVED id=btcusdt-312-1785046188250 act=0.300 c_err=0.065 q_err=0.044 ret=+0.00000
+  [  323] 09:40:53 p=64386.6 c=0.369 q=0.300 δ=0.63 status=pending fallback=saturation_gate target=09:41:52
+  [  324] 09:40:59 SKIP forecast — pending unresolved
+  [  325] 09:41:05 SKIP forecast — pending unresolved
+  [  326] 09:41:10 SKIP forecast — pending unresolved
+  [  327] 09:41:16 SKIP forecast — pending unresolved
+  [  328] 09:41:22 SKIP forecast — pending unresolved
+  [  329] 09:41:28 SKIP forecast — pending unresolved
+  [  330] 09:41:34 SKIP forecast — pending unresolved
+  [  331] 09:41:39 SKIP forecast — pending unresolved
+  [  332] 09:41:45 SKIP forecast — pending unresolved
+  [  333] 09:41:51 SKIP forecast — pending unresolved
+  [  334] 09:41:59 RESOLVED id=btcusdt-323-1785046252969 act=0.233 c_err=0.135 q_err=0.067 ret=+0.00000
+         --- resolved 30: quantum wins 12/30 (40%) trades=5 avg_ret=-0.00205
+  [  334] 09:41:59 p=64386.6 c=0.322 q=0.269 δ=0.46 status=pending fallback=saturation_gate target=09:42:57
+  [  335] 09:42:05 SKIP forecast — pending unresolved
+  [  336] 09:42:12 SKIP forecast — pending unresolved
+  [  337] 09:42:18 SKIP forecast — pending unresolved
+  [  338] 09:42:24 SKIP forecast — pending unresolved
+  [  339] 09:42:31 SKIP forecast — pending unresolved
+  [  340] 09:42:37 SKIP forecast — pending unresolved
+  [  341] 09:42:43 SKIP forecast — pending unresolved
+  [  342] 09:42:49 SKIP forecast — pending unresolved
+  [  343] 09:42:56 SKIP forecast — pending unresolved
+  [  344] 09:43:03 RESOLVED id=btcusdt-334-1785046317994 act=0.267 c_err=0.055 q_err=0.002 ret=+0.00000
+         --- resolved 31: quantum wins 13/31 (42%) trades=5 avg_ret=-0.00205
+  [  344] 09:43:03 p=64367.1 c=0.340 q=0.253 δ=0.60 status=pending fallback=saturation_gate target=09:44:02
+  [  345] 09:43:09 SKIP forecast — pending unresolved
+  [  346] 09:43:15 SKIP forecast — pending unresolved
+  [  347] 09:43:22 SKIP forecast — pending unresolved
+  [  348] 09:43:28 SKIP forecast — pending unresolved
+  [  349] 09:43:35 SKIP forecast — pending unresolved
+  [  350] 09:43:41 SKIP forecast — pending unresolved
+  [  351] 09:43:47 SKIP forecast — pending unresolved
+  [  352] 09:43:53 SKIP forecast — pending unresolved
+  [  353] 09:43:59 SKIP forecast — pending unresolved
+  [  354] 09:44:06 RESOLVED id=btcusdt-344-1785046382996 act=0.300 c_err=0.040 q_err=0.047 ret=+0.00000
+         --- resolved 32: quantum wins 13/32 (41%) trades=5 avg_ret=-0.00205
+  [  354] 09:44:06 p=64367.1 c=0.357 q=0.365 δ=0.82 status=pending fallback=none target=09:45:05
+  [  355] 09:44:13 SKIP forecast — pending unresolved
+  [  356] 09:44:19 SKIP forecast — pending unresolved
+  [  357] 09:44:25 SKIP forecast — pending unresolved
+
+  Signal 15 received, shutting down gracefully...
+
+  Signal 15 received, shutting down gracefully...
+  [  358] 09:44:31 SKIP forecast — pending unresolved
+
+  Stopped at 2026-07-26 09:44:31
+  Collected 359 observations, 33 predictions
+  Saved to /home/manjaruhp/Pictures/Autonomous-AI-june2026/Exchange-Q/core/_live_results/btcusdt-quantum-1785044328.json
+
+  FINAL: resolved=32 quantum wins 13/32 (40.6%)  c_err=0.1282  q_err=0.1449  trades=5 avg_ret=-0.00205
+
+  FINAL: exploratory summary only — need n>=720 for significance report
+  QUANTUM-ONLY LIVE PIPELINE
+  symbol=btcusdt  max_resolved=500  max_fetches=unlimited  max_runtime=unlimited
+  horizon=60.0s  sample_interval=5.0s  window=15
+  output=/home/manjaruhp/Pictures/Autonomous-AI-june2026/Exchange-Q/core/_live_results/btcusdt-quantum-1785046520.json
+  database=/home/manjaruhp/Pictures/Autonomous-AI-june2026/Exchange-Q/core/_live_results/btcusdt-quantum-1785046520.sqlite3
+  PID=1494065
+  Started at 2026-07-26 09:45:20
+
+  [    0] 09:45:22 WARMUP (1/15)
+  [    1] 09:45:28 WARMUP (2/15)
+  [    2] 09:45:34 WARMUP (3/15)
+  [    3] 09:45:40 WARMUP (4/15)
+  [    4] 09:45:46 WARMUP (5/15)
+  [    5] 09:45:52 WARMUP (6/15)
+  [    6] 09:45:58 WARMUP (7/15)
+  [    7] 09:46:05 WARMUP (8/15)
+  [    8] 09:46:11 WARMUP (9/15)
+  [    9] 09:46:17 WARMUP (10/15)
+  [   10] 09:46:23 WARMUP (11/15)
+  [   11] 09:46:29 WARMUP (12/15)
+  [   12] 09:46:36 WARMUP (13/15)
+  [   13] 09:46:42 WARMUP (14/15)
+  WARMUP complete — creating predictions for horizon=60.0s
+  [   14] 09:46:49 p=64363.0 c=0.408 q=0.298 δ=1.41 status=pending fallback=none target=09:47:49
+  [   15] 09:46:55 SKIP forecast — pending unresolved
+  [   16] 09:47:02 SKIP forecast — pending unresolved
+  [   17] 09:47:08 SKIP forecast — pending unresolved
+  [   18] 09:47:15 SKIP forecast — pending unresolved
+  [   19] 09:47:21 SKIP forecast — pending unresolved
+  [   20] 09:47:27 SKIP forecast — pending unresolved
+  [   21] 09:47:33 SKIP forecast — pending unresolved
+  [   22] 09:47:40 SKIP forecast — pending unresolved
+  [   23] 09:47:46 SKIP forecast — pending unresolved
+  [   24] 09:47:54 RESOLVED id=btcusdt-14-1785046609051 act=0.625 c_err=0.217 q_err=0.327 ret=+0.00000
+  [   24] 09:47:54 p=64363.0 c=0.550 q=0.573 δ=1.10 status=pending fallback=none target=09:48:52
+  [   25] 09:48:00 SKIP forecast — pending unresolved
+  [   26] 09:48:06 SKIP forecast — pending unresolved
+  [   27] 09:48:12 SKIP forecast — pending unresolved
+  [   28] 09:48:18 SKIP forecast — pending unresolved
+  [   29] 09:48:25 SKIP forecast — pending unresolved
+  [   30] 09:48:31 SKIP forecast — pending unresolved
+  [   31] 09:48:37 SKIP forecast — pending unresolved
+  [   32] 09:48:43 SKIP forecast — pending unresolved
+  [   33] 09:48:49 SKIP forecast — pending unresolved
+  [   34] 09:48:56 RESOLVED id=btcusdt-24-1785046672909 act=0.000 c_err=0.550 q_err=0.573 ret=+0.00000
+  [   34] 09:48:56 p=64367.4 c=0.611 q=0.670 δ=1.06 status=pending fallback=none target=09:49:55
+  [   35] 09:49:02 SKIP forecast — pending unresolved
+  [   36] 09:49:08 SKIP forecast — pending unresolved
+  [   37] 09:49:14 SKIP forecast — pending unresolved
+  [   38] 09:49:21 SKIP forecast — pending unresolved
+  [   39] 09:49:27 SKIP forecast — pending unresolved
+  [   40] 09:49:33 SKIP forecast — pending unresolved
+  [   41] 09:49:39 SKIP forecast — pending unresolved
+  [   42] 09:49:45 SKIP forecast — pending unresolved
+  [   43] 09:49:51 SKIP forecast — pending unresolved
+  [   44] 09:49:59 RESOLVED id=btcusdt-34-1785046735352 act=0.111 c_err=0.499 q_err=0.559 ret=-0.00229
+  [   44] 09:49:59 p=64348.6 c=0.512 q=0.562 δ=0.90 status=pending fallback=saturation_gate target=09:50:57
+  [   45] 09:50:05 SKIP forecast — pending unresolved
+  [   46] 09:50:11 SKIP forecast — pending unresolved
+  [   47] 09:50:17 SKIP forecast — pending unresolved
+  [   48] 09:50:24 SKIP forecast — pending unresolved
+  [   49] 09:50:30 SKIP forecast — pending unresolved
+  [   50] 09:50:36 SKIP forecast — pending unresolved
+  [   51] 09:50:42 SKIP forecast — pending unresolved
+  [   52] 09:50:48 SKIP forecast — pending unresolved
+  [   53] 09:50:54 SKIP forecast — pending unresolved
+  [   54] 09:51:02 RESOLVED id=btcusdt-44-1785046797901 act=0.000 c_err=0.512 q_err=0.562 ret=+0.00000
+  [   54] 09:51:02 p=64335.8 c=0.320 q=0.396 δ=0.97 status=pending fallback=saturation_gate target=09:52:00
+  [   55] 09:51:08 SKIP forecast — pending unresolved
+  [   56] 09:51:14 SKIP forecast — pending unresolved
+  [   57] 09:51:20 SKIP forecast — pending unresolved
+  [   58] 09:51:26 SKIP forecast — pending unresolved
+  [   59] 09:51:32 SKIP forecast — pending unresolved
+  [   60] 09:51:38 SKIP forecast — pending unresolved
+  [   61] 09:51:44 SKIP forecast — pending unresolved
+  [   62] 09:51:50 SKIP forecast — pending unresolved
+  [   63] 09:51:56 SKIP forecast — pending unresolved
+  [   64] 09:52:04 RESOLVED id=btcusdt-54-1785046860983 act=0.143 c_err=0.178 q_err=0.253 ret=+0.00000
+  [   64] 09:52:04 p=64321.9 c=0.178 q=0.207 δ=0.78 status=pending fallback=none target=09:53:03
+  [   65] 09:52:10 SKIP forecast — pending unresolved
+  [   66] 09:52:16 SKIP forecast — pending unresolved
+  [   67] 09:52:22 SKIP forecast — pending unresolved
+  [   68] 09:52:28 SKIP forecast — pending unresolved
+  [   69] 09:52:34 SKIP forecast — pending unresolved
+  [   70] 09:52:40 SKIP forecast — pending unresolved
+  [   71] 09:52:47 SKIP forecast — pending unresolved
+  [   72] 09:52:53 SKIP forecast — pending unresolved
+  [   73] 09:52:59 SKIP forecast — pending unresolved
+  [   74] 09:53:06 RESOLVED id=btcusdt-64-1785046923004 act=0.857 c_err=0.679 q_err=0.650 ret=+0.00000
+  [   74] 09:53:06 p=64312.0 c=0.359 q=0.168 δ=0.77 status=pending fallback=none target=09:54:05
+  [   75] 09:53:13 SKIP forecast — pending unresolved
+  [   76] 09:53:19 SKIP forecast — pending unresolved
+  [   77] 09:53:25 SKIP forecast — pending unresolved
+  [   78] 09:53:31 SKIP forecast — pending unresolved
+  [   79] 09:53:37 SKIP forecast — pending unresolved
+  [   80] 09:53:43 SKIP forecast — pending unresolved
+  [   81] 09:53:50 SKIP forecast — pending unresolved
+  [   82] 09:53:56 SKIP forecast — pending unresolved
+  [   83] 09:54:02 SKIP forecast — pending unresolved
+  [   84] 09:54:10 RESOLVED id=btcusdt-74-1785046985489 act=0.000 c_err=0.359 q_err=0.168 ret=+0.00000
+  [   84] 09:54:10 p=64310.0 c=0.314 q=0.337 δ=0.88 status=pending fallback=none target=09:55:08
+  [   85] 09:54:16 SKIP forecast — pending unresolved
+  [   86] 09:54:22 SKIP forecast — pending unresolved
+  [   87] 09:54:28 SKIP forecast — pending unresolved
+  [   88] 09:54:34 SKIP forecast — pending unresolved
+  [   89] 09:54:41 SKIP forecast — pending unresolved
+  [   90] 09:54:47 SKIP forecast — pending unresolved
+  [   91] 09:54:53 SKIP forecast — pending unresolved
+  [   92] 09:55:00 SKIP forecast — pending unresolved
+  [   93] 09:55:06 SKIP forecast — pending unresolved
+  [   94] 09:55:12 RESOLVED id=btcusdt-84-1785047048830 act=0.556 c_err=0.241 q_err=0.219 ret=+0.00000
+  [   94] 09:55:12 p=64306.5 c=0.445 q=0.276 δ=0.72 status=pending fallback=saturation_gate target=09:56:11
+  [   95] 09:55:19 SKIP forecast — pending unresolved
+  [   96] 09:55:25 SKIP forecast — pending unresolved
+  [   97] 09:55:31 SKIP forecast — pending unresolved
+  [   98] 09:55:37 SKIP forecast — pending unresolved
+  [   99] 09:55:43 SKIP forecast — pending unresolved
+  [  100] 09:55:49 SKIP forecast — pending unresolved
+  [  101] 09:55:55 SKIP forecast — pending unresolved
+  [  102] 09:56:01 SKIP forecast — pending unresolved
+  [  103] 09:56:07 SKIP forecast — pending unresolved
+  [  104] 09:56:15 RESOLVED id=btcusdt-94-1785047111990 act=1.000 c_err=0.555 q_err=0.724 ret=+0.00000
+  [  104] 09:56:15 p=64313.8 c=0.554 q=0.471 δ=0.89 status=pending fallback=saturation_gate target=09:57:13
+  [  105] 09:56:21 SKIP forecast — pending unresolved
+  [  106] 09:56:27 SKIP forecast — pending unresolved
+  [  107] 09:56:33 SKIP forecast — pending unresolved
+  [  108] 09:56:39 SKIP forecast — pending unresolved
+  [  109] 09:56:45 SKIP forecast — pending unresolved
+  [  110] 09:56:52 SKIP forecast — pending unresolved
+  [  111] 09:56:58 SKIP forecast — pending unresolved
+  [  112] 09:57:05 SKIP forecast — pending unresolved
+  [  113] 09:57:11 SKIP forecast — pending unresolved
+  [  114] 09:57:18 RESOLVED id=btcusdt-104-1785047173847 act=0.267 c_err=0.288 q_err=0.204 ret=+0.00000
+  [  114] 09:57:18 p=64311.8 c=0.456 q=0.560 δ=0.63 status=pending fallback=saturation_gate target=09:58:17
+  [  115] 09:57:24 SKIP forecast — pending unresolved
+  [  116] 09:57:30 SKIP forecast — pending unresolved
+  [  117] 09:57:37 SKIP forecast — pending unresolved
+  [  118] 09:57:43 SKIP forecast — pending unresolved
+  [  119] 09:57:49 SKIP forecast — pending unresolved
+  [  120] 09:57:55 SKIP forecast — pending unresolved
+  [  121] 09:58:01 SKIP forecast — pending unresolved
+  [  122] 09:58:08 SKIP forecast — pending unresolved
+  [  123] 09:58:14 SKIP forecast — pending unresolved
+  [  124] 09:58:21 RESOLVED id=btcusdt-114-1785047237618 act=0.750 c_err=0.294 q_err=0.190 ret=+0.00000
+  [  124] 09:58:21 p=64314.1 c=0.554 q=0.520 δ=0.62 status=pending fallback=saturation_gate target=09:59:20
+  [  125] 09:58:28 SKIP forecast — pending unresolved
+  [  126] 09:58:34 SKIP forecast — pending unresolved
+  [  127] 09:58:40 SKIP forecast — pending unresolved
+  [  128] 09:58:46 SKIP forecast — pending unresolved
+  [  129] 09:58:52 SKIP forecast — pending unresolved
+  [  130] 09:58:58 SKIP forecast — pending unresolved
+  [  131] 09:59:04 SKIP forecast — pending unresolved
+  [  132] 09:59:10 SKIP forecast — pending unresolved
+  [  133] 09:59:16 SKIP forecast — pending unresolved
+  [  134] 09:59:24 RESOLVED id=btcusdt-124-1785047300885 act=0.533 c_err=0.020 q_err=0.013 ret=+0.00000
+  [  134] 09:59:24 p=64314.1 c=0.558 q=0.533 δ=0.71 status=pending fallback=saturation_gate target=10:00:22
+  [  135] 09:59:30 SKIP forecast — pending unresolved
+  [  136] 09:59:36 SKIP forecast — pending unresolved
+  [  137] 09:59:42 SKIP forecast — pending unresolved
+  [  138] 09:59:48 SKIP forecast — pending unresolved
+  [  139] 09:59:54 SKIP forecast — pending unresolved
+  [  140] 10:00:00 SKIP forecast — pending unresolved
+  [  141] 10:00:06 SKIP forecast — pending unresolved
+  [  142] 10:00:13 SKIP forecast — pending unresolved
+  [  143] 10:00:19 SKIP forecast — pending unresolved
+  [  144] 10:00:26 RESOLVED id=btcusdt-134-1785047362888 act=0.000 c_err=0.558 q_err=0.533 ret=+0.00000
+  [  144] 10:00:26 p=64311.3 c=0.455 q=0.491 δ=0.53 status=pending fallback=saturation_gate target=10:01:25
+  [  145] 10:00:32 SKIP forecast — pending unresolved
+  [  146] 10:00:38 SKIP forecast — pending unresolved
+  [  147] 10:00:44 SKIP forecast — pending unresolved
+  [  148] 10:00:50 SKIP forecast — pending unresolved
+  [  149] 10:00:56 SKIP forecast — pending unresolved
+  [  150] 10:01:03 SKIP forecast — pending unresolved
+  [  151] 10:01:09 SKIP forecast — pending unresolved
+  [  152] 10:01:15 SKIP forecast — pending unresolved
+  [  153] 10:01:21 SKIP forecast — pending unresolved
+  [  154] 10:01:28 RESOLVED id=btcusdt-144-1785047425561 act=0.000 c_err=0.455 q_err=0.491 ret=+0.00000
+  [  154] 10:01:28 p=64309.0 c=0.252 q=0.414 δ=1.27 status=pending fallback=none target=10:02:27
+  [  155] 10:01:34 SKIP forecast — pending unresolved
+  [  156] 10:01:40 SKIP forecast — pending unresolved
+  [  157] 10:01:46 SKIP forecast — pending unresolved
+  [  158] 10:01:52 SKIP forecast — pending unresolved
+  [  159] 10:01:59 SKIP forecast — pending unresolved
+  [  160] 10:02:05 SKIP forecast — pending unresolved
+  [  161] 10:02:11 SKIP forecast — pending unresolved
+  [  162] 10:02:19 SKIP forecast — pending unresolved
+  [  163] 10:02:25 SKIP forecast — pending unresolved
+  [  164] 10:02:32 RESOLVED id=btcusdt-154-1785047487556 act=1.000 c_err=0.748 q_err=0.586 ret=+0.00000
+  [  164] 10:02:32 p=64327.6 c=0.716 q=0.387 δ=0.78 status=pending fallback=saturation_gate target=10:03:31
+  [  165] 10:02:38 SKIP forecast — pending unresolved
+  [  166] 10:02:44 SKIP forecast — pending unresolved
+  [  167] 10:02:51 SKIP forecast — pending unresolved
+  [  168] 10:02:57 SKIP forecast — pending unresolved
+  [  169] 10:03:03 SKIP forecast — pending unresolved
+  [  170] 10:03:09 SKIP forecast — pending unresolved
+  [  171] 10:03:15 SKIP forecast — pending unresolved
+  [  172] 10:03:21 SKIP forecast — pending unresolved
+  [  173] 10:03:27 SKIP forecast — pending unresolved
+  [  174] 10:03:34 RESOLVED id=btcusdt-164-1785047551228 act=0.800 c_err=0.084 q_err=0.413 ret=+0.00000
+  [  174] 10:03:34 p=64327.6 c=0.771 q=0.756 δ=0.56 status=pending fallback=saturation_gate target=10:04:33
+  [  175] 10:03:41 SKIP forecast — pending unresolved
+  [  176] 10:03:47 SKIP forecast — pending unresolved
+  [  177] 10:03:53 SKIP forecast — pending unresolved
+  [  178] 10:03:59 SKIP forecast — pending unresolved
+  [  179] 10:04:06 SKIP forecast — pending unresolved
+  [  180] 10:04:11 SKIP forecast — pending unresolved
+  [  181] 10:04:17 SKIP forecast — pending unresolved
+  [  182] 10:04:24 SKIP forecast — pending unresolved
+  [  183] 10:04:30 SKIP forecast — pending unresolved
+  [  184] 10:04:38 RESOLVED id=btcusdt-174-1785047613794 act=0.778 c_err=0.007 q_err=0.022 ret=-0.00177
+  [  184] 10:04:38 p=64342.1 c=0.873 q=0.876 δ=0.86 status=pending fallback=saturation_gate target=10:05:37
+  [  185] 10:04:44 SKIP forecast — pending unresolved
+  [  186] 10:04:50 SKIP forecast — pending unresolved
+  [  187] 10:04:56 SKIP forecast — pending unresolved
+  [  188] 10:05:03 SKIP forecast — pending unresolved
+  [  189] 10:05:09 SKIP forecast — pending unresolved
+  [  190] 10:05:15 SKIP forecast — pending unresolved
+  [  191] 10:05:21 SKIP forecast — pending unresolved
+  [  192] 10:05:27 SKIP forecast — pending unresolved
+  [  193] 10:05:33 SKIP forecast — pending unresolved
+  [  194] 10:05:41 RESOLVED id=btcusdt-184-1785047677193 act=0.552 c_err=0.321 q_err=0.324 ret=-0.00168
+  [  194] 10:05:41 p=64362.5 c=0.569 q=0.738 δ=0.96 status=pending fallback=saturation_gate target=10:06:40
+  [  195] 10:05:47 SKIP forecast — pending unresolved
+  [  196] 10:05:53 SKIP forecast — pending unresolved
+  [  197] 10:06:00 SKIP forecast — pending unresolved
+  [  198] 10:06:06 SKIP forecast — pending unresolved
+  [  199] 10:06:12 SKIP forecast — pending unresolved
+  [  200] 10:06:18 SKIP forecast — pending unresolved
+  [  201] 10:06:24 SKIP forecast — pending unresolved
+  [  202] 10:06:30 SKIP forecast — pending unresolved
+  [  203] 10:06:36 SKIP forecast — pending unresolved
+  [  204] 10:06:44 RESOLVED id=btcusdt-194-1785047740177 act=0.567 c_err=0.003 q_err=0.171 ret=-0.00200
+  [  204] 10:06:44 p=64362.3 c=0.590 q=0.573 δ=0.96 status=pending fallback=saturation_gate target=10:07:42
+  [  205] 10:06:51 SKIP forecast — pending unresolved
+  [  206] 10:06:57 SKIP forecast — pending unresolved
+  [  207] 10:07:03 SKIP forecast — pending unresolved
+  [  208] 10:07:10 SKIP forecast — pending unresolved
+  [  209] 10:07:16 SKIP forecast — pending unresolved
+  [  210] 10:07:23 SKIP forecast — pending unresolved
+  [  211] 10:07:29 SKIP forecast — pending unresolved
+  [  212] 10:07:35 SKIP forecast — pending unresolved
+  [  213] 10:07:42 SKIP forecast — pending unresolved
+  [  214] 10:07:51 RESOLVED id=btcusdt-204-1785047802863 act=0.567 c_err=0.023 q_err=0.007 ret=+0.00000
+  [  214] 10:07:51 p=64362.3 c=0.584 q=0.562 δ=1.04 status=pending fallback=saturation_gate target=10:08:49
+  [  215] 10:07:58 SKIP forecast — pending unresolved
+  [  216] 10:08:04 SKIP forecast — pending unresolved
+  [  217] 10:08:10 SKIP forecast — pending unresolved
+  [  218] 10:08:16 SKIP forecast — pending unresolved
+  [  219] 10:08:23 SKIP forecast — pending unresolved
+  [  220] 10:08:30 SKIP forecast — pending unresolved
+  [  221] 10:08:37 SKIP forecast — pending unresolved
+  [  222] 10:08:43 SKIP forecast — pending unresolved
+  [  223] 10:08:51 RESOLVED id=btcusdt-214-1785047869991 act=0.680 c_err=0.096 q_err=0.118 ret=+0.00000
+  [  223] 10:08:52 p=64379.2 c=0.599 q=0.638 δ=0.89 status=pending fallback=saturation_gate target=10:09:50
+  [  224] 10:08:58 SKIP forecast — pending unresolved
+  [  225] 10:09:04 SKIP forecast — pending unresolved
+  [  226] 10:09:11 SKIP forecast — pending unresolved
+  [  227] 10:09:17 SKIP forecast — pending unresolved
+  [  228] 10:09:23 SKIP forecast — pending unresolved
+  [  229] 10:09:30 SKIP forecast — pending unresolved
+  [  230] 10:09:36 SKIP forecast — pending unresolved
+  [  231] 10:09:43 SKIP forecast — pending unresolved
+  [  232] 10:09:49 SKIP forecast — pending unresolved
+  [  233] 10:09:57 RESOLVED id=btcusdt-223-1785047930716 act=1.000 c_err=0.401 q_err=0.362 ret=-0.00186
+  [  233] 10:09:57 p=64388.0 c=0.726 q=0.700 δ=0.99 status=pending fallback=saturation_gate target=10:10:55
+  [  234] 10:10:03 SKIP forecast — pending unresolved
+  [  235] 10:10:09 SKIP forecast — pending unresolved
+  [  236] 10:10:16 SKIP forecast — pending unresolved
+  [  237] 10:10:22 SKIP forecast — pending unresolved
+  [  238] 10:10:28 SKIP forecast — pending unresolved
+  [  239] 10:10:35 SKIP forecast — pending unresolved
+  [  240] 10:10:41 SKIP forecast — pending unresolved
+  [  241] 10:10:47 SKIP forecast — pending unresolved
+  [  242] 10:10:54 SKIP forecast — pending unresolved
+  [  243] 10:11:02 RESOLVED id=btcusdt-233-1785047995899 act=0.000 c_err=0.726 q_err=0.700 ret=-0.00194
+  [  243] 10:11:02 p=64392.1 c=0.670 q=0.707 δ=1.11 status=pending fallback=saturation_gate target=10:12:00
+  [  244] 10:11:08 SKIP forecast — pending unresolved
+  [  245] 10:11:14 SKIP forecast — pending unresolved
+  [  246] 10:11:21 SKIP forecast — pending unresolved
+  [  247] 10:11:27 SKIP forecast — pending unresolved
+  [  248] 10:11:33 SKIP forecast — pending unresolved
+  [  249] 10:11:40 SKIP forecast — pending unresolved
+  [  250] 10:11:46 SKIP forecast — pending unresolved
+  [  251] 10:11:52 SKIP forecast — pending unresolved
+  [  252] 10:11:59 SKIP forecast — pending unresolved
+  [  253] 10:12:07 RESOLVED id=btcusdt-243-1785048060556 act=0.667 c_err=0.003 q_err=0.040 ret=-0.00200
+  [  253] 10:12:07 p=64392.1 c=0.665 q=0.667 δ=0.94 status=pending fallback=saturation_gate target=10:13:05
+  [  254] 10:12:13 SKIP forecast — pending unresolved
+  [  255] 10:12:19 SKIP forecast — pending unresolved
+  [  256] 10:12:26 SKIP forecast — pending unresolved
+  [  257] 10:12:33 SKIP forecast — pending unresolved
+  [  258] 10:12:39 SKIP forecast — pending unresolved
+  [  259] 10:12:45 SKIP forecast — pending unresolved
+  [  260] 10:12:52 SKIP forecast — pending unresolved
+  [  261] 10:12:58 SKIP forecast — pending unresolved
+  [  262] 10:13:05 SKIP forecast — pending unresolved
+  [  263] 10:13:12 RESOLVED id=btcusdt-253-1785048125393 act=0.667 c_err=0.001 q_err=0.000 ret=-0.00216
+  [  263] 10:13:12 p=64382.0 c=0.665 q=0.667 δ=1.14 status=pending fallback=saturation_gate target=10:14:11
+  [  264] 10:13:19 SKIP forecast — pending unresolved
+  [  265] 10:13:25 SKIP forecast — pending unresolved
+  [  266] 10:13:31 SKIP forecast — pending unresolved
+  [  267] 10:13:38 SKIP forecast — pending unresolved
+  [  268] 10:13:44 SKIP forecast — pending unresolved
+  [  269] 10:13:51 SKIP forecast — pending unresolved
+  [  270] 10:13:57 SKIP forecast — pending unresolved
+  [  271] 10:14:04 SKIP forecast — pending unresolved
+  [  272] 10:14:13 RESOLVED id=btcusdt-263-1785048191329 act=0.667 c_err=0.001 q_err=0.000 ret=-0.00200
+  [  272] 10:14:13 p=64382.0 c=0.665 q=0.667 δ=1.11 status=pending fallback=saturation_gate target=10:15:11
+  [  273] 10:14:19 SKIP forecast — pending unresolved
+  [  274] 10:14:26 SKIP forecast — pending unresolved
+  [  275] 10:14:33 SKIP forecast — pending unresolved
+  [  276] 10:14:39 SKIP forecast — pending unresolved
+  [  277] 10:14:46 SKIP forecast — pending unresolved
+  [  278] 10:14:52 SKIP forecast — pending unresolved
+  [  279] 10:14:58 SKIP forecast — pending unresolved
+  [  280] 10:15:05 SKIP forecast — pending unresolved
+  [  281] 10:15:11 SKIP forecast — pending unresolved
+  [  282] 10:15:19 RESOLVED id=btcusdt-272-1785048251651 act=0.333 c_err=0.332 q_err=0.333 ret=-0.00192
+  [  282] 10:15:19 p=64387.0 c=0.612 q=0.656 δ=1.05 status=pending fallback=saturation_gate target=10:16:17
+  [  283] 10:15:25 SKIP forecast — pending unresolved
+  [  284] 10:15:31 SKIP forecast — pending unresolved
+  [  285] 10:15:38 SKIP forecast — pending unresolved
+  [  286] 10:15:44 SKIP forecast — pending unresolved
+  [  287] 10:15:51 SKIP forecast — pending unresolved
+  [  288] 10:15:58 SKIP forecast — pending unresolved
+  [  289] 10:16:04 SKIP forecast — pending unresolved
+  [  290] 10:16:10 SKIP forecast — pending unresolved
+  [  291] 10:16:16 SKIP forecast — pending unresolved
+  [  292] 10:16:24 RESOLVED id=btcusdt-282-1785048317777 act=1.000 c_err=0.388 q_err=0.344 ret=-0.00195
+  [  292] 10:16:24 p=64390.3 c=0.612 q=0.611 δ=1.09 status=pending fallback=saturation_gate target=10:17:23
+  [  293] 10:16:31 SKIP forecast — pending unresolved
+  [  294] 10:16:38 SKIP forecast — pending unresolved
+  [  295] 10:16:44 SKIP forecast — pending unresolved
+  [  296] 10:16:51 SKIP forecast — pending unresolved
+  [  297] 10:16:57 SKIP forecast — pending unresolved
+  [  298] 10:17:04 SKIP forecast — pending unresolved
+  [  299] 10:17:10 SKIP forecast — pending unresolved
+  [  300] 10:17:17 SKIP forecast — pending unresolved
+  [  301] 10:17:25 RESOLVED id=btcusdt-292-1785048383252 act=0.938 c_err=0.326 q_err=0.326 ret=-0.00169
+  [  301] 10:17:25 p=64410.1 c=0.740 q=0.664 δ=0.96 status=pending fallback=saturation_gate target=10:18:23
+  [  302] 10:17:31 SKIP forecast — pending unresolved
+  [  303] 10:17:38 SKIP forecast — pending unresolved
+  [  304] 10:17:44 SKIP forecast — pending unresolved
+  [  305] 10:17:50 SKIP forecast — pending unresolved
+  [  306] 10:17:57 SKIP forecast — pending unresolved
+  [  307] 10:18:03 SKIP forecast — pending unresolved
+  [  308] 10:18:10 SKIP forecast — pending unresolved
+  [  309] 10:18:16 SKIP forecast — pending unresolved
+  [  310] 10:18:23 SKIP forecast — pending unresolved
+  [  311] 10:18:30 RESOLVED id=btcusdt-301-1785048443497 act=0.800 c_err=0.060 q_err=0.136 ret=-0.00200
+  [  311] 10:18:30 p=64410.1 c=0.772 q=0.800 δ=0.72 status=pending fallback=saturation_gate target=10:19:29
+  [  312] 10:18:37 SKIP forecast — pending unresolved
+  [  313] 10:18:43 SKIP forecast — pending unresolved
+  [  314] 10:18:50 SKIP forecast — pending unresolved
+  [  315] 10:18:56 SKIP forecast — pending unresolved
+  [  316] 10:19:03 SKIP forecast — pending unresolved
+  [  317] 10:19:09 SKIP forecast — pending unresolved
+  [  318] 10:19:16 SKIP forecast — pending unresolved
+  [  319] 10:19:22 SKIP forecast — pending unresolved
+  [  320] 10:19:28 SKIP forecast — pending unresolved
+  [  321] 10:19:37 RESOLVED id=btcusdt-311-1785048509574 act=0.800 c_err=0.028 q_err=0.000 ret=-0.00201
+  [  321] 10:19:37 p=64409.6 c=0.772 q=0.800 δ=1.03 status=pending fallback=saturation_gate target=10:20:35
+  [  322] 10:19:45 SKIP forecast — pending unresolved
+  [  323] 10:20:02 SKIP forecast — pending unresolved
+  [  324] 10:20:13 SKIP forecast — pending unresolved
+  [  325] 10:20:29 SKIP forecast — pending unresolved
+  [  326] 10:21:00 RESOLVED id=btcusdt-321-1785048575784 act=0.800 c_err=0.028 q_err=0.000 ret=-0.00196
+  [  326] 10:21:00 p=64411.9 c=0.772 q=0.800 δ=1.01 status=pending fallback=saturation_gate target=10:21:44
+  [  327] 10:21:10 SKIP forecast — pending unresolved
+  [  328] 10:21:17 SKIP forecast — pending unresolved
+  [  329] 10:21:25 SKIP forecast — pending unresolved
+  [  330] 10:21:36 SKIP forecast — pending unresolved
+  [  331] 10:21:47 RESOLVED id=btcusdt-326-1785048644745 act=0.800 c_err=0.028 q_err=0.000 ret=-0.00200
+  [  331] 10:21:47 p=64411.9 c=0.772 q=0.800 δ=1.33 status=pending fallback=saturation_gate target=10:22:44
+  [  332] 10:21:54 SKIP forecast — pending unresolved
+  [  333] 10:22:07 SKIP forecast — pending unresolved
+  [  334] 10:22:14 SKIP forecast — pending unresolved
+  [  335] 10:22:21 SKIP forecast — pending unresolved
+  [  336] 10:22:27 SKIP forecast — pending unresolved
+  [  337] 10:22:34 SKIP forecast — pending unresolved
+  [  338] 10:22:40 SKIP forecast — pending unresolved
+  [  339] 10:22:49 RESOLVED id=btcusdt-331-1785048704797 act=0.833 c_err=0.061 q_err=0.033 ret=-0.00174
+  [  339] 10:22:49 p=64428.8 c=0.788 q=0.802 δ=1.11 status=pending fallback=saturation_gate target=10:23:46
+  [  340] 10:22:55 SKIP forecast — pending unresolved
+  [  341] 10:23:02 SKIP forecast — pending unresolved
+  [  342] 10:23:09 SKIP forecast — pending unresolved
+  [  343] 10:23:15 SKIP forecast — pending unresolved
+  [  344] 10:23:21 SKIP forecast — pending unresolved
+  [  345] 10:23:28 SKIP forecast — pending unresolved
+  [  346] 10:23:34 SKIP forecast — pending unresolved
+  [  347] 10:23:41 SKIP forecast — pending unresolved
+  [  348] 10:23:50 RESOLVED id=btcusdt-339-1785048766940 act=0.833 c_err=0.045 q_err=0.031 ret=-0.00200
+  [  348] 10:23:50 p=64428.8 c=0.799 q=0.822 δ=1.25 status=pending fallback=saturation_gate target=10:24:48
+  [  349] 10:23:56 SKIP forecast — pending unresolved
+  [  350] 10:24:02 SKIP forecast — pending unresolved
+  [  351] 10:24:09 SKIP forecast — pending unresolved
+  [  352] 10:24:15 SKIP forecast — pending unresolved
+  [  353] 10:24:21 SKIP forecast — pending unresolved
+  [  354] 10:24:27 SKIP forecast — pending unresolved
+  [  355] 10:24:34 SKIP forecast — pending unresolved
+  [  356] 10:24:40 SKIP forecast — pending unresolved
+  [  357] 10:24:46 SKIP forecast — pending unresolved
+  [  358] 10:24:55 RESOLVED id=btcusdt-348-1785048828718 act=1.000 c_err=0.201 q_err=0.178 ret=-0.00200
+  [  358] 10:24:55 p=64428.8 c=0.868 q=0.853 δ=1.04 status=pending fallback=saturation_gate target=10:25:53
+  [  359] 10:25:02 SKIP forecast — pending unresolved
+  [  360] 10:25:08 SKIP forecast — pending unresolved
+  [  361] 10:25:15 SKIP forecast — pending unresolved
+  [  362] 10:25:21 SKIP forecast — pending unresolved
+  [  363] 10:25:27 SKIP forecast — pending unresolved
+  [  364] 10:25:34 SKIP forecast — pending unresolved
+  [  365] 10:25:40 SKIP forecast — pending unresolved
+  [  366] 10:25:47 SKIP forecast — pending unresolved
+  [  367] 10:25:55 RESOLVED id=btcusdt-358-1785048893769 act=1.000 c_err=0.132 q_err=0.147 ret=-0.00170
+  [  367] 10:25:55 p=64448.0 c=0.908 q=0.922 δ=1.22 status=pending fallback=saturation_gate target=10:26:53
+  [  368] 10:26:02 SKIP forecast — pending unresolved
+  [  369] 10:26:08 SKIP forecast — pending unresolved
+  [  370] 10:26:15 SKIP forecast — pending unresolved
+  [  371] 10:26:21 SKIP forecast — pending unresolved
+  [  372] 10:26:29 SKIP forecast — pending unresolved
+  [  373] 10:26:38 SKIP forecast — pending unresolved
+  [  374] 10:26:47 SKIP forecast — pending unresolved
+  [  375] 10:26:56 RESOLVED id=btcusdt-367-1785048953926 act=0.421 c_err=0.487 q_err=0.501 ret=-0.00203
+  [  375] 10:26:56 p=64446.1 c=0.641 q=0.693 δ=1.05 status=pending fallback=saturation_gate target=10:27:55
+  [  376] 10:27:02 SKIP forecast — pending unresolved
+  [  377] 10:27:09 SKIP forecast — pending unresolved
+  [  378] 10:27:16 SKIP forecast — pending unresolved
+  [  379] 10:27:23 SKIP forecast — pending unresolved
+  [  380] 10:27:31 SKIP forecast — pending unresolved
+  [  381] 10:27:37 SKIP forecast — pending unresolved
+  [  382] 10:27:44 SKIP forecast — pending unresolved
+  [  383] 10:27:51 SKIP forecast — pending unresolved
+  [  384] 10:27:59 RESOLVED id=btcusdt-375-1785049015086 act=1.000 c_err=0.359 q_err=0.307 ret=-0.00173
+  [  384] 10:27:59 p=64463.4 c=0.690 q=0.513 δ=0.95 status=pending fallback=saturation_gate target=10:28:57
+  [  385] 10:28:05 SKIP forecast — pending unresolved
+  [  386] 10:28:12 SKIP forecast — pending unresolved
+  [  387] 10:28:19 SKIP forecast — pending unresolved
+  [  388] 10:28:26 SKIP forecast — pending unresolved
+  [  389] 10:28:32 SKIP forecast — pending unresolved
+  [  390] 10:28:39 SKIP forecast — pending unresolved
+  [  391] 10:28:45 SKIP forecast — pending unresolved
+  [  392] 10:28:51 SKIP forecast — pending unresolved
+  [  393] 10:28:59 RESOLVED id=btcusdt-384-1785049077740 act=0.500 c_err=0.190 q_err=0.013 ret=+0.00000
+  [  393] 10:28:59 p=64450.2 c=0.738 q=0.687 δ=1.09 status=pending fallback=saturation_gate target=10:29:58
+  [  394] 10:29:05 SKIP forecast — pending unresolved
+  [  395] 10:29:12 SKIP forecast — pending unresolved
+  [  396] 10:29:18 SKIP forecast — pending unresolved
+  [  397] 10:29:25 SKIP forecast — pending unresolved
+  [  398] 10:29:32 SKIP forecast — pending unresolved
+  [  399] 10:29:38 SKIP forecast — pending unresolved
+  [  400] 10:29:45 SKIP forecast — pending unresolved
+  [  401] 10:29:52 SKIP forecast — pending unresolved
+  [  402] 10:30:01 RESOLVED id=btcusdt-393-1785049138167 act=0.767 c_err=0.029 q_err=0.080 ret=-0.00193
+  [  402] 10:30:01 p=64454.9 c=0.746 q=0.767 δ=1.20 status=pending fallback=saturation_gate target=10:30:59
+  [  403] 10:30:07 SKIP forecast — pending unresolved
+  [  404] 10:30:14 SKIP forecast — pending unresolved
+  [  405] 10:30:21 SKIP forecast — pending unresolved
+  [  406] 10:30:28 SKIP forecast — pending unresolved
+[data_fetcher] _api_get /market/history/kline?symbol=btcusdt&period=1min&size=5: TimeoutError: The read operation timed out
+[data_fetcher] _api_get /market/detail/merged?symbol=btcusdt: TimeoutError: The read operation timed out
+[data_fetcher] _api_get /market/history/trade?symbol=btcusdt&size=30: TimeoutError: The read operation timed out
+[data_fetcher] _api_get /market/depth?symbol=btcusdt&type=step1&depth=20: TimeoutError: The read operation timed out
+  [  407] 10:30:53 SKIP forecast — pending unresolved
+  [  408] 10:31:01 RESOLVED id=btcusdt-402-1785049199379 act=0.250 c_err=0.496 q_err=0.517 ret=-0.00200
+  [  408] 10:31:01 p=64454.9 c=0.767 q=0.780 δ=1.05 status=pending fallback=saturation_gate target=10:32:00
+  [  409] 10:31:08 SKIP forecast — pending unresolved
+  [  410] 10:31:14 SKIP forecast — pending unresolved
+  [  411] 10:31:31 SKIP forecast — pending unresolved
+  [  412] 10:31:43 SKIP forecast — pending unresolved
+  [  413] 10:31:50 SKIP forecast — pending unresolved
+  [  414] 10:31:57 SKIP forecast — pending unresolved
+  [  415] 10:32:07 RESOLVED id=btcusdt-408-1785049260174 act=0.905 c_err=0.137 q_err=0.125 ret=-0.00174
+  [  415] 10:32:07 p=64471.5 c=0.724 q=0.780 δ=1.32 status=pending fallback=saturation_gate target=10:33:04
+  [  416] 10:32:14 SKIP forecast — pending unresolved
+  [  417] 10:32:20 SKIP forecast — pending unresolved
+  [  418] 10:32:27 SKIP forecast — pending unresolved
+  [  419] 10:32:33 SKIP forecast — pending unresolved
+  [  420] 10:32:39 SKIP forecast — pending unresolved
+  [  421] 10:32:46 SKIP forecast — pending unresolved
+  [  422] 10:32:52 SKIP forecast — pending unresolved
+  [  423] 10:32:59 SKIP forecast — pending unresolved
+  [  424] 10:33:06 RESOLVED id=btcusdt-415-1785049324517 act=0.000 c_err=0.724 q_err=0.780 ret=-0.00197
+         --- resolved 30: quantum wins 14/30 (47%) trades=15 avg_ret=-0.00189
+  [  424] 10:33:06 p=64473.6 c=0.678 q=0.722 δ=0.92 status=pending fallback=saturation_gate target=10:34:05
+  [  425] 10:33:13 SKIP forecast — pending unresolved
+  [  426] 10:33:19 SKIP forecast — pending unresolved
+  [  427] 10:33:26 SKIP forecast — pending unresolved
+  [  428] 10:33:32 SKIP forecast — pending unresolved
+  [  429] 10:33:38 SKIP forecast — pending unresolved
+  [  430] 10:33:46 SKIP forecast — pending unresolved
+  [  431] 10:33:52 SKIP forecast — pending unresolved
+  [  432] 10:33:58 SKIP forecast — pending unresolved
+  [  433] 10:34:05 SKIP forecast — pending unresolved
+  [  434] 10:34:13 RESOLVED id=btcusdt-424-1785049385589 act=0.000 c_err=0.678 q_err=0.722 ret=-0.00214
+         --- resolved 31: quantum wins 14/31 (45%) trades=16 avg_ret=-0.00190
+  [  434] 10:34:13 p=64464.3 c=0.665 q=0.667 δ=1.23 status=pending fallback=saturation_gate target=10:35:12
+  [  435] 10:34:19 SKIP forecast — pending unresolved
+  [  436] 10:34:26 SKIP forecast — pending unresolved
+  [  437] 10:34:32 SKIP forecast — pending unresolved
+  [  438] 10:34:38 SKIP forecast — pending unresolved
+  [  439] 10:34:44 SKIP forecast — pending unresolved
+  [  440] 10:34:51 SKIP forecast — pending unresolved
+  [  441] 10:34:57 SKIP forecast — pending unresolved
+  [  442] 10:35:03 SKIP forecast — pending unresolved
+  [  443] 10:35:09 SKIP forecast — pending unresolved
+  [  444] 10:35:17 RESOLVED id=btcusdt-434-1785049452167 act=0.000 c_err=0.665 q_err=0.667 ret=-0.00240
+         --- resolved 32: quantum wins 14/32 (44%) trades=17 avg_ret=-0.00193
+  [  444] 10:35:17 p=64438.4 c=0.561 q=0.649 δ=1.04 status=pending fallback=saturation_gate target=10:36:16
+  [  445] 10:35:24 SKIP forecast — pending unresolved
+  [  446] 10:35:31 SKIP forecast — pending unresolved
+  [  447] 10:35:37 SKIP forecast — pending unresolved
+  [  448] 10:35:43 SKIP forecast — pending unresolved
+  [  449] 10:35:49 SKIP forecast — pending unresolved
+  [  450] 10:35:56 SKIP forecast — pending unresolved
+
+  Signal 15 received, shutting down gracefully...
+
+  Stopped at 2026-07-26 10:35:58
+  Collected 451 observations, 47 predictions
+  Saved to /home/manjaruhp/Pictures/Autonomous-AI-june2026/Exchange-Q/core/_live_results/btcusdt-quantum-1785046520.json
+
+  FINAL: resolved=32 quantum wins 14/32 (43.8%)  c_err=0.3999  q_err=0.3914  trades=17 avg_ret=-0.00193
+
+  FINAL: exploratory summary only — need n>=720 for significance report
+  QUANTUM-ONLY LIVE PIPELINE
+  symbol=btcusdt  max_resolved=500  max_fetches=unlimited  max_runtime=unlimited
+  horizon=60.0s  sample_interval=5.0s  window=15
+  output=/home/manjaruhp/Pictures/Autonomous-AI-june2026/Exchange-Q/core/_live_results/btcusdt-quantum-1785049600.json
+  database=/home/manjaruhp/Pictures/Autonomous-AI-june2026/Exchange-Q/core/_live_results/btcusdt-quantum-1785049600.sqlite3
+  PID=1505735
+  Started at 2026-07-26 10:36:40
+
+  [    0] 10:36:41 WARMUP (1/15)
+  [    1] 10:36:47 WARMUP (2/15)
+  [    2] 10:36:53 WARMUP (3/15)
+  [    3] 10:37:00 WARMUP (4/15)
+  [    4] 10:37:06 WARMUP (5/15)
+  [    5] 10:37:12 WARMUP (6/15)
+  [    6] 10:37:19 WARMUP (7/15)
+  [    7] 10:37:25 WARMUP (8/15)
+  [    8] 10:37:32 WARMUP (9/15)
+  [    9] 10:37:38 WARMUP (10/15)
+  [   10] 10:37:45 WARMUP (11/15)
+  [   11] 10:37:51 WARMUP (12/15)
+  [   12] 10:37:58 WARMUP (13/15)
+  [   13] 10:38:04 WARMUP (14/15)
+  WARMUP complete — creating predictions for horizon=60.0s
+  [   14] 10:38:11 p=64434.9 c=0.474 q=0.458 δ=0.93 status=pending fallback=saturation_gate target=10:39:11
+  [   15] 10:38:17 SKIP forecast — pending unresolved
+  [   16] 10:38:24 SKIP forecast — pending unresolved
+  [   17] 10:38:30 SKIP forecast — pending unresolved
+  [   18] 10:38:37 SKIP forecast — pending unresolved
+  [   19] 10:38:43 SKIP forecast — pending unresolved
+  [   20] 10:38:49 SKIP forecast — pending unresolved
+  [   21] 10:38:55 SKIP forecast — pending unresolved
+  [   22] 10:39:03 SKIP forecast — pending unresolved
+  [   23] 10:39:09 SKIP forecast — pending unresolved
+  [   24] 10:39:17 RESOLVED id=btcusdt-14-1785049691594 act=0.433 c_err=0.041 q_err=0.024 ret=+0.00000
+  [   24] 10:39:17 p=64444.6 c=0.477 q=0.570 δ=0.93 status=pending fallback=none target=10:40:16
+  [   25] 10:39:23 SKIP forecast — pending unresolved
+  [   26] 10:39:30 SKIP forecast — pending unresolved
+  [   27] 10:39:36 SKIP forecast — pending unresolved
+  [   28] 10:39:42 SKIP forecast — pending unresolved
+  [   29] 10:39:49 SKIP forecast — pending unresolved
+  [   30] 10:39:55 SKIP forecast — pending unresolved
+  [   31] 10:40:02 SKIP forecast — pending unresolved
+  [   32] 10:40:08 SKIP forecast — pending unresolved
+  [   33] 10:40:15 SKIP forecast — pending unresolved
+  [   34] 10:40:22 RESOLVED id=btcusdt-24-1785049756400 act=0.250 c_err=0.227 q_err=0.320 ret=+0.00000
+  [   34] 10:40:22 p=64432.9 c=0.440 q=0.409 δ=1.16 status=pending fallback=saturation_gate target=10:41:21
+  [   35] 10:40:29 SKIP forecast — pending unresolved
+  [   36] 10:40:36 SKIP forecast — pending unresolved
+  [   37] 10:40:43 SKIP forecast — pending unresolved
+  [   38] 10:40:49 SKIP forecast — pending unresolved
+  [   39] 10:40:55 SKIP forecast — pending unresolved
+  [   40] 10:41:02 SKIP forecast — pending unresolved
+  [   41] 10:41:09 SKIP forecast — pending unresolved
+  [   42] 10:41:15 SKIP forecast — pending unresolved
+  [   43] 10:41:25 RESOLVED id=btcusdt-34-1785049821441 act=0.400 c_err=0.040 q_err=0.009 ret=+0.00000
+  [   43] 10:41:25 p=64428.8 c=0.450 q=0.398 δ=1.10 status=pending fallback=saturation_gate target=10:42:23
+  [   44] 10:41:31 SKIP forecast — pending unresolved
+  [   45] 10:41:38 SKIP forecast — pending unresolved
+  [   46] 10:41:45 SKIP forecast — pending unresolved
+  [   47] 10:41:51 SKIP forecast — pending unresolved
+  [   48] 10:41:58 SKIP forecast — pending unresolved
+  [   49] 10:42:04 SKIP forecast — pending unresolved
+  [   50] 10:42:11 SKIP forecast — pending unresolved
+  [   51] 10:42:17 SKIP forecast — pending unresolved
+  [   52] 10:42:25 RESOLVED id=btcusdt-43-1785049883089 act=0.433 c_err=0.016 q_err=0.036 ret=+0.00000
+  [   52] 10:42:25 p=64407.9 c=0.476 q=0.495 δ=1.39 status=pending fallback=none target=10:43:24
+  [   53] 10:42:31 SKIP forecast — pending unresolved
+  [   54] 10:42:38 SKIP forecast — pending unresolved
+  [   55] 10:42:44 SKIP forecast — pending unresolved
+  [   56] 10:42:51 SKIP forecast — pending unresolved
+  [   57] 10:42:58 SKIP forecast — pending unresolved
+  [   58] 10:43:04 SKIP forecast — pending unresolved
+  [   59] 10:43:10 SKIP forecast — pending unresolved
+  [   60] 10:43:17 SKIP forecast — pending unresolved
+  [   61] 10:43:23 SKIP forecast — pending unresolved
+  [   62] 10:43:31 RESOLVED id=btcusdt-52-1785049944082 act=0.750 c_err=0.274 q_err=0.255 ret=+0.00000
+  [   62] 10:43:31 p=64413.1 c=0.545 q=0.473 δ=1.12 status=pending fallback=saturation_gate target=10:44:30
+  [   63] 10:43:39 SKIP forecast — pending unresolved
+  [   64] 10:43:45 SKIP forecast — pending unresolved
+  [   65] 10:43:51 SKIP forecast — pending unresolved
+  [   66] 10:43:58 SKIP forecast — pending unresolved
+  [   67] 10:44:04 SKIP forecast — pending unresolved
+  [   68] 10:44:11 SKIP forecast — pending unresolved
+  [   69] 10:44:17 SKIP forecast — pending unresolved
+  [   70] 10:44:23 SKIP forecast — pending unresolved
+  [   71] 10:44:30 SKIP forecast — pending unresolved
+  [   72] 10:44:37 RESOLVED id=btcusdt-62-1785050010495 act=0.533 c_err=0.012 q_err=0.060 ret=+0.00000
+  [   72] 10:44:37 p=64413.1 c=0.558 q=0.533 δ=1.25 status=pending fallback=saturation_gate target=10:45:36
+  [   73] 10:44:44 SKIP forecast — pending unresolved
+  [   74] 10:44:50 SKIP forecast — pending unresolved
+  [   75] 10:44:56 SKIP forecast — pending unresolved
+  [   76] 10:45:02 SKIP forecast — pending unresolved
+  [   77] 10:45:09 SKIP forecast — pending unresolved
+  [   78] 10:45:15 SKIP forecast — pending unresolved
+  [   79] 10:45:21 SKIP forecast — pending unresolved
+  [   80] 10:45:28 SKIP forecast — pending unresolved
+  [   81] 10:45:34 SKIP forecast — pending unresolved
+  [   82] 10:45:42 RESOLVED id=btcusdt-72-1785050076363 act=0.455 c_err=0.103 q_err=0.079 ret=+0.00000
+  [   82] 10:45:42 p=64433.4 c=0.566 q=0.670 δ=1.27 status=pending fallback=none target=10:46:40
+  [   83] 10:45:48 SKIP forecast — pending unresolved
+  [   84] 10:45:55 SKIP forecast — pending unresolved
+  [   85] 10:46:02 SKIP forecast — pending unresolved
+  [   86] 10:46:08 SKIP forecast — pending unresolved
+  [   87] 10:46:15 SKIP forecast — pending unresolved
+  [   88] 10:46:21 SKIP forecast — pending unresolved
+  [   89] 10:46:28 SKIP forecast — pending unresolved
+  [   90] 10:46:34 SKIP forecast — pending unresolved
+  [   91] 10:46:42 RESOLVED id=btcusdt-82-1785050140636 act=0.679 c_err=0.112 q_err=0.008 ret=-0.00175
+  [   91] 10:46:42 p=64449.8 c=0.637 q=0.638 δ=1.13 status=pending fallback=saturation_gate target=10:47:40
+  [   92] 10:46:48 SKIP forecast — pending unresolved
+  [   93] 10:46:54 SKIP forecast — pending unresolved
+  [   94] 10:47:01 SKIP forecast — pending unresolved
+  [   95] 10:47:08 SKIP forecast — pending unresolved
+  [   96] 10:47:15 SKIP forecast — pending unresolved
+  [   97] 10:47:21 SKIP forecast — pending unresolved
+  [   98] 10:47:28 SKIP forecast — pending unresolved
+  [   99] 10:47:35 SKIP forecast — pending unresolved
+  [  100] 10:47:43 RESOLVED id=btcusdt-91-1785050200850 act=0.700 c_err=0.063 q_err=0.062 ret=-0.00205
+  [  100] 10:47:43 p=64446.6 c=0.677 q=0.676 δ=1.16 status=pending fallback=saturation_gate target=10:48:42
+  [  101] 10:47:49 SKIP forecast — pending unresolved
+  [  102] 10:47:56 SKIP forecast — pending unresolved
+  [  103] 10:48:02 SKIP forecast — pending unresolved
+  [  104] 10:48:08 SKIP forecast — pending unresolved
+  [  105] 10:48:14 SKIP forecast — pending unresolved
+  [  106] 10:48:21 SKIP forecast — pending unresolved
+  [  107] 10:48:28 SKIP forecast — pending unresolved
+  [  108] 10:48:35 SKIP forecast — pending unresolved
+  [  109] 10:48:41 SKIP forecast — pending unresolved
+  [  110] 10:48:49 RESOLVED id=btcusdt-100-1785050262235 act=0.000 c_err=0.677 q_err=0.676 ret=-0.00200
+  [  110] 10:48:49 p=64446.6 c=0.616 q=0.631 δ=1.17 status=pending fallback=saturation_gate target=10:49:48
+  [  111] 10:48:55 SKIP forecast — pending unresolved
+  [  112] 10:49:02 SKIP forecast — pending unresolved
+  [  113] 10:49:08 SKIP forecast — pending unresolved
+  [  114] 10:49:14 SKIP forecast — pending unresolved
+  [  115] 10:49:21 SKIP forecast — pending unresolved
+  [  116] 10:49:28 SKIP forecast — pending unresolved
+  [  117] 10:49:34 SKIP forecast — pending unresolved
+  [  118] 10:49:40 SKIP forecast — pending unresolved
+  [  119] 10:49:47 SKIP forecast — pending unresolved
+  [  120] 10:49:55 RESOLVED id=btcusdt-110-1785050328101 act=0.312 c_err=0.303 q_err=0.319 ret=-0.00248
+  [  120] 10:49:55 p=64415.7 c=0.332 q=0.487 δ=1.16 status=pending fallback=saturation_gate target=10:50:53
+  [  121] 10:50:01 SKIP forecast — pending unresolved
+  [  122] 10:50:08 SKIP forecast — pending unresolved
+  [  123] 10:50:14 SKIP forecast — pending unresolved
+  [  124] 10:50:21 SKIP forecast — pending unresolved
+  [  125] 10:50:27 SKIP forecast — pending unresolved
+  [  126] 10:50:33 SKIP forecast — pending unresolved
+  [  127] 10:50:40 SKIP forecast — pending unresolved
+  [  128] 10:50:47 SKIP forecast — pending unresolved
+  [  129] 10:50:53 SKIP forecast — pending unresolved
+  [  130] 10:51:01 RESOLVED id=btcusdt-120-1785050393947 act=0.000 c_err=0.332 q_err=0.487 ret=+0.00000
+  [  130] 10:51:01 p=64408.4 c=0.342 q=0.405 δ=1.01 status=pending fallback=none target=10:51:59
+  [  131] 10:51:07 SKIP forecast — pending unresolved
+  [  132] 10:51:13 SKIP forecast — pending unresolved
+  [  133] 10:51:20 SKIP forecast — pending unresolved
+  [  134] 10:51:26 SKIP forecast — pending unresolved
+  [  135] 10:51:33 SKIP forecast — pending unresolved
+  [  136] 10:51:39 SKIP forecast — pending unresolved
+  [  137] 10:51:45 SKIP forecast — pending unresolved
+  [  138] 10:51:51 SKIP forecast — pending unresolved
+  [  139] 10:51:58 SKIP forecast — pending unresolved
+  [  140] 10:52:06 RESOLVED id=btcusdt-130-1785050459846 act=0.182 c_err=0.160 q_err=0.223 ret=+0.00000
+  [  140] 10:52:06 p=64384.6 c=0.268 q=0.347 δ=0.90 status=pending fallback=none target=10:53:04
+  [  141] 10:52:12 SKIP forecast — pending unresolved
+  [  142] 10:52:18 SKIP forecast — pending unresolved
+  [  143] 10:52:25 SKIP forecast — pending unresolved
+  [  144] 10:52:31 SKIP forecast — pending unresolved
+  [  145] 10:52:38 SKIP forecast — pending unresolved
+  [  146] 10:52:44 SKIP forecast — pending unresolved
+  [  147] 10:52:50 SKIP forecast — pending unresolved
+  [  148] 10:52:57 SKIP forecast — pending unresolved
+  [  149] 10:53:04 SKIP forecast — pending unresolved
+  [  150] 10:53:12 RESOLVED id=btcusdt-140-1785050524798 act=0.333 c_err=0.065 q_err=0.014 ret=+0.00000
+  [  150] 10:53:12 p=64384.9 c=0.285 q=0.245 δ=0.94 status=pending fallback=none target=10:54:10
+  [  151] 10:53:18 SKIP forecast — pending unresolved
+  [  152] 10:53:25 SKIP forecast — pending unresolved
+  [  153] 10:53:31 SKIP forecast — pending unresolved
+  [  154] 10:53:38 SKIP forecast — pending unresolved
+  [  155] 10:53:44 SKIP forecast — pending unresolved
+  [  156] 10:53:50 SKIP forecast — pending unresolved
+  [  157] 10:53:57 SKIP forecast — pending unresolved
+  [  158] 10:54:03 SKIP forecast — pending unresolved
+  [  159] 10:54:11 RESOLVED id=btcusdt-150-1785050590306 act=0.333 c_err=0.048 q_err=0.089 ret=+0.00000
+  [  159] 10:54:11 p=64387.2 c=0.315 q=0.293 δ=1.05 status=pending fallback=none target=10:55:10
+  [  160] 10:54:18 SKIP forecast — pending unresolved
+  [  161] 10:54:24 SKIP forecast — pending unresolved
+  [  162] 10:54:30 SKIP forecast — pending unresolved
+  [  163] 10:54:36 SKIP forecast — pending unresolved
+  [  164] 10:54:43 SKIP forecast — pending unresolved
+  [  165] 10:54:50 SKIP forecast — pending unresolved
+  [  166] 10:54:56 SKIP forecast — pending unresolved
+  [  167] 10:55:02 SKIP forecast — pending unresolved
+  [  168] 10:55:09 SKIP forecast — pending unresolved
+  [  169] 10:55:17 RESOLVED id=btcusdt-159-1785050650542 act=0.333 c_err=0.018 q_err=0.041 ret=+0.00000
+  [  169] 10:55:17 p=64382.1 c=0.344 q=0.339 δ=1.04 status=pending fallback=none target=10:56:16
+  [  170] 10:55:23 SKIP forecast — pending unresolved
+  [  171] 10:55:30 SKIP forecast — pending unresolved
+  [  172] 10:55:36 SKIP forecast — pending unresolved
+  [  173] 10:55:43 SKIP forecast — pending unresolved
+  [  174] 10:55:49 SKIP forecast — pending unresolved
+  [  175] 10:55:56 SKIP forecast — pending unresolved
+  [  176] 10:56:02 SKIP forecast — pending unresolved
+  [  177] 10:56:09 SKIP forecast — pending unresolved
+  [  178] 10:56:15 SKIP forecast — pending unresolved
+  [  179] 10:56:23 RESOLVED id=btcusdt-169-1785050716021 act=0.267 c_err=0.078 q_err=0.072 ret=+0.00000
+  [  179] 10:56:23 p=64382.1 c=0.342 q=0.262 δ=0.95 status=pending fallback=saturation_gate target=10:57:21
+  [  180] 10:56:30 SKIP forecast — pending unresolved
+  [  181] 10:56:36 SKIP forecast — pending unresolved
+  [  182] 10:56:42 SKIP forecast — pending unresolved
+  [  183] 10:56:49 SKIP forecast — pending unresolved
+  [  184] 10:56:55 SKIP forecast — pending unresolved
+  [  185] 10:57:01 SKIP forecast — pending unresolved
+  [  186] 10:57:08 SKIP forecast — pending unresolved
+  [  187] 10:57:14 SKIP forecast — pending unresolved
+  [  188] 10:57:21 SKIP forecast — pending unresolved
+  [  189] 10:57:29 RESOLVED id=btcusdt-179-1785050781845 act=0.267 c_err=0.075 q_err=0.004 ret=+0.00000
+  [  189] 10:57:29 p=64382.1 c=0.342 q=0.267 δ=0.80 status=pending fallback=saturation_gate target=10:58:27
+  [  190] 10:57:36 SKIP forecast — pending unresolved
+  [  191] 10:57:42 SKIP forecast — pending unresolved
+  [  192] 10:57:49 SKIP forecast — pending unresolved
+  [  193] 10:57:55 SKIP forecast — pending unresolved
+  [  194] 10:58:01 SKIP forecast — pending unresolved
+  [  195] 10:58:08 SKIP forecast — pending unresolved
+  [  196] 10:58:15 SKIP forecast — pending unresolved
+  [  197] 10:58:21 SKIP forecast — pending unresolved
+  [  198] 10:58:29 RESOLVED id=btcusdt-189-1785050847759 act=0.267 c_err=0.075 q_err=0.000 ret=+0.00000
+  [  198] 10:58:29 p=64378.2 c=0.342 q=0.267 δ=0.68 status=pending fallback=saturation_gate target=10:59:27
+  [  199] 10:58:35 SKIP forecast — pending unresolved
+  [  200] 10:58:41 SKIP forecast — pending unresolved
+  [  201] 10:58:48 SKIP forecast — pending unresolved
+  [  202] 10:58:54 SKIP forecast — pending unresolved
+  [  203] 10:59:00 SKIP forecast — pending unresolved
+  [  204] 10:59:06 SKIP forecast — pending unresolved
+  [  205] 10:59:13 SKIP forecast — pending unresolved
+  [  206] 10:59:19 SKIP forecast — pending unresolved
+  [  207] 10:59:26 SKIP forecast — pending unresolved
+  [  208] 10:59:33 RESOLVED id=btcusdt-198-1785050907870 act=0.833 c_err=0.492 q_err=0.567 ret=+0.00000
+  [  208] 10:59:33 p=64380.9 c=0.436 q=0.336 δ=0.66 status=pending fallback=saturation_gate target=11:00:32
+  [  209] 10:59:40 SKIP forecast — pending unresolved
+  [  210] 10:59:46 SKIP forecast — pending unresolved
+  [  211] 10:59:53 SKIP forecast — pending unresolved
+  [  212] 11:00:00 SKIP forecast — pending unresolved
+  [  213] 11:00:06 SKIP forecast — pending unresolved
+  [  214] 11:00:13 SKIP forecast — pending unresolved
+  [  215] 11:00:19 SKIP forecast — pending unresolved
+  [  216] 11:00:25 SKIP forecast — pending unresolved
+  [  217] 11:00:32 SKIP forecast — pending unresolved
+  [  218] 11:00:40 RESOLVED id=btcusdt-208-1785050972555 act=0.400 c_err=0.036 q_err=0.064 ret=+0.00000
+  [  218] 11:00:40 p=64380.9 c=0.450 q=0.400 δ=0.60 status=pending fallback=saturation_gate target=11:01:38
+  [  219] 11:00:47 SKIP forecast — pending unresolved
+  [  220] 11:00:53 SKIP forecast — pending unresolved
+  [  221] 11:01:00 SKIP forecast — pending unresolved
+[data_fetcher] _api_get /market/depth?symbol=btcusdt&type=step1&depth=20: OSError: [Errno 101] Network is unreachable
+[data_fetcher] _api_get /market/history/kline?symbol=btcusdt&period=1min&size=5: OSError: [Errno 101] Network is unreachable
+[data_fetcher] _api_get /market/history/trade?symbol=btcusdt&size=30: OSError: [Errno 101] Network is unreachable
+[data_fetcher] _api_get /market/detail/merged?symbol=btcusdt: OSError: [Errno 101] Network is unreachable
+[data_fetcher] _api_get /market/depth?symbol=btcusdt&type=step1&depth=20: OSError: [Errno 101] Network is unreachable
+[data_fetcher] _api_get /market/history/trade?symbol=btcusdt&size=30: OSError: [Errno 101] Network is unreachable
+[data_fetcher] _api_get /market/history/kline?symbol=btcusdt&period=1min&size=5: OSError: [Errno 101] Network is unreachable
+[data_fetcher] _api_get /market/detail/merged?symbol=btcusdt: OSError: [Errno 101] Network is unreachable
+[data_fetcher] _api_get /market/detail/merged?symbol=btcusdt: OSError: [Errno 101] Network is unreachable
+[data_fetcher] _api_get /market/depth?symbol=btcusdt&type=step1&depth=20: OSError: [Errno 101] Network is unreachable
+[data_fetcher] _api_get /market/history/trade?symbol=btcusdt&size=30: OSError: [Errno 101] Network is unreachable
+[data_fetcher] _api_get /market/history/kline?symbol=btcusdt&period=1min&size=5: OSError: [Errno 101] Network is unreachable
+  [  222] 11:03:48 NO DATA — retrying in 5s
+
+  Signal 15 received, shutting down gracefully...

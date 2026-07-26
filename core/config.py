@@ -15,9 +15,49 @@ FEE_RATE = 0.001
 LONG_THRESHOLD = 0.60
 FLAT_THRESHOLD = 0.40
 
-# Statistical testing (increment when adding a new pre-registered hypothesis)
+# Statistical testing (increment when adding a new pre-registered hypothesis).
+# N=5 reflects historical kline-era comparisons.
 N_HYPOTHESES_TOTAL = 5
+# Live schema v5 primary test (single frozen hypothesis: quantum vs classical on buy_ratio).
+N_HYPOTHESES_LIVE = 1
+# Minimum resolved eligible predictions before production significance claims.
+MIN_SIGNIFICANCE_N = 720
 
 # Live protocol defaults
 DEFAULT_WINDOW = 15
 DEFAULT_HORIZON_S = 3600.0
+LIVE_SCHEMA_VERSION = 5
+
+# Raw trade capture for primary live labels.
+TRADE_CAPTURE_SIZE = 2000
+TRADE_RETENTION_DAYS = 30
+MAX_TRADE_CAPTURE_GAP_FACTOR = 2
+
+# Reject observations when cross-endpoint timestamps differ by more than this (ms).
+MAX_ENDPOINT_SKEW_MS = 5000
+
+# Born rule: revert to classical when interference overshoots this much or pred >= SATURATION_THRESHOLD.
+MAX_INTERFERENCE_BOOST = 0.15
+SATURATION_THRESHOLD = 0.99
+
+# Minimum trades in [created_at_ms, target_at_ms] for forward-window buy_ratio label.
+MIN_FORWARD_WINDOW_TRADES = 3
+MAX_FORWARD_WINDOW_MIN_TRADES = 15
+
+# Quality flags that disqualify a forecast from scoring eligibility.
+DISQUALIFYING_QUALITY_FLAGS = frozenset({
+    "crossed_market",
+    "no_trades",
+    "endpoint_skew",
+    "late_resolution",
+    "short_forward_window",
+    "label_unavailable",
+})
+
+
+def min_forward_trades(horizon_s):
+    """Horizon-scaled minimum trades for forward-window label (capped for production)."""
+    return max(
+        MIN_FORWARD_WINDOW_TRADES,
+        min(int(horizon_s / 20), MAX_FORWARD_WINDOW_MIN_TRADES),
+    )

@@ -57,7 +57,7 @@ def classical_splits(candles, period):
     }
 
 
-def classical_ablation(candles, window=15):
+def classical_ablation(candles, window=20):
     """vol_regime vs MA vs ensemble on held-out klines (classical only)."""
     from ensemble import _volregime_predict, _ma_predict
 
@@ -124,22 +124,37 @@ def live_born_status():
         return status
 
     resolved = 0
+    v5_eligible_c = []
+    v5_eligible_q = []
+    born_active = 0
     for p in result_paths[:200]:
+        if "_archive" in p.replace("\\", "/"):
+            continue
         try:
             with open(p) as f:
                 data = json.load(f)
-            if isinstance(data, dict) and data.get("schema_version") in (2, 3):
+            if isinstance(data, dict) and data.get("schema_version") in (2, 3, 4, 5):
+                preds = data.get("predictions", [])
                 resolved += sum(
-                    1 for r in data.get("predictions", [])
+                    1 for r in preds
                     if isinstance(r, dict) and r.get("status") == "resolved"
                 )
-                if data.get("schema_version") == 3:
-                    status.setdefault("schema_v3_files", 0)
-                    status["schema_v3_files"] += 1
+                if data.get("schema_version") == 5:
+                    status.setdefault("schema_v5_files", 0)
+                    status["schema_v5_files"] += 1
                     if data.get("run_id"):
                         status.setdefault("run_ids", [])
                         if data["run_id"] not in status["run_ids"]:
                             status["run_ids"].append(data["run_id"])
+                    for r in preds:
+                        if r.get("status") != "resolved" or not r.get("score_eligible", True):
+                            continue
+                        if r.get("classical_error") is not None:
+                            v5_eligible_c.append(r["classical_error"])
+                        if r.get("prediction_error") is not None:
+                            v5_eligible_q.append(r["prediction_error"])
+                        if r.get("fallback_reason") == "none":
+                            born_active += 1
             elif isinstance(data, dict) and data.get("resolved"):
                 resolved += 1
             elif isinstance(data, list):
@@ -152,6 +167,18 @@ def live_born_status():
 
     status["live_eval"] = "partial" if resolved else "files_present_unresolved"
     status["resolved_records_sampled"] = resolved
+    if v5_eligible_c and v5_eligible_q:
+        import statistics
+        mean_c = statistics.mean(v5_eligible_c)
+        mean_q = statistics.mean(v5_eligible_q)
+        status["schema_v5_eligible_n"] = len(v5_eligible_c)
+        status["schema_v5_mean_classical"] = round(mean_c, 4)
+        status["schema_v5_mean_quantum"] = round(mean_q, 4)
+        status["schema_v5_improvement_pct"] = round((mean_c - mean_q) / mean_c * 100, 2) if mean_c else 0
+        status["schema_v5_born_active"] = born_active
+        status["schema_v5_born_active_rate"] = round(
+            born_active / len(v5_eligible_c) * 100, 1
+        ) if v5_eligible_c else 0
     return status
 
 
@@ -217,6 +244,12 @@ def main():
     all_reports["live_born_status"] = live
     print(f"  live_result_files: {live['live_result_files']}")
     print(f"  live_eval: {live['live_eval']}")
+    if live.get("schema_v5_eligible_n"):
+        print(f"  schema v5 eligible n: {live['schema_v5_eligible_n']}")
+        print(f"  schema v5 MAE: classical={live['schema_v5_mean_classical']} quantum={live['schema_v5_mean_quantum']}")
+        print(f"  schema v5 improvement: {live['schema_v5_improvement_pct']:+.2f}% (not significance-tested)")
+        print(f"  schema v5 born_active: {live['schema_v5_born_active']}/{live['schema_v5_eligible_n']} "
+              f"({live['schema_v5_born_active_rate']}%)")
     print(f"  {live['message']}")
 
     # Smoke that classical_ensemble_klines still imports for callers

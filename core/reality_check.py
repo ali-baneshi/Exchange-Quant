@@ -6,10 +6,11 @@ White's Reality Check — now with block bootstrap and Bonferroni correction.
 Delegates to validation.py for the heavy lifting.
 """
 
-from validation import block_bootstrap_pvalue, bonferroni_correct, N_HYPOTHESES_TOTAL
+from validation import paired_moving_block_test, bonferroni_correct
+from config import N_HYPOTHESES_TOTAL, N_HYPOTHESES_LIVE
 
 
-def reality_check(errors_c, errors_q, n_bootstrap=10000, seed=42):
+def reality_check(errors_c, errors_q, n_bootstrap=10000, seed=42, live=False):
     """
     White's Reality Check with block bootstrap (handles autocorrelation).
     Applies Bonferroni correction for multiple testing.
@@ -28,8 +29,10 @@ def reality_check(errors_c, errors_q, n_bootstrap=10000, seed=42):
     losses = n - wins - ties
     win_rate = wins / n
 
-    raw_p = block_bootstrap_pvalue(errors_c, errors_q, n_bootstrap, seed)
-    corrected_p, sig_005, sig_001 = bonferroni_correct(raw_p)
+    test_result = paired_moving_block_test(errors_c, errors_q, n_bootstrap, seed)
+    raw_p = test_result["p_value"]
+    n_tests = N_HYPOTHESES_LIVE if live else N_HYPOTHESES_TOTAL
+    corrected_p, sig_005, sig_001 = bonferroni_correct(raw_p, n_tests=n_tests)
 
     if sig_001:
         interpretation = "HIGHLY_SIGNIFICANT"
@@ -48,8 +51,15 @@ def reality_check(errors_c, errors_q, n_bootstrap=10000, seed=42):
         "win_rate": round(win_rate, 4),
         "raw_p_value": round(raw_p, 4),
         "corrected_p_value": round(corrected_p, 4),
-        "n_tests_corrected": N_HYPOTHESES_TOTAL,
+        "n_tests_corrected": n_tests,
         "n_bootstrap": n_bootstrap,
+        "block_len": test_result["block_len"],
+        "mean_loss_diff": round(test_result["mean_loss_diff"], 6),
+        "mean_loss_diff_ci_95": [
+            round(test_result["ci_low"], 6),
+            round(test_result["ci_high"], 6),
+        ],
+        "test_method": test_result["method"],
         "interpretation": interpretation,
     }
 

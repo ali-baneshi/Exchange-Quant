@@ -47,6 +47,9 @@ def summarize(data_list):
     combined_q = []
 
     for fname, results in data_list:
+        if isinstance(results, list) and results and isinstance(results[0], dict):
+            if any("score_eligible" in r for r in results):
+                results = [r for r in results if r.get("score_eligible", True)]
         n = len(results)
         if n < 2:
             print(f"\n  Skipping {fname}: only {n} samples")

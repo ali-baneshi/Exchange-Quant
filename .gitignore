@@ -7,6 +7,12 @@ __pycache__/
 core/_kline_cache/
 core/_live_results/
 
+# Live runtime artifacts
+live_quantum_v3.pid
+live_quantum_v3.log
+live_smoke_*.log
+.live_quantum_v3.lock
+
 # OS files
 .DS_Store
 Thumbs.db

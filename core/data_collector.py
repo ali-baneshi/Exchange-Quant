@@ -56,10 +56,12 @@ def run(symbol="btcusdt", n_steps=1000, delay=60):
         if len(data) > 0 and len(data) % 100 == 0:
             _save_checkpoint(symbol, data)
 
-    # Final save
+    # Final save (atomic)
     path = os.path.join(RESULTS_DIR, f"collected_{symbol}_{int(time.time())}.json")
-    with open(path, "w") as f:
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
         json.dump(data, f, indent=2)
+    os.replace(tmp, path)
 
     elapsed = time.time() - t_start
     print(f"\n  Done. Collected {len(data)} samples in {elapsed/3600:.1f}h")

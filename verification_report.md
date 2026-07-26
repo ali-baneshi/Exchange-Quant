@@ -87,10 +87,10 @@ All 20 `.py` files compile cleanly after fixes. The live pipeline can now run in
 
 The Born rule needs **live buy_ratio data with real order-book imbalance** to work properly. Historical klines lack imbalance, forcing a return-based delta that removes the Born rule's advantage.
 
-**Required experiment (Run now — Fix 1 is applied):**
+**Required experiment:**
 ```bash
-# Quantum-only mode for 720+ hourly steps (30+ days):
-python3 core/pipeline_live_ensemble.py btcusdt 720 3600 quantum
+./scripts/start_production_run.sh
+# Or: python3 core/pipeline_live_ensemble.py btcusdt 720 3600 quantum
 ```
 
 Target: 720+ hourly observations, 50%+ win rate with Bonferroni p < 0.05.
@@ -125,7 +125,7 @@ Engineering repairs from the comprehensive plan:
 - Unified Born predictions through `quantum_core.py`; live scripts share `live_protocol` forecast/resolve-later
 - `pipeline_one_shot.py` state v2 with backup on migration
 - Docs aligned with post-2026-07-23 decision
-- Unit suite: 57 tests green (CI via `.github/workflows/test.yml`)
+- Unit suite: **66** tests green (CI via `.github/workflows/test.yml`)
 - Schema v3 live output with `run_id`; `analyze_live_results.py` parses v2 and v3
 - Committed locally as `3c12386`; tagged `v0.9.0-stability`
 - **Push note:** `git push origin main` failed (remote repository not found). Push manually when remote is available.
@@ -148,9 +148,9 @@ Background processes (monitor with `./scripts/monitor_live.sh`):
 | Run | Command | Log |
 |-----|---------|-----|
 | 24h smoke | `pipeline_live_ensemble.py btcusdt 1440 3600 quantum 60 15` | `live_smoke_24h.log` |
-| ~720 forecasts | `pipeline_live_ensemble.py btcusdt 43200 3600 quantum 60 15` | `live_quantum_v3.log` |
+| ~720 forecasts | `./scripts/start_production_run.sh` or `pipeline_live_ensemble.py btcusdt 720 3600 quantum 60 15` | `live_quantum_v3.log` |
 
-With single-pending semantics, one forecast resolves per hour after warmup. Use **43200** sample steps (not 720) for ~720 hourly resolves over ~30 days.
+With single-pending semantics, one forecast resolves per hour after warmup. Use **`720` sample steps** (production default) for ~720 hourly resolves over ~30 days. Use `43200` only if you need extra fetch budget for warmup gaps or API downtime — see [docs/RUNBOOK.md](./docs/RUNBOOK.md).
 
 **Do not mix** pre-fix v2 corpus with schema v3 runs in aggregates. Update this section when the v3 run reaches ≥30 resolved eligible predictions.
 
@@ -169,4 +169,32 @@ Full on-disk aggregate via `analyze_live_results.py` (all `_live_results/*.json`
 | Quantum win rate | 23.3% (669/2866) |
 | White's Reality Check | NOT_SIGNIFICANT on inspected files |
 
-**Honest reading:** Existing live quantum runs do **not** support a Born-rule win. A clean, single-protocol, long-horizon re-run (`pipeline_live_ensemble.py btcusdt 720 3600 quantum`) is still recommended before any new claim — but the current corpus already points negative, not pending.
+**Honest reading:** Existing live quantum runs do **not** support a Born-rule win. A clean, single-protocol, long-horizon re-run (`./scripts/start_production_run.sh` or `pipeline_live_ensemble.py btcusdt 720 3600 quantum`) is still recommended before any new claim — but the legacy corpus already points negative, not pending.
+
+---
+
+## 2026-07-26 audit repairs (model + tooling)
+
+Additional fixes after the engineering hardening above:
+
+| Fix | Description | Files |
+|-----|-------------|-------|
+| Live δ remap | Order-book δ mapped to **[0, π/2]** (was reaching π) | `delta_adaptive.py` |
+| Destructive gate | Negative interference → `fallback_reason: destructive_interference`, use `classical_part` | `quantum_core.py` |
+| Archive filter | `_archive/` skipped on default scan; explicit CLI paths allowed | `analyze_live_results.py` |
+| Monitor mtime | Newest schema v3 JSON selected by modification time | `scripts/monitor_live.sh` |
+| Production script | `./scripts/start_production_run.sh` runs tests then starts v3 pipeline | `scripts/start_production_run.sh` |
+| Docs | Index, SCHEMA_V3, STATISTICS, Persian layer, drift fixes | `docs/`, `README.fa.md` |
+
+**Fix 1 (pipeline crash) — done:** `_quantum_predict` crash in `pipeline_live_ensemble.py` was fixed in the 2026-07-20 hardening pass.
+
+**Test count:** 68 passed (`make test`).
+
+### v3 production re-run status
+
+- Canonical run: `btcusdt_quantum_1785032903.json` (schema v3, quantum mode; active production run)
+- Start via `./scripts/start_production_run.sh`; monitor with `./scripts/monitor_live.sh`
+- Analyze: `python3 core/analyze_live_results.py --schema-version 3 --exclude-collector`
+- **720 vs 43200:** With single-pending semantics, `n_steps=720` targets ~720 hourly resolves over ~30 days. `43200` adds fetch budget (60 fetches/hour × 720 hours) but does not parallelize forecasts — see [docs/RUNBOOK.md](./docs/RUNBOOK.md).
+
+Update this section when the v3 run reaches ≥30 resolved eligible predictions.

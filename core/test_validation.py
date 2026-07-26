@@ -13,6 +13,7 @@ from validation import (
     max_drawdown_from_errors,
     profit_factor,
     sharpe_ratio,
+    paired_moving_block_test,
 )
 
 
@@ -60,6 +61,23 @@ class ValidationTests(unittest.TestCase):
         self.assertEqual(report["n"], 3)
         self.assertIn("bonferroni_p", report)
         self.assertIn("significant_005", report)
+        self.assertEqual(
+            report["test_method"],
+            "paired_moving_block_bootstrap_mean_loss",
+        )
+        self.assertFalse(report["financial_metrics_valid"])
+
+    def test_exact_cube_uses_true_ceiling(self):
+        result = paired_moving_block_test(
+            [0.2] * 27,
+            [0.1] * 27,
+            n_bootstrap=100,
+        )
+        self.assertEqual(result["block_len"], 3)
+
+    def test_mismatched_pairs_are_rejected(self):
+        with self.assertRaises(ValueError):
+            comprehensive_report([0.1, 0.2], [0.1])
 
 
 if __name__ == "__main__":

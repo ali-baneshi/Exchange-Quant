@@ -1,6 +1,14 @@
 # سند تحقیقاتی ۴: معماری پیشنهادی
 ## Interference-Based Context Detection System (ICDS)
 
+> **⚠️ Vision document — implementation differs (2026-07-26).**
+>
+> **English:** This describes the ICDS research vision, not the exact current codebase.
+> See [research_INDEX.md](./research_INDEX.md) and [ARCHITECTURE.md](../ARCHITECTURE.md).
+>
+> **Key difference:** δ is computed via `compute_delta()` in `delta_adaptive.py`, not grid-searched
+> over `[0, π/4, …, π]`. Live order-book δ is mapped to **[0, π/2]**, not δ=π for uncertainty.
+
 ### ۴.۱ نمای کلی
 
 ```

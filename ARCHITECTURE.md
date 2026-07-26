@@ -1,5 +1,7 @@
 # Exchange-Q Architecture
 
+> **JSON schema reference:** [docs/SCHEMA_V5.md](./docs/SCHEMA_V5.md) | **Statistics:** [docs/STATISTICS.md](./docs/STATISTICS.md)
+
 ## Overview
 
 Exchange-Q applies the **Born rule from quantum probability** to financial market prediction. It models market participants' buy/sell decisions as interfering quantum states, where a hidden "context" variable creates non-classical correlations that classical law-of-total-probability models cannot capture.
@@ -60,7 +62,7 @@ data_historical.py           data_fetcher.py
 |--------|-----------|---------|
 | `data_historical.py` | stdlib + curl | `backtest.py`, `validation_report.py`, `experiment_ablation.py` |
 | `features.py` | — | `backtest.py`, `experiment_ablation.py`, `validation_report.py` |
-| `data_fetcher.py` | stdlib + Huobi API | `pipeline_live_*.py`, `pipeline_one_shot.py` |
+| `data_fetcher.py` | stdlib + Huobi API | `pipeline_live_*.py`, `pipeline_one_shot.py`, `data_collector.py` |
 | `quantum_core.py` | `delta_adaptive.py` | `ensemble.py`, `market_sim.py`, all live pipelines |
 | `live_protocol.py` | — | all live pipelines |
 | `delta_adaptive.py` | — | `quantum_core.py`, `experiment.py` |
@@ -91,7 +93,8 @@ Given a window of recent buy_ratios (or convictions):
    μ_low  = mean(low_group)          # expected value in low context
 
 3. Compute interference phase δ from market context:
-   δ = compute_delta(history)        # imbalance-based (live / synthetic probe)
+   δ = compute_delta(history)        # order-book: imbalance + volatility (live)
+   # Live order-book δ is mapped to [0, π/2] (constructive → neutral)
    # Kline return-based delta is NOT used for Born-rule evaluation (removed 2026-07-23)
 
 4. Apply Born rule (unnormalized; see quantum_core.py):
@@ -106,15 +109,17 @@ P_quantum = p_high·μ_high + p_low·μ_low + 2·√(p_high·p_low·μ_high·μ_
            │______classical part______│ │_________interference term_________│
 ```
 
-The interference term is what classical models cannot produce. It is positive when δ=0 (constructive) and negative when δ=π (destructive).
+The interference term is what classical models cannot produce. It is positive when δ=0 (constructive) and negative when δ=π (destructive). On the **live order-book path**, δ ∈ [0, π/2] and negative interference is gated via `destructive_interference`.
 
 ### Delta Interpretation
 
 | Delta | Context | Meaning |
 |-------|---------|---------|
-| 0 | Strong imbalance, low vol | Constructive — market is directional |
-| π/2 | Mixed signals | Max uncertainty — no interference |
-| π | Low imbalance, high vol | Destructive — regime shift possible |
+| 0 | Strong imbalance, low vol (live) | Constructive — market is directional |
+| π/2 | Weak context (live) or mixed signals | Neutral — cos(δ)=0, no interference |
+| π | Kline proxy only | Destructive — gated to classical part in `quantum_core` |
+
+**Live fallback chain:** bucketing tries `buy_ratio` → `buy_ratio_volume` → `imbalance`; on failure returns mean with `fallback_reason` in `{insufficient_history, flat_history, single_bucket}`. If interference term is negative, `fallback_reason: destructive_interference` returns the classical part instead.
 
 ---
 
@@ -188,10 +193,12 @@ Profit Factor: win_count / loss_count  (inf if all wins)
 ## Live Pipeline Semantics (2026-07-26)
 
 - **Canonical entry point:** `pipeline_live_ensemble.py`
+- **Cron alternative:** `pipeline_one_shot.py` uses persisted `state.json` with `STATE_VERSION = 2` (not schema v5 JSON); prefer ensemble pipeline for definitive eval
 - **One pending forecast at a time** — no overlapping horizons when `sample_interval_s << horizon_s`
 - **Resolve timing:** `live_protocol.pending_due()` before scoring
 - **Ensemble mode:** weights update via `Ensemble.predict_and_update()` on resolve
-- **Output schema:** version 3 JSON with `run_id`, `quality_flags`, optional `ensemble_weights`
+- **Output schema:** version 3 JSON with `run_id`, `quality_flags`, `bucket_feature`, optional `ensemble_weights`
+- **Corpus policy:** active v5 runs in `_live_results/`; legacy v2–v4/collector in `_live_results/_archive/pre_v5/`
 
 ---
 

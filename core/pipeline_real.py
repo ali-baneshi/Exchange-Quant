@@ -130,6 +130,12 @@ def print_summary(results):
 
 
 def main():
+    import warnings
+    warnings.warn(
+        "pipeline_real.py is a smoke demo; use pipeline_live_ensemble.py for production",
+        DeprecationWarning,
+        stacklevel=1,
+    )
     symbol = sys.argv[1] if len(sys.argv) > 1 else "btcusdt"
     n_steps = int(sys.argv[2]) if len(sys.argv) > 2 else 60
     delay = float(sys.argv[3]) if len(sys.argv) > 3 else 1.0

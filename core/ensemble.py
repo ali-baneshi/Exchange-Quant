@@ -15,12 +15,12 @@ from config import RELATIVE_K
 
 
 def _quantum_predict(history):
-    pred, meta = born_rule_predict(history)
+    pred, meta = born_rule_predict(history, skip_volume_bucket=True)
     return pred, meta["delta"]
 
 
 def _quantum_predict_with_meta(history):
-    return born_rule_predict(history)
+    return born_rule_predict(history, skip_volume_bucket=True)
 
 
 def _volregime_predict(history):
@@ -116,8 +116,14 @@ class Ensemble:
 
     def update(self, history, actual):
         raw_preds, _ = self._get_raw_predictions(history)
+        self.update_from_predictions(raw_preds, actual)
+
+    def update_from_predictions(self, raw_predictions, actual):
+        """Update performance from predictions captured at forecast creation."""
         for name in self.MODEL_NAMES:
-            err = abs(raw_preds[name] - actual)
+            if name not in raw_predictions:
+                raise ValueError(f"Missing stored prediction for model {name!r}")
+            err = abs(float(raw_predictions[name]) - float(actual))
             self.performance[name].append(err)
             if len(self.performance[name]) > self.perf_memory:
                 self.performance[name] = self.performance[name][-self.perf_memory:]

@@ -3,14 +3,9 @@
 """
 One-shot ensemble pipeline (cron-friendly) with forecast / resolve-later.
 
-Each run:
-  1. Load state from _live_results/state.json (versioned)
-  2. Fetch live data from Huobi
-  3. Resolve any pending forecast against the new buy_ratio
-  4. Create a new pending forecast from history[-window:]
-  5. Persist state and exit
-
-Assumes the cron interval approximates horizon_s (default 3600).
+DEPRECATED: use pipeline_live_ensemble.py for schema v5 durable evaluation.
+This script remains for lightweight cron diagnostics only — significance
+reporting is disabled; ensemble weights update from stored predictions only.
 """
 
 import json
@@ -23,7 +18,6 @@ import time
 from data_fetcher import HuobiData
 from ensemble import Ensemble
 from baselines import classical_ensemble
-from validation import comprehensive_report, print_report
 from live_protocol import (
     DEFAULT_WINDOW,
     DEFAULT_HORIZON_S,
@@ -145,9 +139,12 @@ def run():
 
     if pending and pending_due(pending, now_ms):
         resolved = resolve_buy_ratio(pending, actual, now_ms)
-        # Update ensemble weights using resolved actual
-        lookback_for_update = forecast_lookback(history[:-1], WINDOW) or history[-WINDOW:]
-        _, w, meta = ens.predict_and_update(lookback_for_update, actual)
+        stored_raw = {
+            "quantum": pending.get("quantum_raw", pending.get("prediction", 0.5)),
+            "vol_regime": pending.get("vol_regime_raw", 0.5),
+        }
+        ens.update_from_predictions(stored_raw, actual)
+        w = ens.weights[:]
         c_err = resolved["classical_error"]
         q_err = resolved["prediction_error"]
         winner = "E" if q_err < c_err else "C" if c_err < q_err else "="
@@ -159,12 +156,12 @@ def run():
             "actual": round(actual, 4),
             "classical": round(resolved.get("classical", 0.5), 4),
             "ensemble": round(resolved.get("prediction", 0.5), 4),
-            "quantum_raw": round(resolved.get("quantum_raw", resolved.get("prediction", 0.5)), 4),
-            "vol_regime_raw": round(resolved.get("vol_regime_raw", 0.5), 4),
-            "w_quantum": round(resolved.get("w_quantum", w[0]), 4),
-            "w_vol_regime": round(resolved.get("w_vol_regime", w[1]), 4),
-            "delta": round(resolved.get("delta", meta.get("delta", 0.0)), 4),
-            "confidence": round(resolved.get("confidence", meta.get("confidence", 0.0)), 4),
+            "quantum_raw": round(stored_raw["quantum"], 4),
+            "vol_regime_raw": round(stored_raw["vol_regime"], 4),
+            "w_quantum": round(w[0], 4),
+            "w_vol_regime": round(w[1], 4),
+            "delta": round(resolved.get("delta", pending.get("delta", 0.0)), 4),
+            "confidence": round(resolved.get("confidence", pending.get("confidence", 0.0)), 4),
             "winner": winner,
             "status": "resolved",
         }
@@ -188,11 +185,7 @@ def run():
                   f"({w_all/len(results)*100:.1f}%)  "
                   f"c_err={c_mean:.4f}  e_err={e_mean:.4f}  "
                   f"imprv={_pct_improvement(c_mean, e_mean):+.2f}%")
-
-            if len(results) >= 30:
-                print(f"\n  --- Honest live evaluation (block bootstrap, Bonferroni corrected) ---")
-                report = comprehensive_report(c_all, e_all, " [live one-shot]")
-                print_report(report, detail=True)
+            print("  --- significance reporting disabled in one-shot mode (use pipeline_live_ensemble)")
 
     if not ready_for_forecast(history, WINDOW):
         print(f"{meta_str} WARMUP ({len(history)}/{WINDOW})")
@@ -242,4 +235,10 @@ def run():
 
 
 if __name__ == "__main__":
+    import warnings
+    warnings.warn(
+        "pipeline_one_shot.py uses state v2; use pipeline_live_ensemble.py for schema v5",
+        DeprecationWarning,
+        stacklevel=1,
+    )
     run()

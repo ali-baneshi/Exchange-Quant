@@ -55,9 +55,10 @@ class TestAscendingContract(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "btcusdt_15min.json")
             with mock.patch.object(dh, "_CACHE_DIR", tmp):
-                with open(path, "w") as f:
-                    json.dump(oversized, f)
-                got = dh.fetch_klines_range("btcusdt", "15min", 8)
+                with mock.patch.object(dh, "_refresh_cache_tail", side_effect=lambda _s, _p, c: c):
+                    with open(path, "w") as f:
+                        json.dump(oversized, f)
+                    got = dh.fetch_klines_range("btcusdt", "15min", 8)
         self.assertEqual([c["id"] for c in got], list(range(13, 21)))
 
     def test_held_out_split_requires_minimum_candles(self):

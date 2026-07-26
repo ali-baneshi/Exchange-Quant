@@ -186,6 +186,24 @@ def _gate_to_huobi(raw_candles):
     return to_ascending(result)
 
 
+def _refresh_cache_tail(symbol, period, cached):
+    """Fetch latest Gate.io candles and merge into cache (updates stale tail)."""
+    MAX_PER_CALL = 1000
+    interval = GATE_INTERVALS.get(period, period)
+    pair = to_gate_pair(symbol)
+    url = (
+        f"{GATE_BASE}/api/v4/spot/candlesticks"
+        f"?currency_pair={pair}&interval={interval}&limit={MAX_PER_CALL}"
+    )
+    raw = _curl_get_raw(url)
+    if raw is None or len(raw) == 0:
+        return cached
+    batch = _gate_to_huobi(raw)
+    if not batch:
+        return cached
+    return to_ascending(cached + batch)
+
+
 def fetch_klines_gateio(symbol="btcusdt", period="60min", n_candles=2000):
     """
     Fetch OHLCV from Gate.io with pagination.
@@ -197,6 +215,10 @@ def fetch_klines_gateio(symbol="btcusdt", period="60min", n_candles=2000):
 
     cached = to_ascending(_load_cache(symbol, period))
     if len(cached) >= n_candles:
+        refreshed = _refresh_cache_tail(symbol, period, cached)
+        if len(refreshed) != len(cached) or (refreshed and cached and refreshed[-1]["id"] != cached[-1]["id"]):
+            _save_cache(symbol, period, refreshed)
+            cached = refreshed
         return newest_n(cached, n_candles)
 
     all_data = list(cached)
@@ -239,6 +261,11 @@ def fetch_klines_range(symbol="btcusdt", period="15min", n_candles=2000):
     """Fetch candles from Gate.io (preferred) or Huobi (fallback). Oldest → newest."""
     cached = to_ascending(_load_cache(symbol, period))
     if len(cached) >= n_candles:
+        if period in GATE_INTERVALS:
+            refreshed = _refresh_cache_tail(symbol, period, cached)
+            if len(refreshed) != len(cached) or (refreshed and cached and refreshed[-1]["id"] != cached[-1]["id"]):
+                _save_cache(symbol, period, refreshed)
+                cached = refreshed
         return newest_n(cached, n_candles)
 
     if period in GATE_INTERVALS:

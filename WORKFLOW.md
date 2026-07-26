@@ -1,5 +1,7 @@
 # Exchange-Q Workflow Guide
 
+**Docs index:** [docs/README.md](./docs/README.md) | **Persian:** [docs/fa/QUICKSTART.md](./docs/fa/QUICKSTART.md)
+
 ## Entry-to-Exit Pipeline
 
 This document explains the correct order of operations for using Exchange-Q.
@@ -90,7 +92,6 @@ Born rule is not part of this ablation anymore. For Born-rule value, use the liv
 ```bash
 # Single source-of-truth report for a specific period
 python3 core/validation_report.py --period 60min
-```
 
 # Save report to JSON
 python3 core/validation_report.py --period 60min --output report_60min.json
@@ -126,13 +127,13 @@ python3 core/experiment.py
 python3 core/visualize.py
 ```
 
-**Important:** On synthetic data, the Born rule performs **worse** than classical (23.5% higher error). This discrepancy with the theoretical claim needs investigation. The Born rule advantage on real data may come from market microstructure features not present in the synthetic model.
+**Important:** On synthetic data, the Born rule performs **worse** than classical (quantum higher MAE). This discrepancy with the theoretical claim needs investigation. The Born rule advantage on real data may come from market microstructure features not present in the synthetic model.
 
 ---
 
-## Step 6: Collect Live Data
+## Step 6: Collect Live Data (Optional)
 
-**Goal:** Accumulate buy_ratio + imbalance samples from Huobi (required for the quantum model to work with proper delta).
+**Goal:** Optionally accumulate raw features without running models. **Not required** for the canonical eval — `pipeline_live_ensemble.py` fetches Huobi data inline.
 
 ```bash
 # Overnight collection (60s intervals, ~25 hours for 1500 samples)
@@ -151,6 +152,10 @@ tail -f nohup.out
 **Goal:** Compare quantum vs classical on real streaming data with order-book imbalance — the only delta that gives the Born rule its advantage.
 
 ```bash
+# Recommended production start (runs make test first)
+./scripts/start_production_run.sh
+
+# Or manual:
 # Quantum-only mode (pure Born rule)
 python3 core/pipeline_live_ensemble.py btcusdt 720 3600 quantum
 
@@ -167,11 +172,18 @@ python3 core/pipeline_live_ensemble.py btcusdt 720 3600 ensemble
 | mode | quantum/ensemble | Model mode |
 | sample_interval | 60 | Seconds between Huobi fetches (default 60) |
 
-**Behavior:** Creates at most one pending forecast at a time. Resolves only when `pending_due` is true. Writes schema v3 JSON with `run_id` on state changes.
+**Behavior:** Creates at most one pending forecast at a time. Resolves only when `pending_due` is true. Writes schema v5 JSON with locally captured forward-window label provenance.
 
-**Current empirical status (2026-07-26):** Aggregate live corpus (2866 resolved obs) shows quantum MAE ~2× classical. Treat negative results as ground truth until a clean re-run completes.
+**Current empirical status:** Legacy mixed corpus is not eligible for claims. Use **schema v5-only** analysis:
 
-**Target for new claims:** ≥30 resolved eligible predictions before reporting win rate; ≥720 for significance claims.
+```bash
+python3 core/analyze_live_results.py --schema-version 5 --exclude-collector
+./scripts/monitor_live.sh
+```
+
+**Target for new claims:** ≥30 resolved eligible predictions before reporting win rate; ≥720 for significance claims. Check `Born active` rate (fallback_reason=none) in analyze output.
+
+See [docs/RUNBOOK.md](./docs/RUNBOOK.md) for **720 vs 43200** sample-step semantics.
 
 ---
 
@@ -179,7 +191,7 @@ python3 core/pipeline_live_ensemble.py btcusdt 720 3600 ensemble
 
 ```bash
 # Analyze all live results
-python3 core/analyze_live_results.py
+python3 core/analyze_live_results.py --schema-version 5 --exclude-collector
 
 # Analyze specific file
 python3 core/analyze_live_results.py core/_live_results/btcusdt_ensemble_*.json
@@ -223,7 +235,7 @@ python3 core/disjunction_demo.py
 | "v4 unified Born rule" | Standardized the formula. Fixes have now been applied to all files. |
 | "Bonferroni correction for 5 tests" | Corrects for 5 pre-registered hypotheses. Actual number tested is higher. |
 
-**Bottom line:** Engineering hardening is complete (52 unit tests, CI). The empirical case for the Born rule beating classical baselines is **not supported** by existing live data. New runs should use `pipeline_live_ensemble.py` with schema v3 output.
+**Bottom line:** Engineering hardening does not establish model efficacy. The empirical case for the Born rule beating classical baselines is **not supported** by existing live data. New runs must use `pipeline_live_ensemble.py` with schema v5 and complete locally captured labels.
 
 ---
 
