@@ -125,9 +125,36 @@ Engineering repairs from the comprehensive plan:
 - Unified Born predictions through `quantum_core.py`; live scripts share `live_protocol` forecast/resolve-later
 - `pipeline_one_shot.py` state v2 with backup on migration
 - Docs aligned with post-2026-07-23 decision
-- Unit suite: 52 tests green (`test_validation`, `test_data_historical`, `test_regressions`, `test_quantum_core`, `test_live_pipeline`, and others)
+- Unit suite: 57 tests green (CI via `.github/workflows/test.yml`)
+- Schema v3 live output with `run_id`; `analyze_live_results.py` parses v2 and v3
+- Committed locally as `3c12386`; tagged `v0.9.0-stability`
+- **Push note:** `git push origin main` failed (remote repository not found). Push manually when remote is available.
 
-### Live evaluation snapshot (2026-07-26)
+### Schema v3 smoke (2026-07-26)
+
+Short ensemble smoke (`btcusdt_quantum_1785028289.json`):
+
+| Check | Result |
+|-------|--------|
+| `schema_version` | 3 |
+| `run_id` | `btcusdt-quantum-1785028289` |
+| Forecast → resolve | OK (3 resolved, single-pending semantics) |
+| `analyze_live_results.py` | Parses v3 without error |
+
+### Long-horizon runs started (2026-07-26)
+
+Background processes (monitor with `./scripts/monitor_live.sh`):
+
+| Run | Command | Log |
+|-----|---------|-----|
+| 24h smoke | `pipeline_live_ensemble.py btcusdt 1440 3600 quantum 60 15` | `live_smoke_24h.log` |
+| ~720 forecasts | `pipeline_live_ensemble.py btcusdt 43200 3600 quantum 60 15` | `live_quantum_v3.log` |
+
+With single-pending semantics, one forecast resolves per hour after warmup. Use **43200** sample steps (not 720) for ~720 hourly resolves over ~30 days.
+
+**Do not mix** pre-fix v2 corpus with schema v3 runs in aggregates. Update this section when the v3 run reaches ≥30 resolved eligible predictions.
+
+### Live evaluation snapshot (legacy v2 aggregate)
 
 Smoke: `pipeline_real` forecast/resolve-later works against Huobi (pending→resolved).
 
