@@ -1,249 +1,137 @@
 # Exchange-Q Workflow Guide
 
-**Docs index:** [docs/README.md](./docs/README.md) | **Persian:** [docs/fa/QUICKSTART.md](./docs/fa/QUICKSTART.md)
+This guide describes the complete research workflow. Start with the section matching your goal; do not treat every command as part of one comparable experiment.
 
-## Entry-to-Exit Pipeline
-
-This document explains the correct order of operations for using Exchange-Q.
-
----
-
-## Step 0: Prerequisites
+## 1. Prepare the Environment
 
 ```bash
-# Verify Python version (3.8+)
 python3 --version
-
-# No pip packages needed — 100% standard library
-# Historical fetch also requires system curl on PATH
-python3 -c "
-import math, cmath, statistics, http.client, ssl
-import json, os, sys, time, concurrent.futures, subprocess, signal
-print('All stdlib modules available')
-"
 command -v curl
-
-# Clone / enter project directory
-cd Exchange-Q
-```
-
----
-
-## Step 1: Collect Historical Data
-
-**Goal:** Populate `_kline_cache/` with 5000+ candles per timeframe.
-
-```bash
-# Downloads 5000 candles for 15min, 60min, 1day from Gate.io
-# Runs in ~30 seconds total, caches results
-python3 core/data_historical.py
-```
-
-**Output:**
-```
-Fetching 5000 15min candles...
-  total=5000  train+val=4000  held_out=1000
-Fetching 5000 60min candles...
-  total=5000  train+val=4000  held_out=1000
-Fetching 5000 1day candles...
-  total=5000  train+val=4000  held_out=1000
-```
-
-Data is cached in `core/_kline_cache/btcusdt_15min.json`, etc.
-Re-running is instant if cache exists.
-
----
-
-## Step 2: Run Classical Backtests
-
-**Goal:** Evaluate classical models on historical klines (binary direction).
-Born rule was removed from this path (2026-07-23).
-
-```bash
-# Classical-only MAE on train / val / held-out
-python3 core/backtest.py
-
-# Deprecated stubs (exit code 1) — do not use for Born-on-klines:
-# python3 core/backtest_ensemble.py
-# python3 core/backtest_boost.py
-```
-
-Kline candles are returned **oldest → newest**. Held-out = last 20%.
-Target is **binary direction**, not continuous buy_ratio.
-
----
-
-## Step 3: Ablation Study
-
-**Goal:** Compare classical models (vol_regime / MA / ensemble) on held-out klines.
-
-```bash
-python3 core/experiment_ablation.py
-```
-
-Born rule is not part of this ablation anymore. For Born-rule value, use the live order-book pipeline.
-
----
-
-## Step 4: Comprehensive Validation Report
-
-**Goal:** Classical kline metrics plus on-disk live Born-rule status (not a quantum kline backtest).
-
-```bash
-# Single source-of-truth report for a specific period
-python3 core/validation_report.py --period 60min
-
-# Save report to JSON
-python3 core/validation_report.py --period 60min --output report_60min.json
-```
-
-**Metrics explained:**
-
-| Metric | What it measures | Good value |
-|--------|-----------------|------------|
-| `improvement_pct` | (classical_err - quantum_err) / classical_err | Positive = quantum wins |
-| `win_rate` | Fraction of steps where quantum error < classical error | > 0.5 = quantum wins more |
-| `raw_p_value` | Bootstrap p-value (uncorrected) | < 0.05 = raw significant |
-| `bonferroni_p` | Corrected for 5 simultaneous tests | < 0.05 = robustly significant |
-| `max_drawdown_q` | Worst peak-to-trough on quantum equity curve | Lower = smoother |
-| `sharpe_q` | Risk-adjusted return (quantum) | Higher = better |
-| `profit_factor` | Win sum / Loss sum | > 1.0 = profitable |
-
-**Validation checklist (before trusting any result):**
-- [ ] Classical error within ±0.01 of previous run on same dataset
-- [ ] Bonferroni p > 0.05 reported as "NOT SIGNIFICANT" (no hedging)
-- [ ] n ≥ 100 for any claim; n ≥ 500 for significance claims
-- [ ] Held-out set = last 20%, NEVER touched during training
-- [ ] Sharpe period matches data frequency (15min→35040, 60min→8760, 1day→365)
-
----
-
-## Step 5: Synthetic Experiment
-
-**Goal:** Controlled test with known ground truth (hidden context).
-
-```bash
-python3 core/experiment.py
-python3 core/visualize.py
-```
-
-**Important:** On synthetic data, the Born rule performs **worse** than classical (quantum higher MAE). This discrepancy with the theoretical claim needs investigation. The Born rule advantage on real data may come from market microstructure features not present in the synthetic model.
-
----
-
-## Step 6: Collect Live Data (Optional)
-
-**Goal:** Optionally accumulate raw features without running models. **Not required** for the canonical eval — `pipeline_live_ensemble.py` fetches Huobi data inline.
-
-```bash
-# Overnight collection (60s intervals, ~25 hours for 1500 samples)
-nohup python3 core/data_collector.py btcusdt 1500 60 &
-
-# Check progress
-tail -f nohup.out
-
-# Results saved to: core/_live_results/collected_btcusdt_<timestamp>.json
-```
-
----
-
-## Step 7: Run Live Pipeline (The Definitive Test)
-
-**Goal:** Compare quantum vs classical on real streaming data with order-book imbalance — the only delta that gives the Born rule its advantage.
-
-```bash
-# Recommended production start (runs make test first)
-./scripts/start_production_run.sh
-
-# Or manual:
-# Quantum-only mode (pure Born rule)
-python3 core/pipeline_live_ensemble.py btcusdt 720 3600 quantum
-
-# Ensemble mode (quantum + vol_regime)
-python3 core/pipeline_live_ensemble.py btcusdt 720 3600 ensemble
-```
-
-**Parameters:**
-| Arg | Example | Meaning |
-|-----|---------|---------|
-| symbol | btcusdt | Trading pair |
-| n_steps | 720 | Max sample iterations (one forecast per horizon when pending clears) |
-| delay | 3600 | Forecast horizon in seconds (3600 = 1 hour) |
-| mode | quantum/ensemble | Model mode |
-| sample_interval | 60 | Seconds between Huobi fetches (default 60) |
-
-**Behavior:** Creates at most one pending forecast at a time. Resolves only when `pending_due` is true. Writes schema v5 JSON with locally captured forward-window label provenance.
-
-**Current empirical status:** Legacy mixed corpus is not eligible for claims. Use **schema v5-only** analysis:
-
-```bash
-python3 core/analyze_live_results.py --schema-version 5 --exclude-collector
-./scripts/monitor_live.sh
-```
-
-**Target for new claims:** ≥30 resolved eligible predictions before reporting win rate; ≥720 for significance claims. Check `Born active` rate (fallback_reason=none) in analyze output.
-
-See [docs/RUNBOOK.md](./docs/RUNBOOK.md) for **720 vs 43200** sample-step semantics.
-
----
-
-## Step 8: Analyze Results
-
-```bash
-# Analyze all live results
-python3 core/analyze_live_results.py --schema-version 5 --exclude-collector
-
-# Analyze specific file
-python3 core/analyze_live_results.py core/_live_results/btcusdt_ensemble_*.json
-```
-
----
-
-## Quick Reference: All Commands
-
-```bash
-# === DATA ===
-python3 core/data_historical.py
-nohup python3 core/data_collector.py btcusdt 1500 60 &
-
-# === CLASSICAL KLINES ===
-python3 core/backtest.py
-python3 core/experiment_ablation.py
-python3 core/validation_report.py --period 60min
-
-# === SYNTHETIC ===
-python3 core/experiment.py
-python3 core/visualize.py
-
-# === LIVE BORN RULE (valid quantum path) ===
-python3 core/pipeline_live_ensemble.py btcusdt 720 3600 quantum
-python3 core/pipeline_live_ensemble.py btcusdt 720 3600 ensemble
-python3 core/analyze_live_results.py
-
-# === DEMO ===
-python3 core/disjunction_demo.py
-```
-
----
-
-## Interpreting Research Claims
-
-| Claim in `research_05_results.md` | What it actually means |
-|-----------------------------------|----------------------|
-| "Born rule error 0.4801" | On 2000 candles, 400 held-out, binary **direction** prediction (not buy_ratio) |
-| "Born rule beats all simple models" | On the same 2000-candle dataset; NOT replicable on 5000 candles |
-| "v4 unified Born rule" | Standardized the formula. Fixes have now been applied to all files. |
-| "Bonferroni correction for 5 tests" | Corrects for 5 pre-registered hypotheses. Actual number tested is higher. |
-
-**Bottom line:** Engineering hardening does not establish model efficacy. The empirical case for the Born rule beating classical baselines is **not supported** by existing live data. New runs must use `pipeline_live_ensemble.py` with schema v5 and complete locally captured labels.
-
----
-
-## Step 0b: Run Tests
-
-```bash
+pip install -r requirements-dev.txt
 make test
-# or: cd core && python -m pytest test_*.py -v
+make compile
 ```
 
-GitHub Actions runs the same suite on Python 3.10 and 3.12 for every push.
+Runtime code uses the Python standard library. `pytest` is a development dependency. Historical collection requires `curl`.
+
+## 2. Classical Historical Analysis
+
+Use this path to check data ordering and classical baselines on historical OHLCV.
+
+```bash
+python3 core/data_historical.py
+python3 core/backtest.py
+python3 core/experiment_ablation.py
+python3 core/validation_report.py --period 60min
+```
+
+### What this path means
+
+- Data source: Gate.io OHLCV cache with Huobi fallback.
+- Target: binary next-candle direction.
+- Born rule: intentionally excluded.
+- Output: classical MAE and diagnostic validation statistics.
+
+Do not compare this MAE to live `buy_ratio` MAE. The target, data source, and difficulty are different.
+
+## 3. Synthetic Diagnostics
+
+```bash
+python3 core/experiment.py
+python3 core/visualize.py
+```
+
+The simulator is useful for checking formulas and failure modes. It is not an out-of-sample market test and must not be used to support a trading or model-efficacy claim.
+
+## 4. Start the Frozen Live Study
+
+The only primary Born-rule path is the durable schema-v5 evaluator.
+
+```bash
+./scripts/start_production_run.sh
+```
+
+Equivalent explicit command:
+
+```bash
+python3 core/pipeline_live_ensemble.py \
+  --symbol btcusdt \
+  --mode quantum \
+  --horizon-s 3600 \
+  --sample-interval-s 60 \
+  --window 15 \
+  --max-resolved 720
+```
+
+### Configuration semantics
+
+| Option | Production value | Meaning |
+|---|---:|---|
+| `--horizon-s` | `3600` | Future label interval in seconds |
+| `--sample-interval-s` | `60` | Feature/trade capture cadence |
+| `--window` | `15` | Accepted observation lookback |
+| `--max-resolved` | `720` | Eligible resolved forecasts required before successful completion |
+| `--mode` | `quantum` | Frozen Born-only model; `ensemble` is a separate configuration |
+
+Only one forecast is pending at a time. With a one-hour horizon, 720 eligible resolutions usually require about 30 days, plus any excluded data-quality intervals.
+
+## 5. Monitor, Resume, and Stop
+
+```bash
+./scripts/monitor_live.sh
+./scripts/stop_all_runs.sh
+```
+
+To resume an interrupted run, use the `run_id` printed at startup:
+
+```bash
+python3 core/pipeline_live_ensemble.py \
+  --resume btcusdt-quantum-EPOCH \
+  --horizon-s 3600 \
+  --sample-interval-s 60 \
+  --window 15 \
+  --max-resolved 720
+```
+
+Resume succeeds only if the stored configuration hash matches the requested configuration.
+
+## 6. Analyze Results
+
+```bash
+python3 core/analyze_live_results.py --schema-version 5 --exclude-collector
+python3 core/analyze_live_results.py --schema-version 5 --run-id btcusdt-quantum-EPOCH
+```
+
+The analyzer includes only v5 records that have:
+
+```text
+resolved_label == "forward_window"
+label_capture_complete == true
+score_eligible == true
+```
+
+Legacy v2–v4 files are historical artifacts. Move them out of the active corpus with:
+
+```bash
+./scripts/archive_legacy_results.sh
+```
+
+## 7. Interpret Results Safely
+
+| Eligible sample size | Allowed conclusion |
+|---:|---|
+| `< 30` | Pipeline/data-quality diagnostics only |
+| `30–719` | Exploratory descriptive comparison only |
+| `≥ 720` | Run the frozen paired statistical analysis |
+
+Every report must state the run ID, configuration hash, model version, eligible sample count, excluded-label reasons, MAE comparison, and corrected p-value. See `docs/STATISTICS.md`.
+
+## 8. Common Mistakes
+
+| Mistake | Correct practice |
+|---|---|
+| Comparing kline and live MAE | Treat them as different tasks |
+| Using a snapshot label after a missing trade window | Keep as diagnostic; exclude from score |
+| Mixing old JSON with v5 data | Archive v2–v4 before aggregate analysis |
+| Restarting with changed parameters | Start a new run; do not resume |
+| Reading an exploratory win rate as evidence | Wait for the frozen threshold and paired inference |

@@ -3,71 +3,74 @@
 ## Development Setup
 
 ```bash
-python3 --version   # 3.8+
+python3 --version
 pip install -r requirements-dev.txt
 make test
+make compile
 ```
 
-Runtime code uses **stdlib only**. Pytest is a dev dependency.
+The runtime is standard-library-only. CI runs the test suite on Python 3.10 and 3.12; use one of those versions for release validation.
 
-## Running Tests
+## Required Checks
+
+Before opening a review:
 
 ```bash
 make test
-# or
-cd core && python -m pytest test_*.py -v
+make compile
+for file in scripts/*.sh; do sh -n "$file"; done
+git diff --check
 ```
 
-CI (`.github/workflows/test.yml`) runs on Python 3.10 and 3.12. Current suite: **68 tests**.
+Do not commit generated live databases, live JSON, caches, logs, or local PID files.
 
-### Optional pre-commit check
+## Change Classification
 
-Before pushing, run:
+| Change type | Required accompanying work |
+|---|---|
+| Live feature or trade capture | Unit tests for malformed/duplicate/out-of-order data and integration coverage for label eligibility |
+| Forecast lifecycle | Tests for pending, resolution timing, resume, and no look-ahead leakage |
+| Schema-v5 field | `docs/SCHEMA_V5.md`, analyzer tests, and English/Persian operational docs |
+| Model/delta/gate behavior | `test_quantum_core.py`, frozen model version decision, and statistical-policy review |
+| Statistic/reporting behavior | `test_validation.py`, `docs/STATISTICS.md`, and explicit claim-policy review |
+| Script/CLI change | `--help`/shell syntax validation and `docs/RUNBOOK.md`/`WORKFLOW.md` updates |
 
-```bash
-make test
-python -m compileall core
-```
+## Review Checklist
 
-To install a local git hook:
+- [ ] The change preserves the boundary: evaluator only, no order execution.
+- [ ] Live model predictions use `quantum_core.born_rule_predict`.
+- [ ] A primary score uses only a complete local future trade window.
+- [ ] `score_eligible` is false for incomplete labels or disqualifying data quality.
+- [ ] Resume rejects mismatched `config_hash` values.
+- [ ] Schema-v5 documents and analyzer behavior match.
+- [ ] Current English and Persian operational documentation are updated together.
+- [ ] Historical documentation is not silently rewritten as current evidence.
+- [ ] Tests cover the changed behavior and the complete suite passes.
 
-```bash
-printf '#!/bin/sh\nmake test\n' > .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
-```
+## Documentation Policy
 
-Weekly drift detection: `.github/workflows/validation-weekly.yml` (Mondays 06:00 UTC).
+| Document class | Rule |
+|---|---|
+| Current operational docs | Must describe schema v5 and current commands |
+| Persian operational docs | Must remain equivalent to English policy and commands |
+| Research theory | Must separate conceptual claims from implemented behavior |
+| Historical audit/lessons | Preserve original substance; add an archive banner and link to current docs |
+| PDFs | Treat as fixed reference artifacts unless a maintained source is available |
 
-## Code Review Checklist
+## Naming and Compatibility
 
-- [ ] Live changes use `live_protocol` (`pending_due`, `forecast_lookback`, `resolve_buy_ratio`)
-- [ ] Born rule predictions go through `quantum_core.born_rule_predict` only
-- [ ] Do not re-enable Born rule on kline backtests without order-book imbalance
-- [ ] Statistical claims include sample size and Bonferroni correction
-- [ ] Update [docs/SCHEMA_V5.md](./docs/SCHEMA_V5.md) if prediction JSON fields change
-- [ ] New constants are documented at module level
-- [ ] One pending forecast at a time in live pipelines
+- New current live output must use the schema version in `core/config.py`.
+- A behaviorally meaningful model change requires a new `model_version` and a new corpus.
+- Do not add compatibility fallbacks that permit legacy labels to become primary evidence.
+- Keep public CLI options backward-compatible when practical; clearly deprecate positional or legacy forms in the runbook.
 
-## Pipeline Guidelines
+## Where to Add Tests
 
-| Module | Role |
-|--------|------|
-| `pipeline_live_ensemble.py` | Canonical long-running evaluation |
-| `pipeline_one_shot.py` | Scheduled cron runs with state persistence |
-| `pipeline_real.py` | Demo/smoke only |
-| `pipeline_live_long.py` | Legacy — avoid for new experiments |
-
-## Target Variable Warning
-
-- **Kline backtest:** binary `direction` (0/1)
-- **Live pipeline:** continuous `buy_ratio` [0, 1]
-
-These metrics are **not directly comparable**.
-
-## Adding Tests
-
-Priority areas when changing code:
-
-1. `test_validation.py` — any change to significance metrics
-2. `test_quantum_core.py` — Born rule, delta logic, destructive-interference gate
-3. `test_live_protocol.py` — resolve timing contract
-4. `test_data_historical.py` — candle ordering regressions
+| Area | Primary test file |
+|---|---|
+| Live persistence and raw trades | `core/test_live_store.py` |
+| Live resolution and eligibility | `core/test_live_pipeline.py` |
+| Resume and end-to-end lifecycle | `core/test_live_runner_integration.py` |
+| Result filtering and aggregation | `core/test_analyze_live_results.py` |
+| Born-rule behavior | `core/test_quantum_core.py` |
+| Statistical inference | `core/test_validation.py` |

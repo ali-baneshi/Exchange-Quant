@@ -1550,3 +1550,136 @@
   [  222] 11:03:48 NO DATA — retrying in 5s
 
   Signal 15 received, shutting down gracefully...
+  QUANTUM-ONLY LIVE PIPELINE
+  symbol=btcusdt  max_resolved=500  max_fetches=unlimited  max_runtime=unlimited
+  horizon=60.0s  sample_interval=5.0s  window=15
+  output=/home/manjaruhp/Pictures/Autonomous-AI-june2026/Exchange-Q/core/_live_results/btcusdt-quantum-1785067586.json
+  database=/home/manjaruhp/Pictures/Autonomous-AI-june2026/Exchange-Q/core/_live_results/btcusdt-quantum-1785067586.sqlite3
+  PID=1527431
+  Started at 2026-07-26 15:36:26
+
+  [    0] 15:36:29 WARMUP (1/15)
+  [    1] 15:36:39 WARMUP (2/15)
+  [    2] 15:36:50 WARMUP (3/15)
+  [    3] 15:37:05 WARMUP (4/15)
+  [    4] 15:37:18 WARMUP (5/15)
+  [    5] 15:37:30 WARMUP (6/15)
+  [    6] 15:37:42 WARMUP (7/15)
+  [    7] 15:37:52 WARMUP (8/15)
+  [    8] 15:38:00 WARMUP (9/15)
+  [    9] 15:38:09 WARMUP (10/15)
+  [   10] 15:38:20 WARMUP (11/15)
+  [   11] 15:38:31 WARMUP (12/15)
+  [   12] 15:38:53 WARMUP (13/15)
+[data_fetcher] _api_get /market/history/kline?symbol=btcusdt&period=1min&size=5: TimeoutError: The read operation timed out
+[data_fetcher] _api_get /market/history/trade?symbol=btcusdt&size=2000: TimeoutError: The read operation timed out
+  [   13] 15:39:08 WARMUP (14/15)
+  WARMUP complete — creating predictions for horizon=60.0s
+  [   14] 15:39:22 p=64647.3 c=0.524 q=0.496 δ=0.56 status=pending fallback=saturation_gate target=15:40:22
+[data_fetcher] _api_get /market/history/kline?symbol=btcusdt&period=1min&size=5: TimeoutError: _ssl.c:1063: The handshake operation timed out
+[data_fetcher] _api_get /market/history/trade?symbol=btcusdt&size=2000: TimeoutError: The read operation timed out
+  [   15] 15:39:41 SKIP forecast — pending unresolved
+[data_fetcher] _api_get /market/detail/merged?symbol=btcusdt: TimeoutError: The read operation timed out
+[data_fetcher] _api_get /market/depth?symbol=btcusdt&type=step1&depth=20: TimeoutError: _ssl.c:1063: The handshake operation timed out
+[data_fetcher] _api_get /market/history/trade?symbol=btcusdt&size=2000: TimeoutError: _ssl.c:1063: The handshake operation timed out
+[data_fetcher] _api_get /market/history/kline?symbol=btcusdt&period=1min&size=5: TimeoutError: The read operation timed out
+  [   16] 15:40:14 SKIP forecast — pending unresolved
+[data_fetcher] _api_get /market/history/kline?symbol=btcusdt&period=1min&size=5: TimeoutError: The read operation timed out
+  [   17] 15:40:28 RESOLVED id=btcusdt-14-1785067762791 act=0.475 c_err=0.048 q_err=0.020 ret=+0.00000
+  [   17] 15:40:28 p=64600.6 c=0.509 q=0.489 δ=0.67 status=pending fallback=saturation_gate target=15:41:28
+[data_fetcher] _api_get /market/history/trade?symbol=btcusdt&size=2000: TimeoutError: The read operation timed out
+  [   18] 15:40:41 SKIP forecast — pending unresolved
+  [   19] 15:40:53 SKIP forecast — pending unresolved
+  [   20] 15:41:04 SKIP forecast — pending unresolved
+[data_fetcher] _api_get /market/history/kline?symbol=btcusdt&period=1min&size=5: TimeoutError: _ssl.c:1063: The handshake operation timed out
+  [   21] 15:41:21 SKIP forecast — pending unresolved
+[data_fetcher] _api_get /market/history/trade?symbol=btcusdt&size=2000: TimeoutError: _ssl.c:1063: The handshake operation timed out
+[data_fetcher] _api_get /market/depth?symbol=btcusdt&type=step1&depth=20: TimeoutError: _ssl.c:1063: The handshake operation timed out
+  [   22] 15:41:41 RESOLVED id=btcusdt-17-1785067828808 act=0.500 c_err=0.009 q_err=0.011 ret=+0.00000
+  [   22] 15:41:42 p=64613.6 c=0.520 q=0.485 δ=0.83 status=pending fallback=saturation_gate target=15:42:41
+[data_fetcher] _api_get /market/history/kline?symbol=btcusdt&period=1min&size=5: TimeoutError: The read operation timed out
+[data_fetcher] _api_get /market/history/trade?symbol=btcusdt&size=2000: TimeoutError: The read operation timed out
+  [   23] 15:42:00 SKIP forecast — pending unresolved
+[data_fetcher] _api_get /market/history/kline?symbol=btcusdt&period=1min&size=5: TimeoutError: _ssl.c:1063: The handshake operation timed out
+[data_fetcher] _api_get /market/history/trade?symbol=btcusdt&size=2000: TimeoutError: _ssl.c:1063: The handshake operation timed out[data_fetcher] _api_get /market/detail/merged?symbol=btcusdt: TimeoutError: _ssl.c:1063: The handshake operation timed out
+
+[data_fetcher] _api_get /market/depth?symbol=btcusdt&type=step1&depth=20: TimeoutError: The read operation timed out
+[data_fetcher] _api_get /market/detail/merged?symbol=btcusdt: TimeoutError: The read operation timed out
+[data_fetcher] _api_get /market/history/trade?symbol=btcusdt&size=2000: TimeoutError: The read operation timed out
+[data_fetcher] _api_get /market/history/kline?symbol=btcusdt&period=1min&size=5: TimeoutError: _ssl.c:1063: The handshake operation timed out
+[data_fetcher] _api_get /market/depth?symbol=btcusdt&type=step1&depth=20: TimeoutError: _ssl.c:1063: The handshake operation timed out[data_fetcher] _api_get /market/detail/merged?symbol=btcusdt: TimeoutError: _ssl.c:1063: The handshake operation timed out
+
+[data_fetcher] _api_get /market/history/trade?symbol=btcusdt&size=2000: TimeoutError: _ssl.c:1063: The handshake operation timed out
+  [   24] 15:42:46 NO DATA — retrying in 5s
+[data_fetcher] _api_get /market/detail/merged?symbol=btcusdt: TimeoutError: _ssl.c:1063: The handshake operation timed out
+[data_fetcher] _api_get /market/history/kline?symbol=btcusdt&period=1min&size=5: TimeoutError: _ssl.c:1063: The handshake operation timed out
+[data_fetcher] _api_get /market/depth?symbol=btcusdt&type=step1&depth=20: TimeoutError: _ssl.c:1063: The handshake operation timed out
+[data_fetcher] _api_get /market/history/trade?symbol=btcusdt&size=2000: TimeoutError: _ssl.c:1063: The handshake operation timed out
+[data_fetcher] _api_get /market/history/kline?symbol=btcusdt&period=1min&size=5: TimeoutError: _ssl.c:1063: The handshake operation timed out
+[data_fetcher] _api_get /market/detail/merged?symbol=btcusdt: TimeoutError: The read operation timed out
+[data_fetcher] _api_get /market/depth?symbol=btcusdt&type=step1&depth=20: TimeoutError: The read operation timed out
+[data_fetcher] _api_get /market/history/trade?symbol=btcusdt&size=2000: TimeoutError: _ssl.c:1063: The handshake operation timed out
+  [   25] 15:43:45 RESOLVED id=btcusdt-22-1785067901996 act=0.500 c_err=0.020 q_err=0.015 ret=+0.00000
+  [   25] 15:43:45 p=64629.5 c=0.534 q=0.488 δ=0.74 status=pending fallback=saturation_gate target=15:44:45
+[data_fetcher] _api_get /market/detail/merged?symbol=btcusdt: TimeoutError: _ssl.c:1063: The handshake operation timed out
+[data_fetcher] _api_get /market/history/trade?symbol=btcusdt&size=2000: TimeoutError: The read operation timed out
+[data_fetcher] _api_get /market/detail/merged?symbol=btcusdt: OSError: [Errno 101] Network is unreachable
+[data_fetcher] _api_get /market/depth?symbol=btcusdt&type=step1&depth=20: TimeoutError: _ssl.c:1063: The handshake operation timed out
+[data_fetcher] _api_get /market/history/kline?symbol=btcusdt&period=1min&size=5: TimeoutError: The read operation timed out
+[data_fetcher] _api_get /market/history/trade?symbol=btcusdt&size=2000: TimeoutError: The read operation timed out
+[data_fetcher] _api_get /market/history/kline?symbol=btcusdt&period=1min&size=5: TimeoutError: _ssl.c:1063: The handshake operation timed out
+[data_fetcher] _api_get /market/history/trade?symbol=btcusdt&size=2000: TimeoutError: The read operation timed out
+  [   26] 15:45:11 RESOLVED id=btcusdt-25-1785068025099 act=0.500 c_err=0.034 q_err=0.012 ret=+0.00000
+  [   26] 15:45:11 p=64633.9 c=0.532 q=0.489 δ=0.76 status=pending fallback=saturation_gate target=15:46:11
+[data_fetcher] _api_get /market/history/kline?symbol=btcusdt&period=1min&size=5: TimeoutError: _ssl.c:1063: The handshake operation timed out
+  [   27] 15:45:26 SKIP forecast — pending unresolved
+  [   28] 15:45:37 SKIP forecast — pending unresolved
+  [   29] 15:45:45 SKIP forecast — pending unresolved
+[data_fetcher] _api_get /market/history/kline?symbol=btcusdt&period=1min&size=5: TimeoutError: _ssl.c:1063: The handshake operation timed out
+  [   30] 15:45:59 SKIP forecast — pending unresolved
+  [   31] 15:46:09 SKIP forecast — pending unresolved
+[data_fetcher] _api_get /market/detail/merged?symbol=btcusdt: TimeoutError: _ssl.c:1063: The handshake operation timed out
+  [   32] 15:46:30 RESOLVED id=btcusdt-26-1785068111407 act=0.478 c_err=0.054 q_err=0.011 ret=+0.00000
+  [   32] 15:46:30 p=64638.6 c=0.515 q=0.484 δ=0.82 status=pending fallback=saturation_gate target=15:47:30
+  [   33] 15:46:38 SKIP forecast — pending unresolved
+  [   34] 15:46:57 SKIP forecast — pending unresolved
+  [   35] 15:47:19 SKIP forecast — pending unresolved
+  [   36] 15:47:31 RESOLVED id=btcusdt-32-1785068190548 act=0.462 c_err=0.053 q_err=0.022 ret=+0.00000
+  [   36] 15:47:31 p=64621.5 c=0.499 q=0.480 δ=1.00 status=pending fallback=saturation_gate target=15:48:31
+  [   37] 15:47:42 SKIP forecast — pending unresolved
+  [   38] 15:47:57 SKIP forecast — pending unresolved
+[data_fetcher] _api_get /market/depth?symbol=btcusdt&type=step1&depth=20: TimeoutError: _ssl.c:1063: The handshake operation timed out
+  [   39] 15:48:10 SKIP forecast — pending unresolved
+[data_fetcher] _api_get /market/depth?symbol=btcusdt&type=step1&depth=20: TimeoutError: The read operation timed out
+  [   40] 15:48:29 SKIP forecast — pending unresolved
+  [   41] 15:48:40 RESOLVED id=btcusdt-36-1785068251767 act=0.456 c_err=0.043 q_err=0.025 ret=+0.00000
+  [   41] 15:48:40 p=64603.4 c=0.498 q=0.469 δ=1.08 status=pending fallback=saturation_gate target=15:49:40
+  [   42] 15:48:52 SKIP forecast — pending unresolved
+[data_fetcher] _api_get /market/detail/merged?symbol=btcusdt: TimeoutError: _ssl.c:1063: The handshake operation timed out
+[data_fetcher] _api_get /market/history/trade?symbol=btcusdt&size=2000: TimeoutError: _ssl.c:1063: The handshake operation timed out
+  [   43] 15:49:11 SKIP forecast — pending unresolved
+[data_fetcher] _api_get /market/detail/merged?symbol=btcusdt: TimeoutError: The read operation timed out
+  [   44] 15:49:38 SKIP forecast — pending unresolved
+[data_fetcher] _api_get /market/history/trade?symbol=btcusdt&size=2000: TimeoutError: _ssl.c:1063: The handshake operation timed out
+[data_fetcher] _api_get /market/history/kline?symbol=btcusdt&period=1min&size=5: TimeoutError: _ssl.c:1063: The handshake operation timed out
+  [   45] 15:49:54 RESOLVED id=btcusdt-41-1785068320516 act=0.500 c_err=0.002 q_err=0.031 ret=+0.00000
+  [   45] 15:49:54 p=64573.4 c=0.520 q=0.469 δ=0.65 status=pending fallback=saturation_gate target=15:50:54
+[data_fetcher] _api_get /market/depth?symbol=btcusdt&type=step1&depth=20: TimeoutError: _ssl.c:1063: The handshake operation timed out
+  [   46] 15:50:06 SKIP forecast — pending unresolved
+  [   47] 15:50:15 SKIP forecast — pending unresolved
+[data_fetcher] _api_get /market/history/trade?symbol=btcusdt&size=2000: TimeoutError: The read operation timed out
+  [   48] 15:50:28 SKIP forecast — pending unresolved
+[data_fetcher] _api_get /market/depth?symbol=btcusdt&type=step1&depth=20: TimeoutError: The read operation timed out
+[data_fetcher] _api_get /market/history/kline?symbol=btcusdt&period=1min&size=5: TimeoutError: _ssl.c:1063: The handshake operation timed out
+  [   49] 15:50:44 SKIP forecast — pending unresolved
+  [   50] 15:51:02 RESOLVED id=btcusdt-45-1785068394062 act=0.425 c_err=0.095 q_err=0.043 ret=+0.00000
+  [   50] 15:51:02 p=64536.3 c=0.485 q=0.458 δ=1.04 status=pending fallback=saturation_gate target=15:52:02
+[data_fetcher] _api_get /market/history/kline?symbol=btcusdt&period=1min&size=5: TimeoutError: _ssl.c:1063: The handshake operation timed out
+  [   51] 15:51:26 SKIP forecast — pending unresolved
+[data_fetcher] _api_get /market/history/kline?symbol=btcusdt&period=1min&size=5: TimeoutError: _ssl.c:1063: The handshake operation timed out
+[data_fetcher] _api_get /market/history/trade?symbol=btcusdt&size=2000: TimeoutError: _ssl.c:1063: The handshake operation timed out
+  [   52] 15:51:43 SKIP forecast — pending unresolved
+  [   53] 15:51:55 SKIP forecast — pending unresolved
+  [   54] 15:52:08 RESOLVED id=btcusdt-50-1785068462262 act=0.434 c_err=0.051 q_err=0.024 ret=+0.00000
+  [   54] 15:52:08 p=64562.6 c=0.491 q=0.454 δ=0.69 status=pending fallback=saturation_gate target=15:53:08
+  [   55] 15:52:22 SKIP forecast — pending unresolved

@@ -1,219 +1,141 @@
 # Exchange-Q Architecture
 
-> **JSON schema reference:** [docs/SCHEMA_V5.md](./docs/SCHEMA_V5.md) | **Statistics:** [docs/STATISTICS.md](./docs/STATISTICS.md)
+> Current operational contract: [schema v5](./docs/SCHEMA_V5.md) · [statistical protocol](./docs/STATISTICS.md) · [runbook](./docs/RUNBOOK.md)
 
-## Overview
+## Purpose and Boundary
 
-Exchange-Q applies the **Born rule from quantum probability** to financial market prediction. It models market participants' buy/sell decisions as interfering quantum states, where a hidden "context" variable creates non-classical correlations that classical law-of-total-probability models cannot capture.
+Exchange-Q is a durable **research-evaluation pipeline** for a quantum-inspired prediction hypothesis. It has no exchange authentication, portfolio management, order-routing, or execution layer.
 
-No quantum hardware is required — the Born rule is a simple formula evaluated on a regular CPU.
+The architecture separates three questions that must not be mixed:
 
----
+| Question | Data | Target | Canonical code |
+|---|---|---|---|
+| Are classical candle features useful? | Historical OHLCV | Binary next-candle direction | `backtest.py` |
+| Does the frozen Born model improve live trade-flow prediction? | Live order book and trades | Future continuous `buy_ratio` | `pipeline_live_ensemble.py` |
+| Does the formula behave under controlled assumptions? | `MarketSimulator` | Simulator target | `experiment.py` |
 
-## Data Flow
+## System Context
 
-```
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│   DATA LAYER    │────▶│  FEATURE EXTRACT │────▶│  PREDICTION     │
-│                 │     │                  │     │                 │
-│ Gate.io (hist.) │     │ compute_features │     │ Quantum (Born)  │
-│ Huobi (live)    │     │ → buy_ratio      │     │ Vol regime      │
-│ MarketSim (syn) │     │ → conviction     │     │ Classical ens.  │
-│                 │     │ → imbalance      │     │                 │
-│ _kline_cache/   │     │ → volatility     │     │ Ensemble fusion │
-│ _live_results/  │     │ → delta          │     │                 │
-└─────────────────┘     └──────────────────┘     └────────┬────────┘
-                                                          │
-                                                          ▼
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│  VALIDATION     │◀────│  REPORTING       │◀────│  SIGNAL         │
-│                 │     │                  │     │                 │
-│ Block bootstrap │     │ JSON results     │     │ delta → signal  │
-│ Bonferroni corr.│     │ CSV printout     │     │ confidence      │
-│ MDD / Sharpe    │     │ analyze_live     │     │ alert           │
-│ Profit factor   │     │ visualization    │     │                 │
-└─────────────────┘     └──────────────────┘     └─────────────────┘
+```text
+Gate.io OHLCV ───────────────► historical cache ─► classical backtest/report
+
+Huobi ticker/depth/trades ───► feature snapshot ─┐
+                         raw trades ─► SQLite ───┼─► live forecast
+                                                  │
+                  pending forecast + exact future trade window
+                                                  │
+                                                  ▼
+                                       eligible paired-error record
+                                                  │
+                                                  ▼
+                                  schema-v5 JSON export / analyzer / report
 ```
 
----
+The SQLite database is the durable source of truth for a live run. JSON is an atomic, inspectable export of that state.
 
-## Module Dependency Graph
+## Live Evaluation Lifecycle
 
-```
-data_historical.py           data_fetcher.py
-        │                          │
-        ▼                          ▼
-  features.py                 live_protocol.py
-  backtest.py                      │
-  experiment_ablation.py           ▼
-  validation_report.py      pipeline_live_*.py / one_shot
-        │                          │
-        │                          ▼
-        │                   quantum_core.py ◄── ensemble.py
-        │                          │
-        └──────────┬───────────────┘
-                   ▼
-             validation.py
-```
-
-### Key Dependencies
-
-| Module | Depends On | Used By |
-|--------|-----------|---------|
-| `data_historical.py` | stdlib + curl | `backtest.py`, `validation_report.py`, `experiment_ablation.py` |
-| `features.py` | — | `backtest.py`, `experiment_ablation.py`, `validation_report.py` |
-| `data_fetcher.py` | stdlib + Huobi API | `pipeline_live_*.py`, `pipeline_one_shot.py`, `data_collector.py` |
-| `quantum_core.py` | `delta_adaptive.py` | `ensemble.py`, `market_sim.py`, all live pipelines |
-| `live_protocol.py` | — | all live pipelines |
-| `delta_adaptive.py` | — | `quantum_core.py`, `experiment.py` |
-| `ensemble.py` | `quantum_core.py` | `pipeline_live_ensemble.py`, `pipeline_one_shot.py` |
-| `baselines.py` | — | live pipelines |
-| `validation.py` | — | reports + live summary |
-| `market_sim.py` | `quantum_core.py` | `experiment.py`, `visualize.py` |
-
-**Deprecated (stubs, exit 1):** `backtest_ensemble.py`, `backtest_boost.py`, `calibrate_delta.py` — Born rule removed from klines 2026-07-23.
-
----
-
-## The Born Rule in Detail
-
-### Standard Form (used everywhere after v4 hardening)
-
-```
-Given a window of recent buy_ratios (or convictions):
-
-1. Split into two groups at the median:
-   high_group = {r : r > median}
-   low_group  = {r : r <= median}
-
-2. Compute statistics:
-   p_high = |high_group| / N         # probability of high context
-   p_low  = |low_group| / N          # probability of low context
-   μ_high = mean(high_group)         # expected value in high context
-   μ_low  = mean(low_group)          # expected value in low context
-
-3. Compute interference phase δ from market context:
-   δ = compute_delta(history)        # order-book: imbalance + volatility (live)
-   # Live order-book δ is mapped to [0, π/2] (constructive → neutral)
-   # Kline return-based delta is NOT used for Born-rule evaluation (removed 2026-07-23)
-
-4. Apply Born rule (unnormalized; see quantum_core.py):
-   P_quantum = |√(p_high · μ_high) + √(p_low · μ_low) · e^(i·δ)|²
+```text
+fetch features + raw trades
+        │
+        ├─ validate timestamp and quality flags
+        ├─ persist raw trade batch and deduplicate trade IDs
+        └─ append accepted observation
+                 │
+                 ▼
+       warmup window complete?
+          │ no                  │ yes and no pending forecast
+          ▼                     ▼
+       collect only        create one pending forecast
+                                      │
+                                      ▼
+                              target time reached?
+                                      │
+                                      ▼
+                   read locally captured trades in exact interval
+                                      │
+                    ┌─────────────────┴─────────────────┐
+                    ▼                                   ▼
+             complete label                      incomplete label
+                    │                                   │
+                    ▼                                   ▼
+          score + optional ensemble update       diagnostic only; excluded
 ```
 
-### Expansion
+## Module Boundaries
 
-```
-P_quantum = p_high·μ_high + p_low·μ_low + 2·√(p_high·p_low·μ_high·μ_low)·cos(δ)
+| Module | Responsibility | Key contract |
+|---|---|---|
+| `data_fetcher.py` | Fetches ticker, depth, trades, and klines; computes live features | Exchange data is untrusted and may be incomplete |
+| `live_store.py` | SQLite persistence for state, observations, forecasts, raw trades, and retention | Deduplicates observations and raw trades |
+| `live_protocol.py` | Pure forecast timing helpers | One pending forecast at a time |
+| `pipeline_live_ensemble.py` | Canonical durable live evaluator | Emits schema v5 and preserves label provenance |
+| `quantum_core.py` | Shared Born-rule prediction and fallback metadata | All live Born predictions pass through this module |
+| `delta_adaptive.py` | Phase calculation | Live order-book delta is bounded to `[0, π/2]` |
+| `ensemble.py` | Quantum + volatility-regime adaptive ensemble | Updates only from eligible resolved labels |
+| `baselines.py` | Classical comparators | Returns bounded predictions |
+| `validation.py` / `reality_check.py` | Paired error statistics | Significance requires the frozen primary protocol |
+| `analyze_live_results.py` | Schema-aware filtering and aggregation | Defaults to v5 and rejects non-primary labels |
 
-           │______classical part______│ │_________interference term_________│
-```
+## Born-Rule Model
 
-The interference term is what classical models cannot produce. It is positive when δ=0 (constructive) and negative when δ=π (destructive). On the **live order-book path**, δ ∈ [0, π/2] and negative interference is gated via `destructive_interference`.
+For a high/low partition of a bounded feature history:
 
-### Delta Interpretation
-
-| Delta | Context | Meaning |
-|-------|---------|---------|
-| 0 | Strong imbalance, low vol (live) | Constructive — market is directional |
-| π/2 | Weak context (live) or mixed signals | Neutral — cos(δ)=0, no interference |
-| π | Kline proxy only | Destructive — gated to classical part in `quantum_core` |
-
-**Live fallback chain:** bucketing tries `buy_ratio` → `buy_ratio_volume` → `imbalance`; on failure returns mean with `fallback_reason` in `{insufficient_history, flat_history, single_bucket}`. If interference term is negative, `fallback_reason: destructive_interference` returns the classical part instead.
-
----
-
-## Prediction Pipelines
-
-### 1. Backtest (kline-based, classical only, binary direction)
-
-```
-Input: OHLCV klines (oldest→newest) → features.compute_features() → conviction
-Target: next_candle_direction (0 or 1)
-Models: classical_ensemble_klines only
-Born rule: REMOVED from this path (2026-07-23)
+```text
+P = |sqrt(p_high * mu_high) + sqrt(p_low * mu_low) * exp(i * delta)|²
 ```
 
-### 2. Live (order-book-based, continuous buy_ratio, forecast)
+The implementation records the classical component and interference term separately:
 
-```
-Input: Huobi order book + trades → buy_ratio, imbalance
-Lookback: live_protocol.forecast_lookback → history[-window:]
-Target: FUTURE buy_ratio after horizon_s (resolve-later)
-Models: classical_ensemble (baselines.py), quantum_core.born_rule_predict
-Delta:  compute_delta (imbalance+volatility based)
+```text
+classical_part = p_high * mu_high + p_low * mu_low
+interference_term = 2 * sqrt(p_high * p_low * mu_high * mu_low) * cos(delta)
 ```
 
-### 3. Synthetic (controlled hidden context)
+### Live safeguards
 
-```
-Input: MarketSimulator agents → buy_ratio, synthetic imbalance, hidden_context
-Target: next_buy_ratio
-Models: classical_model, quantum_model → both route Born through quantum_core
-Delta:  compute_delta; optional hidden-sign probe (δ=0/π), not a true oracle
-```
+- Bucketing tries usable live features and returns explicit fallback metadata.
+- Flat or insufficient histories revert to a bounded mean.
+- Negative interference is gated back to the classical part.
+- Constructive overshoot or near-saturation is gated back to the classical part.
+- The active model name is `born_constructive_v1`; it is a frozen experimental arm, not a claim of mathematical optimality.
 
----
+## Persistence and Recovery
 
-## Statistical Testing Framework
+Each live run has:
 
-### Block Bootstrap (White's Reality Check)
-
-```
-H₀: quantum_win_rate ≤ 0.5
-Hₐ: quantum_win_rate > 0.5
-
-block_len = ceil(n^(1/3))           # handles autocorrelation
-n_blocks = ceil(n / block_len)
-For each bootstrap iteration:
-    For each block: flip sign with p=0.5
-    Count wins in resampled series
-p_value = (count_extreme + 1) / (n_iterations + 1)
+```text
+core/_live_results/<run_id>.sqlite3   durable source of truth
+core/_live_results/<run_id>.json      atomic schema-v5 export
 ```
 
-### Bonferroni Correction
+On resume, the runner verifies the stored `config_hash`, restores observations and forecasts, rebuilds history, and restores ensemble performance. A configuration mismatch stops the run rather than silently mixing experiments.
 
-```
-N_HYPOTHESES_TOTAL = 5              # pre-registered tests
-corrected_p = min(1.0, raw_p * 5)
-significant_005 = corrected_p < 0.05
-significant_001 = corrected_p < 0.01
-```
+Raw trades are retained locally for 30 days. Trade batches record response saturation and capture timing; incomplete coverage makes a label ineligible rather than silently substituting a different target.
 
-### Financial Metrics
+## Data Quality Model
 
-```
-MDD:     max peak-to-trough drawdown on error-based equity curve
-Sharpe:  mean(return_series) / std(return_series) * √(periods_per_year)
-Profit Factor: win_count / loss_count  (inf if all wins)
-```
+| Condition | Result |
+|---|---|
+| Duplicate exchange timestamp | Not used in forecast history |
+| Empty trades/depth, crossed market, endpoint skew | Recorded as quality flags; may disqualify a score |
+| Too few future trades | `label_unavailable` |
+| Capture gap or saturated trade response | `label_unavailable` |
+| Late resolution | Disqualified from primary scoring |
 
----
+## Deprecated and Historical Components
 
-## Live Pipeline Semantics (2026-07-26)
+| Component | Status | Reason |
+|---|---|---|
+| `backtest_ensemble.py`, `backtest_boost.py`, `calibrate_delta.py` | Deprecated stubs | Born rule removed from kline evaluation |
+| `pipeline_one_shot.py` | Legacy convenience path | State v2; not schema-v5 evidence |
+| `pipeline_live_long.py` | Legacy | Canonical runner has durable v5 behavior |
+| `pipeline_real.py` | Smoke/demo only | Not a primary evaluator |
+| `docs/SCHEMA_V3.md`, `code_audit_v1/` | Historical | Preserve context, not current instructions |
 
-- **Canonical entry point:** `pipeline_live_ensemble.py`
-- **Cron alternative:** `pipeline_one_shot.py` uses persisted `state.json` with `STATE_VERSION = 2` (not schema v5 JSON); prefer ensemble pipeline for definitive eval
-- **One pending forecast at a time** — no overlapping horizons when `sample_interval_s << horizon_s`
-- **Resolve timing:** `live_protocol.pending_due()` before scoring
-- **Ensemble mode:** weights update via `Ensemble.predict_and_update()` on resolve
-- **Output schema:** version 3 JSON with `run_id`, `quality_flags`, `bucket_feature`, optional `ensemble_weights`
-- **Corpus policy:** active v5 runs in `_live_results/`; legacy v2–v4/collector in `_live_results/_archive/pre_v5/`
+## Operational References
 
----
-
-## Key Files Reference
-
-| File | Purpose | Entry Point |
-|------|---------|-------------|
-| `core/ensemble.py` | 2-model Ensemble (quantum + vol_regime) | `Ensemble()` class |
-| `core/delta_adaptive.py` | Delta computation | `compute_delta()`, `compute_delta_from_klines()` |
-| `core/validation.py` | Statistical testing | `comprehensive_report()` |
-| `core/backtest.py` | Classical-only kline backtest | `python3 backtest.py` |
-| `core/pipeline_live_ensemble.py` | **Primary** live pipeline (ensemble/quantum) | `python3 pipeline_live_ensemble.py ...` |
-| `core/pipeline_one_shot.py` | Cron one-shot with state v2 | `python3 pipeline_one_shot.py` |
-| `core/pipeline_real.py` | Demo/smoke only (short runs) | `python3 pipeline_real.py ...` |
-| `core/pipeline_live_long.py` | Legacy long run — prefer ensemble pipeline | `python3 pipeline_live_long.py ...` |
-| `core/data_historical.py` | Historical data collection | `python3 data_historical.py` |
-| `core/data_collector.py` | Live data collection | `python3 data_collector.py ...` |
-| `core/data_fetcher.py` | Huobi API wrapper | `HuobiData()` class |
+- `docs/RUNBOOK.md`: start, monitor, stop, resume, and troubleshoot live runs.
+- `docs/SCHEMA_V5.md`: field-level contract and eligibility invariants.
+- `docs/STATISTICS.md`: primary hypothesis and reporting threshold.
+- `WORKFLOW.md`: end-to-end usage, including historical and synthetic paths.
