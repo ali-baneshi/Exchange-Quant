@@ -18,6 +18,19 @@ def _mean(values, default=0.5):
     return statistics.mean(values) if values else default
 
 
+def _feature_value(h, key=None):
+    """Extract a bounded feature value; treat explicit None as missing."""
+    if key:
+        v = h.get(key)
+    else:
+        v = h.get("buy_ratio")
+        if v is None:
+            v = h.get("conviction")
+    if v is None:
+        return 0.0
+    return max(0.0, min(1.0, float(v)))
+
+
 def _infer_delta_source(history):
     if any(k in h for h in history for k in ("open", "close", "return", "direction", "body_ratio")):
         return "kline_proxy"
@@ -26,12 +39,16 @@ def _infer_delta_source(history):
     return "fallback"
 
 
-def born_rule_predict(history, value_key=None, min_history=4, variance_floor=1e-8):
+def born_rule_predict(history, value_key=None, min_history=4, variance_floor=1e-8,
+                      delta_override=None):
     """
     Predict a bounded [0, 1] value with the Born-rule interference formula.
 
+    delta_override: if set, skip compute_delta and use this phase (for synthetic
+    diagnostics / hidden-sign probes). Does not claim to be a true optimum.
+
     Metadata fields:
-      - delta_source: orderbook, kline_proxy, or fallback
+      - delta_source: orderbook, kline_proxy, fallback, or override
       - fallback_reason: none, insufficient_history, flat_history, single_bucket
       - classical_part: p_h*mu_h + p_l*mu_l before interference
       - interference_term: 2*sqrt(...)*cos(delta)
@@ -54,16 +71,19 @@ def born_rule_predict(history, value_key=None, min_history=4, variance_floor=1e-
         meta["fallback_reason"] = "insufficient_history"
         return 0.5, meta
 
-    delta, confidence = compute_delta(history)
+    if delta_override is not None:
+        delta, confidence = float(delta_override), 1.0
+        meta["delta_source"] = "override"
+    else:
+        delta, confidence = compute_delta(history)
+        meta["delta_source"] = source
     meta["delta"] = delta
     meta["confidence"] = confidence
-    meta["delta_source"] = _infer_delta_source(history)
 
     if value_key:
-        vals = [h.get(value_key, h.get("buy_ratio", h.get("conviction", 0))) for h in history]
+        vals = [_feature_value(h, key=value_key) for h in history]
     else:
-        vals = [h.get("buy_ratio", h.get("conviction", 0)) for h in history]
-    vals = [max(0.0, min(1.0, float(v))) for v in vals]
+        vals = [_feature_value(h) for h in history]
 
     if len(vals) < min_history:
         meta["fallback_reason"] = "insufficient_history"

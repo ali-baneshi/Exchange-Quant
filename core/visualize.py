@@ -57,6 +57,11 @@ def main():
     actual_ratios = [r['actual_buy_ratio'] for r in results]
     classical_errs = [r['classical_error'] for r in results]
     quantum_errs = [r['quantum_error'] for r in results]
+    quantum_oracle_errs = [r['quantum_oracle_error'] for r in results]
+
+    all_errs = classical_errs + quantum_errs + quantum_oracle_errs
+    err_min = min(all_errs)
+    err_max = max(all_errs)
 
     print(f"\n  Hidden Context (sinusoidal sweep):")
     print(f"  {sparkline(contexts)}")
@@ -67,39 +72,40 @@ def main():
     print(f"  min={min(actual_ratios):.2f}  max={max(actual_ratios):.2f}")
 
     print(f"\n  Classical Prediction Error:")
-    print(f"  {sparkline(classical_errs)}")
+    print(f"  {sparkline(classical_errs, min_val=err_min, max_val=err_max)}")
     print(f"  mean={statistics.mean(classical_errs):.4f}")
 
-    print(f"\n  Quantum Prediction Error:")
-    print(f"  {sparkline(quantum_errs)}")
+    print(f"\n  Quantum Prediction Error (computed delta):")
+    print(f"  {sparkline(quantum_errs, min_val=err_min, max_val=err_max)}")
     print(f"  mean={statistics.mean(quantum_errs):.4f}")
+
+    print(f"\n  Quantum Prediction Error (hidden-sign δ probe):")
+    print(f"  {sparkline(quantum_oracle_errs, min_val=err_min, max_val=err_max)}")
+    print(f"  mean={statistics.mean(quantum_oracle_errs):.4f}")
 
     print()
     print("-" * 72)
     print("  INTERPRETATION")
     print("-" * 72)
-    print("""
-  The sparklines above show 500 time steps of a synthetic market.
+    print(f"""
+  The sparklines above show {len(results)} time steps of a synthetic market.
   The 'hidden context' oscillates sinusoidally.
 
-  Classical model uses the law of total probability:
-    P(buy) = E[P(buy | visible_data)]
-    It cannot see the hidden context, so it always predicts
-    the rolling average. Error is high (~12.5%).
+  Three models are compared:
+    - Classical: rolling mean of recent buy_ratio (cannot see hidden context)
+    - Quantum (computed delta): Born rule with delta from market features
+    - Quantum (hidden-sign δ):  Born rule with δ=0/π from known hidden
+                                context sign — heuristic probe, NOT a true
+                                oracle / argmin upper bound
 
-  Quantum model uses the Born rule with interference:
-    P(buy) = |sqrt(p_high * mu_high) + sqrt(p_low * mu_low) * e^{i*delta}|^2
-    The interference term |psi_1 + psi_2|^2 captures non-classical
-    correlations created by the hidden context.
+  If hidden-sign quantum beats classical but COMPUTED quantum does not:
+    -> Some phase signal may exist, but compute_delta() fails to extract it.
 
-  When |context| is large, agents enter a 'dissonant' state —
-    they simultaneously want to buy AND sell depending on the
-    unobserved variable. Classical averaging misses this entirely.
-    Quantum interference captures it via the cross-term 2*Re(psi_1*psi_2*).
+  If even the hidden-sign probe cannot beat classical:
+    -> The median-split Born formulation may be inadequate for this
+       hidden-context structure.
 
-  This is structurally identical to the disjunction effect
-  (Tversky & Shafir, 1992) and the violation of the sure-thing
-  principle — phenomena that only quantum probability can model.
+  Synthetic imbalance is derived from buy_ratio — not a real order book.
 """)
 
     print("-" * 72)
@@ -112,19 +118,21 @@ def main():
     - Macro expectations (not yet priced in)
     - MEV bots waiting for confirmation
 
-  The quantum model's advantage:
-    - Detects when classical models are about to fail
-    - Provides a leading indicator (the optimal delta shifts
-      before the price moves)
-    - No quantum hardware needed — just complex numbers and
-      the Born rule on a regular CPU
+  Live Born-rule evaluation requires real order-book imbalance
+  (pipeline_live_ensemble.py), not kline proxies.
 """)
 
+    def _pct(base, model):
+        return (base - model) / base * 100 if base else 0.0
+
+    imprv_comp = _pct(stats['mean_classical_error'], stats['mean_quantum_error'])
+    imprv_oracle = _pct(stats['mean_classical_error'], stats['mean_quantum_oracle_error'])
     print("=" * 72)
-    print(f"  Summary: {stats['n_steps']} steps  |  "
-          f"Classical err: {stats['mean_classical_error']:.4f}  |  "
-          f"Quantum err: {stats['mean_quantum_error']:.4f}  |  "
-          f"Improvement: {((stats['mean_classical_error']-stats['mean_quantum_error'])/stats['mean_classical_error']*100):+.1f}%")
+    print(f"  Summary: {stats['n_steps']} steps")
+    print(f"    Classical err:                {stats['mean_classical_error']:.4f}")
+    print(f"    Quantum err (computed δ):     {stats['mean_quantum_error']:.4f}  ({imprv_comp:+.1f}%)")
+    print(f"    Quantum err (hidden-sign δ):  {stats['mean_quantum_oracle_error']:.4f}  ({imprv_oracle:+.1f}%)")
+    print(f"    Hidden context separation:    {stats['mean_hidden_separation']:.4f}")
     print("=" * 72)
 
 

@@ -11,8 +11,7 @@ Weights use exp(-relative_gap * K) for aggressive separation.
 import math
 import statistics
 from quantum_core import born_rule_predict
-
-RELATIVE_K = 10.0
+from config import RELATIVE_K
 
 
 def _quantum_predict(history):

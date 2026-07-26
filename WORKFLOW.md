@@ -13,11 +13,13 @@ This document explains the correct order of operations for using Exchange-Q.
 python3 --version
 
 # No pip packages needed — 100% standard library
+# Historical fetch also requires system curl on PATH
 python3 -c "
 import math, cmath, statistics, http.client, ssl
 import json, os, sys, time, concurrent.futures, subprocess, signal
-print('All stdlib modules available ✓')
+print('All stdlib modules available')
 "
+command -v curl
 
 # Clone / enter project directory
 cd Exchange-Q
@@ -50,55 +52,45 @@ Re-running is instant if cache exists.
 
 ---
 
-## Step 2: Run Backtests
+## Step 2: Run Classical Backtests
 
-**Goal:** Compare classical vs quantum models on historical data.
+**Goal:** Evaluate classical models on historical klines (binary direction).
+Born rule was removed from this path (2026-07-23).
 
 ```bash
-# 1. Basic classical vs quantum comparison
+# Classical-only MAE on train / val / held-out
 python3 core/backtest.py
 
-# 2. Ensemble backtest (quantum + vol_regime)
-python3 core/backtest_ensemble.py
-
-# 3. Adaptive vs fixed weight comparison
-python3 core/backtest_boost.py
+# Deprecated stubs (exit code 1) — do not use for Born-on-klines:
+# python3 core/backtest_ensemble.py
+# python3 core/backtest_boost.py
 ```
 
-Each script runs on all three timeframes (15min, 60min, 1day) with:
-- Walk-forward: 60% train → 40% val → 20% held-out
-- Block bootstrap with Bonferroni correction
-- Financial metrics (MDD, Sharpe, profit factor)
+Kline candles are returned **oldest → newest**. Held-out = last 20%.
+Target is **binary direction**, not continuous buy_ratio.
 
 ---
 
 ## Step 3: Ablation Study
 
-**Goal:** Determine if the Born rule adds value beyond simple models.
+**Goal:** Compare classical models (vol_regime / MA / ensemble) on held-out klines.
 
 ```bash
 python3 core/experiment_ablation.py
 ```
 
-**What it tests:**
-| Comparison | Meaning |
-|-----------|---------|
-| 2-model (quantum+vol) vs 1-model (vol only) | Does Born rule help? |
-| quantum+MA vs MA alone | Does Born rule help with MA? |
-| Individual model errors | Which model is best alone? |
-
-**Interpreting results:**
-- If 2-model error < 1-model error → Born rule adds value
-- If 2-model error >= 1-model error → Born rule does NOT help
-- Current finding: **Borderline** — Born rule helps ~1-2% over simple models on 2000 candles, but NOT significant on 5000 candles (p=1.0)
+Born rule is not part of this ablation anymore. For Born-rule value, use the live order-book pipeline.
 
 ---
 
 ## Step 4: Comprehensive Validation Report
 
+**Goal:** Classical kline metrics plus on-disk live Born-rule status (not a quantum kline backtest).
+
 ```bash
 # Single source-of-truth report for a specific period
 python3 core/validation_report.py --period 60min
+```
 
 # Save report to JSON
 python3 core/validation_report.py --period 60min --output report_60min.json
@@ -170,11 +162,16 @@ python3 core/pipeline_live_ensemble.py btcusdt 720 3600 ensemble
 | Arg | Example | Meaning |
 |-----|---------|---------|
 | symbol | btcusdt | Trading pair |
-| n_steps | 720 | Number of hourly comparisons |
-| delay | 3600 | Seconds between steps (3600 = 1 hour) |
+| n_steps | 720 | Max sample iterations (one forecast per horizon when pending clears) |
+| delay | 3600 | Forecast horizon in seconds (3600 = 1 hour) |
 | mode | quantum/ensemble | Model mode |
+| sample_interval | 60 | Seconds between Huobi fetches (default 60) |
 
-**Target:** 720+ hourly observations. Win rate > 50% with Bonferroni p < 0.05.
+**Behavior:** Creates at most one pending forecast at a time. Resolves only when `pending_due` is true. Writes schema v3 JSON with `run_id` on state changes.
+
+**Current empirical status (2026-07-26):** Aggregate live corpus (2866 resolved obs) shows quantum MAE ~2× classical. Treat negative results as ground truth until a clean re-run completes.
+
+**Target for new claims:** ≥30 resolved eligible predictions before reporting win rate; ≥720 for significance claims.
 
 ---
 
@@ -193,31 +190,26 @@ python3 core/analyze_live_results.py core/_live_results/btcusdt_ensemble_*.json
 ## Quick Reference: All Commands
 
 ```bash
-# === DATA COLLECTION ===
-python3 core/data_historical.py                              # Historical (30s)
-nohup python3 core/data_collector.py btcusdt 1500 60 &      # Live overnight
+# === DATA ===
+python3 core/data_historical.py
+nohup python3 core/data_collector.py btcusdt 1500 60 &
 
-# === BACKTESTS ===
-python3 core/backtest.py                                     # Basic comparison
-python3 core/backtest_ensemble.py                            # Ensemble comparison
-python3 core/backtest_boost.py                               # Adaptive vs fixed
-
-# === ABLATION & VALIDATION ===
-python3 core/experiment_ablation.py                          # Born rule value?
-python3 core/calibrate_delta.py                              # Delta calibration
-python3 core/validation_report.py --period 60min             # Full report
+# === CLASSICAL KLINES ===
+python3 core/backtest.py
+python3 core/experiment_ablation.py
+python3 core/validation_report.py --period 60min
 
 # === SYNTHETIC ===
-python3 core/experiment.py                                   # Synthetic test
-python3 core/visualize.py                                    # Sparklines
+python3 core/experiment.py
+python3 core/visualize.py
 
-# === LIVE ===
-python3 core/pipeline_live_ensemble.py btcusdt 720 3600 quantum  # Quantum mode
-python3 core/pipeline_live_ensemble.py btcusdt 720 3600 ensemble # Ensemble mode
-python3 core/analyze_live_results.py                         # Analyze results
+# === LIVE BORN RULE (valid quantum path) ===
+python3 core/pipeline_live_ensemble.py btcusdt 720 3600 quantum
+python3 core/pipeline_live_ensemble.py btcusdt 720 3600 ensemble
+python3 core/analyze_live_results.py
 
 # === DEMO ===
-python3 core/disjunction_demo.py                             # Disjunction effect
+python3 core/disjunction_demo.py
 ```
 
 ---
@@ -231,4 +223,15 @@ python3 core/disjunction_demo.py                             # Disjunction effec
 | "v4 unified Born rule" | Standardized the formula. Fixes have now been applied to all files. |
 | "Bonferroni correction for 5 tests" | Corrects for 5 pre-registered hypotheses. Actual number tested is higher. |
 
-**Bottom line:** The project has strong theoretical foundations and working infrastructure, but the empirical case for the Born rule beating classical baselines is **not yet proven**. The definitive test is the live pipeline with `--mode quantum` running for 30+ days.
+**Bottom line:** Engineering hardening is complete (52 unit tests, CI). The empirical case for the Born rule beating classical baselines is **not supported** by existing live data. New runs should use `pipeline_live_ensemble.py` with schema v3 output.
+
+---
+
+## Step 0b: Run Tests
+
+```bash
+make test
+# or: cd core && python -m pytest test_*.py -v
+```
+
+GitHub Actions runs the same suite on Python 3.10 and 3.12 for every push.

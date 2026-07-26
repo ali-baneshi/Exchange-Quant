@@ -41,33 +41,35 @@ No quantum hardware is required — the Born rule is a simple formula evaluated 
 data_historical.py           data_fetcher.py
         │                          │
         ▼                          ▼
-  backtest.py ◄────────────── pipeline_live_*.py
-  backtest_ensemble.py              │
-  backtest_boost.py                 │
+  features.py                 live_protocol.py
+  backtest.py                      │
+  experiment_ablation.py           ▼
+  validation_report.py      pipeline_live_*.py / one_shot
         │                          │
-        ▼                          ▼
-  delta_adaptive.py ◄────── ensemble.py / ensemble_adaptive.py
+        │                          ▼
+        │                   quantum_core.py ◄── ensemble.py
         │                          │
         └──────────┬───────────────┘
                    ▼
              validation.py
-                   │
-                   ▼
-        comprehensive_report()
 ```
 
 ### Key Dependencies
 
 | Module | Depends On | Used By |
 |--------|-----------|---------|
-| `data_historical.py` | — (stdlib + curl) | `backtest.py`, `backtest_ensemble.py`, `backtest_boost.py`, `calibrate_delta.py`, `validation_report.py`, `experiment_ablation.py` |
-| `data_fetcher.py` | — (stdlib + Huobi API) | `pipeline_live_*.py`, `pipeline_one_shot.py`, `analyze_live_results.py` |
-| `delta_adaptive.py` | — | `ensemble.py`, `ensemble_adaptive.py`, `backtest.py`, `backtest_ensemble.py`, `pipeline_live_*.py`, `experiment.py`, `pipeline_real.py` |
-| `ensemble.py` | `delta_adaptive.py` | `pipeline_live_ensemble.py`, `pipeline_one_shot.py`, `backtest_boost.py` |
-| `ensemble_adaptive.py` | `delta_adaptive.py` | `backtest_ensemble.py`, `validation_report.py` |
-| `baselines.py` | — | `pipeline_live_*.py`, `pipeline_one_shot.py`, `pipeline_real.py` |
-| `validation.py` | — | all backtests + live pipelines + experiment ablation |
-| `market_sim.py` | — | `experiment.py`, `visualize.py` |
+| `data_historical.py` | stdlib + curl | `backtest.py`, `validation_report.py`, `experiment_ablation.py` |
+| `features.py` | — | `backtest.py`, `experiment_ablation.py`, `validation_report.py` |
+| `data_fetcher.py` | stdlib + Huobi API | `pipeline_live_*.py`, `pipeline_one_shot.py` |
+| `quantum_core.py` | `delta_adaptive.py` | `ensemble.py`, `market_sim.py`, all live pipelines |
+| `live_protocol.py` | — | all live pipelines |
+| `delta_adaptive.py` | — | `quantum_core.py`, `experiment.py` |
+| `ensemble.py` | `quantum_core.py` | `pipeline_live_ensemble.py`, `pipeline_one_shot.py` |
+| `baselines.py` | — | live pipelines |
+| `validation.py` | — | reports + live summary |
+| `market_sim.py` | `quantum_core.py` | `experiment.py`, `visualize.py` |
+
+**Deprecated (stubs, exit 1):** `backtest_ensemble.py`, `backtest_boost.py`, `calibrate_delta.py` — Born rule removed from klines 2026-07-23.
 
 ---
 
@@ -89,10 +91,10 @@ Given a window of recent buy_ratios (or convictions):
    μ_low  = mean(low_group)          # expected value in low context
 
 3. Compute interference phase δ from market context:
-   δ = compute_delta(history)        # imbalance-based (live)
-   δ = compute_delta_from_klines()   # return-based (backtest)
+   δ = compute_delta(history)        # imbalance-based (live / synthetic probe)
+   # Kline return-based delta is NOT used for Born-rule evaluation (removed 2026-07-23)
 
-4. Apply Born rule:
+4. Apply Born rule (unnormalized; see quantum_core.py):
    P_quantum = |√(p_high · μ_high) + √(p_low · μ_low) · e^(i·δ)|²
 ```
 
@@ -118,31 +120,32 @@ The interference term is what classical models cannot produce. It is positive wh
 
 ## Prediction Pipelines
 
-### 1. Backtest (kline-based, binary direction)
+### 1. Backtest (kline-based, classical only, binary direction)
 
 ```
-Input: OHLCV klines → compute_features() → conviction, return
+Input: OHLCV klines (oldest→newest) → features.compute_features() → conviction
 Target: next_candle_direction (0 or 1)
-Models: classical_ensemble_klines, quantum_model_klines
-Delta:  compute_delta_from_klines (return-based)
+Models: classical_ensemble_klines only
+Born rule: REMOVED from this path (2026-07-23)
 ```
 
-### 2. Live (order-book-based, continuous buy_ratio)
+### 2. Live (order-book-based, continuous buy_ratio, forecast)
 
 ```
-Input: Huobi order book + trades → compute_features() → buy_ratio, imbalance
-Target: next_step_buy_ratio (continuous [0,1])
-Models: classical_ensemble (baselines.py), _quantum_predict (ensemble.py)
+Input: Huobi order book + trades → buy_ratio, imbalance
+Lookback: live_protocol.forecast_lookback → history[-window:]
+Target: FUTURE buy_ratio after horizon_s (resolve-later)
+Models: classical_ensemble (baselines.py), quantum_core.born_rule_predict
 Delta:  compute_delta (imbalance+volatility based)
 ```
 
 ### 3. Synthetic (controlled hidden context)
 
 ```
-Input: MarketSimulator agents → buy_ratio, imbalance, hidden_context
+Input: MarketSimulator agents → buy_ratio, synthetic imbalance, hidden_context
 Target: next_buy_ratio
-Models: classical_model (market_sim.py), quantum_model (market_sim.py)
-Delta:  compute_delta (imbalance+volatility based)
+Models: classical_model, quantum_model → both route Born through quantum_core
+Delta:  compute_delta; optional hidden-sign probe (δ=0/π), not a true oracle
 ```
 
 ---
@@ -182,6 +185,16 @@ Profit Factor: win_count / loss_count  (inf if all wins)
 
 ---
 
+## Live Pipeline Semantics (2026-07-26)
+
+- **Canonical entry point:** `pipeline_live_ensemble.py`
+- **One pending forecast at a time** — no overlapping horizons when `sample_interval_s << horizon_s`
+- **Resolve timing:** `live_protocol.pending_due()` before scoring
+- **Ensemble mode:** weights update via `Ensemble.predict_and_update()` on resolve
+- **Output schema:** version 3 JSON with `run_id`, `quality_flags`, optional `ensemble_weights`
+
+---
+
 ## Key Files Reference
 
 | File | Purpose | Entry Point |
@@ -189,8 +202,11 @@ Profit Factor: win_count / loss_count  (inf if all wins)
 | `core/ensemble.py` | 2-model Ensemble (quantum + vol_regime) | `Ensemble()` class |
 | `core/delta_adaptive.py` | Delta computation | `compute_delta()`, `compute_delta_from_klines()` |
 | `core/validation.py` | Statistical testing | `comprehensive_report()` |
-| `core/backtest.py` | Classical vs Quantum backtest | `python3 backtest.py` |
-| `core/pipeline_live_ensemble.py` | Live ensemble pipeline | `python3 pipeline_live_ensemble.py ...` |
+| `core/backtest.py` | Classical-only kline backtest | `python3 backtest.py` |
+| `core/pipeline_live_ensemble.py` | **Primary** live pipeline (ensemble/quantum) | `python3 pipeline_live_ensemble.py ...` |
+| `core/pipeline_one_shot.py` | Cron one-shot with state v2 | `python3 pipeline_one_shot.py` |
+| `core/pipeline_real.py` | Demo/smoke only (short runs) | `python3 pipeline_real.py ...` |
+| `core/pipeline_live_long.py` | Legacy long run — prefer ensemble pipeline | `python3 pipeline_live_long.py ...` |
 | `core/data_historical.py` | Historical data collection | `python3 data_historical.py` |
 | `core/data_collector.py` | Live data collection | `python3 data_collector.py ...` |
 | `core/data_fetcher.py` | Huobi API wrapper | `HuobiData()` class |

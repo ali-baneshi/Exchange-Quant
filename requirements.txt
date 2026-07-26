@@ -1,7 +1,11 @@
 # Exchange-Q uses Python 3.8+ standard library only.
-# No third-party packages required.
+# No third-party pip packages required.
+#
+# System dependency (historical Gate.io / Huobi fetch via data_historical.py):
+#   curl  — must be on PATH
 #
 # Tested on Python 3.10, 3.11, 3.12
 #
 # To verify your setup:
 #   python3 -c "import math, cmath, statistics, http.client, ssl, json, os, sys, time, concurrent.futures, subprocess, signal; print('All stdlib modules available')"
+#   command -v curl

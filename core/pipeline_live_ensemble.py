@@ -22,14 +22,13 @@ from data_fetcher import HuobiData
 from ensemble import Ensemble, _quantum_predict_with_meta
 from baselines import classical_ensemble
 from validation import comprehensive_report, print_report
+from live_protocol import forecast_lookback, ready_for_forecast, pending_due
+from config import FEE_RATE, LONG_THRESHOLD, FLAT_THRESHOLD
 
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "_live_results")
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 _running = True
-FEE_RATE = 0.001
-LONG_THRESHOLD = 0.60
-FLAT_THRESHOLD = 0.40
 
 
 def _handle_signal(sig, frame):
@@ -57,10 +56,11 @@ def _wall_ms():
     return int(time.time() * 1000)
 
 
-def _observation(features, symbol, step):
+def _observation(features, symbol, step, run_id=None):
     obs = dict(features)
     obs.update({
         "id": step,
+        "run_id": run_id,
         "symbol": symbol,
         "wall_time_ms": _wall_ms(),
         "time": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -143,6 +143,31 @@ def _resolve_prediction(pred, obs):
     return pred
 
 
+def _write_run_state(output_path, symbol, mode, horizon_s, sample_interval, window,
+                     observations, predictions, ensemble=None, run_id=None):
+    payload = {
+        "schema_version": 3,
+        "run_id": run_id,
+        "symbol": symbol,
+        "mode": mode,
+        "horizon_s": horizon_s,
+        "sample_interval_s": sample_interval,
+        "window": window,
+        "observations": observations,
+        "predictions": predictions,
+    }
+    if ensemble is not None:
+        payload["ensemble_weights"] = ensemble.weights[:]
+        payload["ensemble_performance"] = {
+            name: errs[-30:] for name, errs in ensemble.performance.items()
+        }
+    _atomic_write(output_path, payload)
+
+
+def _has_pending(predictions):
+    return any(p.get("status") == "pending" for p in predictions)
+
+
 def _summarize_resolved(predictions):
     resolved = [p for p in predictions if p.get("status") == "resolved" and p.get("score_eligible", True)]
     if not resolved:
@@ -186,6 +211,7 @@ def run(symbol="btcusdt", n_steps=10000, delay=3600.0, window=15, mode="ensemble
         output_tag = "ensemble"
 
     output_path = os.path.join(RESULTS_DIR, f"{symbol}_{output_tag}_{int(time.time())}.json")
+    run_id = f"{symbol}-{output_tag}-{int(time.time())}"
 
     print(f"  {'ENSEMBLE' if mode == 'ensemble' else 'QUANTUM-ONLY'} LIVE PIPELINE")
     print(f"  symbol={symbol}  max_steps={n_steps}  horizon={horizon_s}s  sample_interval={sample_interval}s  window={window}")
@@ -204,7 +230,7 @@ def run(symbol="btcusdt", n_steps=10000, delay=3600.0, window=15, mode="ensemble
             time.sleep(60)
             continue
 
-        obs = _observation(features, symbol, i)
+        obs = _observation(features, symbol, i, run_id=run_id)
         observations.append(obs)
 
         ts = features.get("timestamp") or features.get("collected_at_ms")
@@ -216,20 +242,43 @@ def run(symbol="btcusdt", n_steps=10000, delay=3600.0, window=15, mode="ensemble
         if not duplicate_ts:
             history.append(features)
 
+        state_dirty = False
         for pred in predictions:
-            if pred["status"] == "pending" and obs["wall_time_ms"] >= pred["target_at_ms"]:
+            if pred["status"] == "pending" and pending_due(pred, obs["wall_time_ms"]):
                 _resolve_prediction(pred, obs)
+                if mode == "ensemble":
+                    lookback_for_update = forecast_lookback(history[:-1], window) or history[-window:]
+                    _, w, meta = ensemble.predict_and_update(lookback_for_update, pred["resolved_actual"])
+                    pred.update({
+                        "w_quantum": w[0],
+                        "w_vol_regime": w[1],
+                        "quantum_raw": meta["predictions"]["quantum"],
+                        "vol_regime_raw": meta["predictions"]["vol_regime"],
+                    })
                 print(f"  [{i:5d}] {time.strftime('%H:%M:%S')} RESOLVED "
                       f"id={pred['id']} act={pred['resolved_actual']:.3f} "
                       f"c_err={pred['classical_error']:.3f} q_err={pred['prediction_error']:.3f} "
                       f"ret={pred['net_return']:+.5f}")
+                state_dirty = True
 
-        if len(history) >= window:
+        if state_dirty:
+            summary = _summarize_resolved(predictions)
+            if summary and summary["n"] >= 30:
+                print(f"         --- resolved {summary['n']}: quantum wins {summary['wins']}/{summary['n']} "
+                      f"({summary['wins']/summary['n']*100:.0f}%) trades={summary['trades']} "
+                      f"avg_ret={summary['avg_net_return']:+.5f}")
+            _write_run_state(
+                output_path, symbol, mode, horizon_s, sample_interval, window,
+                observations, predictions, ensemble if mode == "ensemble" else None,
+                run_id=run_id,
+            )
+
+        if ready_for_forecast(history, window) and not _has_pending(predictions):
             if not warmup_complete:
                 warmup_complete = True
                 print(f"  WARMUP complete — creating predictions for horizon={horizon_s}s")
 
-            lookback = history[-window:]
+            lookback = forecast_lookback(history, window)
 
             pred_c, preds_c = classical_ensemble(lookback)
 
@@ -263,26 +312,13 @@ def run(symbol="btcusdt", n_steps=10000, delay=3600.0, window=15, mode="ensemble
                 f"fallback={meta.get('fallback_reason', 'unknown')} "
                 f"target={time.strftime('%H:%M:%S', time.localtime(pred_record['target_at_ms']/1000))}")
 
-            if len(predictions) % 10 == 0:
-                summary = _summarize_resolved(predictions)
-                if summary and summary["n"] >= 30:
-                    print(f"         --- resolved {summary['n']}: quantum wins {summary['wins']}/{summary['n']} "
-                          f"({summary['wins']/summary['n']*100:.0f}%) trades={summary['trades']} "
-                          f"avg_ret={summary['avg_net_return']:+.5f}")
-                else:
-                    n_res = summary["n"] if summary else 0
-                    print(f"         --- resolved {n_res}: exploratory only until n>=30")
-
-            _atomic_write(output_path, {
-                "schema_version": 2,
-                "symbol": symbol,
-                "mode": mode,
-                "horizon_s": horizon_s,
-                "sample_interval_s": sample_interval,
-                "window": window,
-                "observations": observations,
-                "predictions": predictions,
-            })
+            _write_run_state(
+                output_path, symbol, mode, horizon_s, sample_interval, window,
+                observations, predictions, ensemble if mode == "ensemble" else None,
+                run_id=run_id,
+            )
+        elif ready_for_forecast(history, window) and _has_pending(predictions):
+            print(f"  [{i:5d}] {time.strftime('%H:%M:%S')} SKIP forecast — pending unresolved")
         else:
             print(f"  [{i:5d}] {time.strftime('%H:%M:%S')} WARMUP ({len(history)}/{window})")
 
@@ -292,16 +328,11 @@ def run(symbol="btcusdt", n_steps=10000, delay=3600.0, window=15, mode="ensemble
     print(f"  Collected {len(observations)} observations, {len(predictions)} predictions")
 
     if predictions or observations:
-        _atomic_write(output_path, {
-            "schema_version": 2,
-            "symbol": symbol,
-            "mode": mode,
-            "horizon_s": horizon_s,
-            "sample_interval_s": sample_interval,
-            "window": window,
-            "observations": observations,
-            "predictions": predictions,
-        })
+        _write_run_state(
+            output_path, symbol, mode, horizon_s, sample_interval, window,
+            observations, predictions, ensemble if mode == "ensemble" else None,
+            run_id=run_id,
+        )
         print(f"  Saved to {output_path}")
 
         summary = _summarize_resolved(predictions)

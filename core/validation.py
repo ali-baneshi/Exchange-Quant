@@ -15,17 +15,7 @@ import math
 import statistics
 import random
 
-
-N_HYPOTHESES_TOTAL = 5
-"""
-Known hypotheses tested to date:
-  1. Born rule on 15min candles
-  2. Born rule on 60min candles
-  3. Born rule on 1day candles
-  4. Adaptive ensemble (boost) on 60min
-  5. AdaptiveEnsemble vs standalone quantum on 60min
-Any NEW hypothesis must increment this counter.
-"""
+from config import N_HYPOTHESES_TOTAL
 
 
 def bonferroni_correct(p_value, n_tests=N_HYPOTHESES_TOTAL):
@@ -53,8 +43,12 @@ def max_drawdown_from_errors(errors, direction=1):
     for v in equity:
         if v > peak:
             peak = v
-        if peak != 0:
+        if peak > 0:
             dd = (peak - v) / peak
+            if dd > mdd:
+                mdd = dd
+        elif peak < 0 and v < peak:
+            dd = (peak - v) / abs(peak)
             if dd > mdd:
                 mdd = dd
     return mdd

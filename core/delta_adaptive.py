@@ -23,6 +23,15 @@ def _clamp(value, lo=0.0, hi=1.0):
     return min(hi, max(lo, value))
 
 
+def _ema(values, alpha):
+    if not values:
+        return 0.0
+    ema = values[0]
+    for v in values[1:]:
+        ema = alpha * v + (1 - alpha) * ema
+    return ema
+
+
 def _has_real_imbalance(history):
     has_candle_fields = any(
         any(k in h for k in ("open", "close", "return", "direction", "body_ratio"))
@@ -59,8 +68,10 @@ def compute_delta_from_orderbook_features(history, lambda_smooth=0.3):
         return 0.0, 0.0
 
     recent = history[-min(len(history), 10):]
-    avg_imbalance = statistics.mean(abs(h.get("imbalance", 0)) for h in recent)
-    avg_vol = statistics.mean(h.get("volatility", 0) for h in recent)
+    imb_vals = [abs(h.get("imbalance", 0)) for h in recent]
+    vol_vals = [h.get("volatility", 0) for h in recent]
+    avg_imbalance = _ema(imb_vals, lambda_smooth) if imb_vals else 0.0
+    avg_vol = _ema(vol_vals, lambda_smooth) if vol_vals else 0.0
 
     avg_imbalance = _clamp(avg_imbalance)
     avg_vol = _clamp(avg_vol)

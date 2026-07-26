@@ -16,6 +16,7 @@ import glob
 from collections import Counter
 
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "_live_results")
+SCHEMA_VERSIONS = (2, 3)
 
 
 def load_results(path):
@@ -23,10 +24,24 @@ def load_results(path):
         return json.load(f)
 
 
+def _is_result_document(data):
+    if isinstance(data, list):
+        return True
+    if not isinstance(data, dict):
+        return False
+    if data.get("schema_version") in SCHEMA_VERSIONS:
+        return True
+    return "predictions" in data
+
+
 def _normalize_results(data):
-    if isinstance(data, dict) and data.get("schema_version") == 2:
+    if isinstance(data, dict) and data.get("schema_version") in SCHEMA_VERSIONS:
         predictions = data.get("predictions", [])
         resolved = [p for p in predictions if p.get("status") == "resolved"]
+        if any("score_eligible" in p for p in resolved):
+            eligible = [p for p in resolved if p.get("score_eligible", True)]
+            if eligible:
+                resolved = eligible
         return resolved, data
     return data, None
 
@@ -47,12 +62,18 @@ def _detect_format(results):
 def analyze(results):
     results, meta_doc = _normalize_results(results)
     if meta_doc is not None:
+        version = meta_doc.get("schema_version", "?")
         total_predictions = len(meta_doc.get("predictions", []))
         pending = sum(1 for p in meta_doc.get("predictions", []) if p.get("status") == "pending")
         observations = len(meta_doc.get("observations", []))
-        print(f"  Schema:         v2 resolve-later")
+        print(f"  Schema:         v{version} resolve-later")
+        if meta_doc.get("run_id"):
+            print(f"  Run ID:         {meta_doc['run_id']}")
+        if meta_doc.get("ensemble_weights"):
+            w = meta_doc["ensemble_weights"]
+            print(f"  Ensemble w:     q={w[0]:.2f} v={w[1]:.2f}")
         print(f"  Observations:   {observations}")
-        print(f"  Predictions:    {total_predictions} total, {pending} pending, {len(results)} resolved")
+        print(f"  Predictions:    {total_predictions} total, {pending} pending, {len(results)} resolved (eligible)")
         print(f"  Horizon:        {meta_doc.get('horizon_s')}s")
 
     n = len(results)
@@ -158,7 +179,11 @@ def analyze(results):
 
     if fmt == "ensemble":
         last_w = results[-1]
-        print(f"  Last weights:   q={last_w['w_quantum']:.2f} v={last_w['w_vol_regime']:.2f}")
+        if "w_quantum" in last_w and "w_vol_regime" in last_w:
+            print(f"  Last weights:   q={last_w['w_quantum']:.2f} v={last_w['w_vol_regime']:.2f}")
+        elif meta_doc and meta_doc.get("ensemble_weights"):
+            w = meta_doc["ensemble_weights"]
+            print(f"  Last weights:   q={w[0]:.2f} v={w[1]:.2f} (from doc)")
         last_delta = last_w.get("delta")
         print(f"  Last delta:     {last_delta:.2f}" if last_delta is not None else "  Last delta:     None")
 
@@ -181,6 +206,8 @@ def analyze(results):
 
 def main():
     paths = sys.argv[1:] if len(sys.argv) > 1 else sorted(glob.glob(os.path.join(RESULTS_DIR, "*.json")))
+    # Skip persisted runner state — not a results document
+    paths = [p for p in paths if os.path.basename(p) != "state.json"]
 
     if not paths:
         print(f"No result files found in {RESULTS_DIR}")
@@ -194,6 +221,9 @@ def main():
         print(f"  FILE: {os.path.basename(path)}")
         print(f"{'=' * 55}")
         results = load_results(path)
+        if not _is_result_document(results):
+            print("  Skipping non-result JSON (not schema v2/v3 / not a list)")
+            continue
         summary = analyze(results)
         if summary:
             all_summaries.append(summary)

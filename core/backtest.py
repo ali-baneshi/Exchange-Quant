@@ -1,75 +1,24 @@
 #!/usr/bin/env python3
 
 """
-Backtest: Classical vs Quantum comparison on historical klines.
+Backtest: Classical-only evaluation on historical klines.
 
-Uses walk-forward validation (train→val→held-out), block bootstrap,
-and Bonferroni correction.  Compares the Born rule quantum model against
-a classical ensemble on binary direction prediction.
+Born rule has been removed from kline-based evaluation (2026-07-23).
+See decision log: Born rule requires order-book imbalance data and
+cannot work on kline-only data (all p-values = 1.0 on 5000 candles).
+
+Reports mean absolute error of a classical ensemble against next-candle
+binary direction (0/1). This is NOT comparable to live buy_ratio forecasts.
 
 Usage:
     python3 backtest.py
 """
 
-import math
 import statistics
 import time
 
 from data_historical import fetch_klines_range, parse_klines, held_out_split
-from quantum_core import born_rule_predict
-from validation import comprehensive_report, print_report
-
-
-def compute_features(candle, prev_candles):
-    features = {
-        "ts": candle["ts"],
-        "price": candle["close"],
-        "open": candle["open"],
-        "high": candle["high"],
-        "low": candle["low"],
-        "close": candle["close"],
-        "vol": candle["vol"],
-        "amount": candle["amount"],
-        "count": candle.get("count", 0),
-    }
-    candle_range = candle["high"] - candle["low"]
-    body = abs(candle["close"] - candle["open"])
-    features["body_ratio"] = body / candle_range if candle_range > 0 else 0.0
-    features["direction"] = 1.0 if candle["close"] > candle["open"] else 0.0
-    features["volatility"] = candle_range / candle["close"] if candle["close"] else 0.0
-
-    signed_direction = 1.0 if candle["close"] > candle["open"] else -1.0
-    features["avg_trade_size"] = candle["amount"] / max(1, candle.get("count", 1))
-    features["price_impact"] = (candle["close"] - candle["open"]) / candle["amount"] if candle["amount"] > 0 else 0.0
-    features["imbalance"] = (features["direction"] - 0.5) * features["body_ratio"] * 2
-
-    if prev_candles:
-        prev_close = prev_candles[-1]["close"]
-        features["return"] = (candle["close"] - prev_close) / prev_close if prev_close else 0.0
-        features["log_return"] = math.log(candle["close"] / prev_close) if prev_close > 0 else 0.0
-        if len(prev_candles) >= 3:
-            vols = [c["vol"] for c in prev_candles[-3:]]
-            vol_prev = statistics.mean(vols[:-1]) if len(vols) > 1 else vols[0]
-            features["volume_change"] = (candle["vol"] - vol_prev) / vol_prev if vol_prev > 0 else 0.0
-        else:
-            features["volume_change"] = 0.0
-        if len(prev_candles) >= 5:
-            recent_vols = [c["vol"] for c in prev_candles[-5:]]
-            features["vol_percentile"] = sum(1 for v in recent_vols if v <= candle["vol"]) / len(recent_vols)
-        else:
-            features["vol_percentile"] = 0.5
-    else:
-        features["return"] = 0.0
-        features["log_return"] = 0.0
-        features["volume_change"] = 0.0
-        features["vol_percentile"] = 0.5
-
-    features["conviction"] = features["direction"] * features["body_ratio"]
-    features["buy_ratio"] = features["conviction"]
-    features["signed_conviction"] = signed_direction * features["body_ratio"]
-    features["abs_return"] = abs(features["return"])
-
-    return features
+from features import compute_features
 
 
 def classical_ensemble_klines(history):
@@ -113,20 +62,20 @@ def classical_ensemble_klines(history):
     return max(0, min(1, ensemble))
 
 
-def quantum_model_klines(history):
-    pred, meta = born_rule_predict(history, value_key="conviction")
-    return pred, meta["delta"], meta["confidence"]
+def _mean_or_none(errs):
+    return statistics.mean(errs) if errs else None
 
 
-def run_backtest(candles, label="", periods_per_year=8760):
+def run_backtest(candles, window=20):
+    """Walk one step ahead; return list of abs errors vs next-candle direction."""
     features_list = []
     for i in range(len(candles)):
-        prev = features_list if i > 0 else []
+        prev = features_list[max(0, i - 5):i] if i > 0 else []
         f = compute_features(candles[i], prev)
         features_list.append(f)
 
     history = []
-    results = []
+    errs = []
 
     for i in range(len(features_list) - 1):
         curr = features_list[i]
@@ -135,32 +84,34 @@ def run_backtest(candles, label="", periods_per_year=8760):
 
         history.append(curr)
 
-        if len(history) >= 20 + 1:
-            lookback = history[-(20 + 1):-1]
+        if len(history) >= window + 1:
+            lookback = history[-(window + 1):-1]
+            pred = classical_ensemble_klines(lookback)
+            errs.append(abs(pred - target))
 
-            pred_c = classical_ensemble_klines(lookback)
-            pred_q, delta, conf = quantum_model_klines(lookback)
-
-            c_err = abs(pred_c - target)
-            q_err = abs(pred_q - target)
-
-            results.append({
-                "step": i,
-                "c_err": c_err,
-                "q_err": q_err,
-            })
-
-    c_errs = [r["c_err"] for r in results]
-    q_errs = [r["q_err"] for r in results]
-
-    report = comprehensive_report(c_errs, q_errs, label, periods_per_year=periods_per_year)
-    return results, report
+    return errs
 
 
-PERIODS_PER_YEAR = {"15min": 35040, "60min": 8760, "1day": 365}
+def _print_split(name, errs):
+    mean_err = _mean_or_none(errs)
+    if mean_err is None:
+        print(f"  {name}: insufficient data (n=0)")
+    else:
+        print(f"  {name}: Classical mean error: {mean_err:.4f}  (n={len(errs)})")
+    return mean_err
+
 
 def main():
+    print(f"\n{'='*65}")
+    print(f"  {'!'*61}")
+    print(f"  ! WARNING: Target is BINARY DIRECTION (0/1), NOT continuous  !")
+    print(f"  ! buy_ratio. Results are NOT directly comparable to live     !")
+    print(f"  ! pipeline (continuous buy_ratio) predictions.              !")
+    print(f"  {'!'*61}")
+    print(f"{'='*65}\n")
+
     periods = [("15min", 5000), ("60min", 5000), ("1day", 5000)]
+    summary = []
 
     for period, n in periods:
         print(f"\n{'#' * 65}")
@@ -174,48 +125,39 @@ def main():
         train_val, held_out = held_out_split(candles)
         print(f"  Train/val: {len(train_val)}  Held-out: {len(held_out)}")
 
-        # Further split train_val into train (60%) and val (40%)
         split2 = int(len(train_val) * 0.6)
         train_set = train_val[:split2]
         val_set = train_val[split2:]
 
         t0 = time.time()
 
-        ppy = PERIODS_PER_YEAR[period]
+        print(f"\n  --- TRAIN ({period}) ---")
+        errs_train = run_backtest(train_set)
+        _print_split("TRAIN", errs_train)
 
-        # Train
-        _, report_train = run_backtest(train_set, f" [train {period}]", periods_per_year=ppy)
-        print_report(report_train, detail=False)
+        print(f"\n  --- VAL ({period}) ---")
+        errs_val = run_backtest(val_set)
+        _print_split("VAL", errs_val)
 
-        # Validate
-        _, report_val = run_backtest(val_set, f" [val {period}]", periods_per_year=ppy)
-        print_report(report_val, detail=False)
-
-        # Held-out test (FINAL)
-        _, report_ho = run_backtest(held_out, f" [held-out test {period}]", periods_per_year=ppy)
-        print_report(report_ho, detail=True)
+        print(f"\n  --- HELD-OUT EVALUATION ({period}) ---")
+        print(f"  WARNING: binary direction target (0/1)")
+        errs_ho = run_backtest(held_out)
+        mean_ho = _print_split("HELD-OUT", errs_ho)
+        summary.append((period, len(errs_ho), mean_ho))
 
         elapsed = time.time() - t0
         print(f"  Completed in {elapsed:.1f}s")
 
-    # Cross-period summary (held-out only)
     print(f"\n{'=' * 65}")
-    print(f"  CROSS-PERIOD HELD-OUT COMPARISON (Bonferroni corrected)")
+    print(f"  CROSS-PERIOD HELD-OUT SUMMARY")
     print(f"{'='*65}")
-    print(f"{'Period':>8} {'n':>6} {'imprv%':>8} {'win_rate':>9} {'raw_p':>8} {'corr_p':>8} {'sig':>10} {'DD_red':>8}")
-    print("-" * 75)
-    for period, n in periods:
-        ppy = PERIODS_PER_YEAR[period]
-        raw = fetch_klines_range("btcusdt", period, n)
-        candles = parse_klines(raw)
-        _, held_out = held_out_split(candles)
-        if held_out:
-            _, report = run_backtest(held_out, f" [held-out {period}]", periods_per_year=ppy)
-            p_str = f"{report['bonferroni_p']:.4f}" if report else "?"
-            dd_str = f"{report['max_drawdown_reduction']:+.1f}%" if report else "?"
-            sig_str = "YES" if report and report['significant_005'] else "no"
-            print(f"{period:>8} {report['n']:>6d} {report['improvement_pct']:>+7.2f}% "
-                  f"{report['win_rate']:>8.1%} {report['raw_p_value']:>8.4f} {p_str:>8} {sig_str:>10} {dd_str:>8}")
+    print(f"{'Period':>8} {'n':>6} {'mean_err':>8}")
+    print("-" * 30)
+    for period, n_err, mean_err in summary:
+        if mean_err is None:
+            print(f"{period:>8} {n_err:>6d} {'n/a':>8}")
+        else:
+            print(f"{period:>8} {n_err:>6d} {mean_err:>8.4f}")
 
 
 if __name__ == "__main__":

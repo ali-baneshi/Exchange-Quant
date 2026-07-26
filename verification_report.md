@@ -113,3 +113,33 @@ Target: 720+ hourly observations, 50%+ win rate with Bonferroni p < 0.05.
 | "Born rule is the correct approach" | **Plausible but unproven** |
 
 **Bottom line:** To date, there is NO statistically significant evidence that the Born rule beats classical baselines at predicting market direction or buy_ratio. The project has promising theory, high-quality infrastructure, and a clear path forward — but the empirical case is not yet made.
+
+---
+
+## Repair follow-up (2026-07-26)
+
+Engineering repairs from the comprehensive plan:
+
+- Fixed kline cache/slice ordering (oldest→newest; newest-n window)
+- Deprecated Born-on-klines callers; `validation_report.py` is classical + live status
+- Unified Born predictions through `quantum_core.py`; live scripts share `live_protocol` forecast/resolve-later
+- `pipeline_one_shot.py` state v2 with backup on migration
+- Docs aligned with post-2026-07-23 decision
+- Unit suite: 52 tests green (`test_validation`, `test_data_historical`, `test_regressions`, `test_quantum_core`, `test_live_pipeline`, and others)
+
+### Live evaluation snapshot (2026-07-26)
+
+Smoke: `pipeline_real` forecast/resolve-later works against Huobi (pending→resolved).
+
+Full on-disk aggregate via `analyze_live_results.py` (all `_live_results/*.json` except `state.json`):
+
+| Metric | Value |
+|--------|-------|
+| Resolved observations (aggregate) | 2866 |
+| Weighted classical MAE | 0.1878 |
+| Weighted quantum MAE | 0.3820 |
+| Improvement | **-103.4%** (quantum worse) |
+| Quantum win rate | 23.3% (669/2866) |
+| White's Reality Check | NOT_SIGNIFICANT on inspected files |
+
+**Honest reading:** Existing live quantum runs do **not** support a Born-rule win. A clean, single-protocol, long-horizon re-run (`pipeline_live_ensemble.py btcusdt 720 3600 quantum`) is still recommended before any new claim — but the current corpus already points negative, not pending.

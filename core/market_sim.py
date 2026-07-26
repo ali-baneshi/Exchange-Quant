@@ -7,6 +7,10 @@ Creates agents whose decisions are modulated by an unobserved hidden variable,
 producing non-classical (quantum-like) correlations.  Used by experiment.py
 to compare classical and Born-rule predictions in a controlled setting.
 
+Note: history entries include a synthetic `imbalance` derived from buy_ratio.
+That is NOT a real order book — it only exercises the same feature key the
+live pipeline uses so compute_delta / Born rule share one code path.
+
 Usage:
     sim = MarketSimulator(n_agents=30, seed=42)
     for t in range(500):
@@ -16,7 +20,8 @@ Usage:
 import math
 import random
 import statistics
-import cmath
+
+from quantum_core import born_rule_predict
 
 
 class Agent:
@@ -66,6 +71,7 @@ class MarketSimulator:
             'hidden_context': hidden_context,
             'buy_ratio': buy_ratio,
             'buy_count': sum(decisions),
+            # Synthetic proxy only — not a real L2 order-book imbalance.
             'imbalance': 2.0 * (buy_ratio - 0.5),
             'volatility': abs(price_change) / max(self.price, 0.001),
         })
@@ -88,46 +94,59 @@ def classical_model(history_lookback):
     """
     Uses the law of total probability on recent data.
     Always predicts the average of recent buy ratios.
-
-    Classical can only do: P(buy) ≈ rolling_average
-    No way to account for unobserved context.
     """
     ratios = [h['buy_ratio'] for h in history_lookback]
     return statistics.mean(ratios) if ratios else 0.5
 
 
-def quantum_model(history_lookback, delta=math.pi):
+def quantum_model(history_lookback, delta=None):
     """
-    Uses Born rule with interference.
+    Born-rule prediction via quantum_core (single source of truth).
 
-    Splits recent history into two 'context groups' based on
-    whether buy_ratio was above or below median, then applies
-    the Born rule with an interference phase.
-
-    This captures non-classical correlations that classical
-    averaging misses.
+    If delta is provided, it overrides compute_delta (synthetic probes only).
     """
-    if len(history_lookback) < 4:
-        return 0.5
+    pred, _ = born_rule_predict(
+        history_lookback,
+        delta_override=delta if delta is not None else None,
+    )
+    return pred
+
+
+def quantum_model_diagnostic(history_lookback, delta=None):
+    """
+    Same prediction as quantum_model plus split / hidden-context diagnostics.
+    """
+    pred, meta = born_rule_predict(
+        history_lookback,
+        delta_override=delta if delta is not None else None,
+    )
 
     ratios = [h['buy_ratio'] for h in history_lookback]
+    if len(history_lookback) < 4:
+        return pred, {"fallback": meta.get("fallback_reason", "insufficient_history"),
+                      "n": len(history_lookback)}
+
     median = statistics.median(ratios)
+    high_context = [h for h in history_lookback if h['buy_ratio'] > median]
+    low_context = [h for h in history_lookback if h['buy_ratio'] <= median]
+    high_hidden = [h.get('hidden_context', 0) for h in high_context]
+    low_hidden = [h.get('hidden_context', 0) for h in low_context]
 
-    high_context = [r for r in ratios if r > median]
-    low_context = [r for r in ratios if r <= median]
-
-    if not high_context or not low_context:
-        return statistics.mean(ratios)
-
-    p_high = len(high_context) / len(ratios)
-    p_low = len(low_context) / len(ratios)
-
-    mu_high = statistics.mean(high_context)
-    mu_low = statistics.mean(low_context)
-
-    amp_high = math.sqrt(p_high * mu_high)
-    amp_low = math.sqrt(p_low * mu_low) * cmath.exp(1j * delta)
-
-    total = amp_high + amp_low
-    quantum_pred = abs(total) ** 2
-    return max(0, min(1, quantum_pred))
+    diag = {
+        "fallback": meta.get("fallback_reason", "none"),
+        "n_high": len(high_context),
+        "n_low": len(low_context),
+        "mu_high": meta.get("mu_high"),
+        "mu_low": meta.get("mu_low"),
+        "p_high": meta.get("p_high"),
+        "p_low": meta.get("p_low"),
+        "mean_hidden_high": statistics.mean(high_hidden) if high_hidden else 0,
+        "mean_hidden_low": statistics.mean(low_hidden) if low_hidden else 0,
+        "hidden_separation": (
+            abs(statistics.mean(high_hidden) - statistics.mean(low_hidden))
+            if high_hidden and low_hidden else 0
+        ),
+        "delta": meta.get("delta"),
+        "delta_source": meta.get("delta_source"),
+    }
+    return pred, diag

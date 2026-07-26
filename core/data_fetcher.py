@@ -18,6 +18,7 @@ import math
 import statistics
 import http.client
 import ssl
+import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 HUOBI_BASE = "https://api.huobi.pro"
@@ -27,20 +28,26 @@ _CTX = ssl.create_default_context()
 def _api_get(url, timeout=3):
     host = "api.huobi.pro"
     path = url.split("api.huobi.pro")[-1]
+    last_err = None
     for attempt in range(2):
         try:
             conn = http.client.HTTPSConnection(host, timeout=timeout, context=_CTX)
             conn.request("GET", path, headers={"User-Agent": "Mozilla/5.0", "Connection": "close"})
             resp = conn.getresponse()
-            data = json.loads(resp.read())
+            body = resp.read()
+            data = json.loads(body)
             conn.close()
             if data.get("status") == "ok":
                 return data
+            last_err = f"API status={data.get('status')!r} err={data.get('err-msg') or data.get('message')!r}"
             return None
-        except Exception:
+        except Exception as exc:
+            last_err = f"{type(exc).__name__}: {exc}"
             if attempt < 1:
                 time.sleep(0.2)
             continue
+    if last_err:
+        print(f"[data_fetcher] _api_get {path}: {last_err}", file=sys.stderr)
     return None
 
 
@@ -129,19 +136,33 @@ class HuobiData:
             results.get("klines", []),
         )
 
-    def fetch_features(self, symbol="btcusdt", max_attempts=2):
-        for _ in range(max_attempts):
+    def fetch_features(self, symbol="btcusdt", max_attempts=3):
+        for attempt in range(max_attempts):
             t, d, tr, k = self.fetch_all(symbol)
-            f = compute_features(t, d, tr, k)
+            f = compute_live_features(t, d, tr, k)
             if f is not None:
                 return f
-            time.sleep(1)
+            if attempt < max_attempts - 1:
+                time.sleep(min(2 ** attempt, 30))
         return None
 
 
-def compute_features(ticker, depth, trades, klines):
+def _best_bid_ask(ticker):
+    """Return (bid, ask) prices or None if ticker side arrays are empty."""
+    bid = ticker.get("bid") or []
+    ask = ticker.get("ask") or []
+    if not bid or not ask:
+        return None
+    return float(bid[0]), float(ask[0])
+
+
+def compute_live_features(ticker, depth, trades, klines):
     if not ticker:
         return None
+    ba = _best_bid_ask(ticker)
+    if ba is None:
+        return None
+    bid_px, ask_px = ba
     total_trades = len(trades)
     buy_count = sum(1 for t in trades if t["direction"] == "buy")
     buy_ratio = buy_count / total_trades if total_trades > 0 else 0.5
@@ -161,7 +182,7 @@ def compute_features(ticker, depth, trades, klines):
         vol_prev = statistics.mean(vols[:-1]) if len(vols) > 1 else vols[0]
         if vol_prev > 0:
             vol_change = (vols[-1] - vol_prev) / vol_prev
-    spread = (ticker["ask"][0] - ticker["bid"][0]) / price
+    spread = (ask_px - bid_px) / price
     trade_ts = [t["ts"] for t in trades if t.get("ts")]
     unique_trade_ts = len(set(trade_ts))
     quality_flags = []
@@ -191,11 +212,15 @@ def compute_features(ticker, depth, trades, klines):
     }
 
 
+# Backward-compatible alias (kline OHLCV features live in features.py)
+compute_features = compute_live_features
+
+
 def stream_features(symbol="btcusdt", n_points=100, delay=1.0):
     hd = HuobiData()
     for i in range(n_points):
         ticker, depth, trades, klines = hd.fetch_all(symbol)
-        features = compute_features(ticker, depth, trades, klines)
+        features = compute_live_features(ticker, depth, trades, klines)
         if features:
             yield features
         elif i < n_points - 1:
@@ -211,8 +236,13 @@ if __name__ == "__main__":
     t0 = time.time()
     ticker = hd.fetch_ticker("btcusdt")
     if ticker:
-        sp = (ticker["ask"][0] - ticker["bid"][0]) / ticker["close"] * 100
-        print(f"BTCUSDT: {ticker['close']} bid={ticker['bid'][0]} ask={ticker['ask'][0]} spread={sp:.4f}%  ({time.time()-t0:.1f}s)")
+        ba = _best_bid_ask(ticker)
+        if ba:
+            bid_px, ask_px = ba
+            sp = (ask_px - bid_px) / ticker["close"] * 100
+            print(f"BTCUSDT: {ticker['close']} bid={bid_px} ask={ask_px} spread={sp:.4f}%  ({time.time()-t0:.1f}s)")
+        else:
+            print(f"BTCUSDT: {ticker['close']} (empty bid/ask)  ({time.time()-t0:.1f}s)")
     print("Streaming...")
     for i, f in enumerate(stream_features("btcusdt", n_points=10, delay=0.0)):
         print(f"[{i}] p={f['price']:.1f} buy={f['buy_ratio']:.3f} imb={f['imbalance']*100:+.1f}% spread={f['spread']*100:.4f}%")

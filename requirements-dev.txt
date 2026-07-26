@@ -1,0 +1,2 @@
+# Development dependencies (runtime remains stdlib-only)
+pytest>=8.0

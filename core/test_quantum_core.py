@@ -62,6 +62,28 @@ class QuantumCoreTests(unittest.TestCase):
         self.assertIsNotNone(meta["classical_part"])
         self.assertIsNotNone(meta["interference_term"])
 
+    def test_null_buy_ratio_treated_as_zero(self):
+        history = [
+            {"buy_ratio": None, "conviction": 0.4, "imbalance": 0.5, "volatility": 0.001},
+            {"buy_ratio": 0.8, "imbalance": 0.5, "volatility": 0.001},
+            {"buy_ratio": 0.2, "imbalance": 0.5, "volatility": 0.001},
+            {"buy_ratio": 0.75, "imbalance": 0.5, "volatility": 0.001},
+        ]
+        pred, meta = born_rule_predict(history)
+        self.assertGreaterEqual(pred, 0.0)
+        self.assertLessEqual(pred, 1.0)
+        self.assertEqual(meta["fallback_reason"], "none")
+
+    def test_insufficient_history_fallback(self):
+        pred, meta = born_rule_predict([{"buy_ratio": 0.6}])
+        self.assertEqual(meta["fallback_reason"], "insufficient_history")
+
+    def test_uniform_history_uses_flat_fallback(self):
+        history = [{"buy_ratio": 0.5, "imbalance": 0.1, "volatility": 0.001} for _ in range(6)]
+        pred, meta = born_rule_predict(history)
+        self.assertEqual(meta["fallback_reason"], "flat_history")
+        self.assertAlmostEqual(pred, 0.5)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -6,7 +6,12 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from pipeline_live_ensemble import _prediction_record, _resolve_prediction
+from pipeline_live_ensemble import (
+    _has_pending,
+    _prediction_record,
+    _resolve_prediction,
+)
+from ensemble import Ensemble
 
 
 class LivePipelineTests(unittest.TestCase):
@@ -69,6 +74,23 @@ class LivePipelineTests(unittest.TestCase):
         }
         obs = {"wall_time_ms": 1, "time": "t", "price": 100.0, "buy_ratio": 0.5, "spread": 0.0, "quality_flags": []}
         self.assertFalse(_resolve_prediction(pred, obs)["score_eligible"])
+
+    def test_has_pending(self):
+        preds = [{"status": "pending"}, {"status": "resolved"}]
+        self.assertTrue(_has_pending(preds))
+        self.assertFalse(_has_pending([{"status": "resolved"}]))
+
+    def test_ensemble_update_on_resolve(self):
+        ens = Ensemble(window=3)
+        history = [
+            {"buy_ratio": 0.4, "imbalance": 0.2, "volatility": 0.002},
+            {"buy_ratio": 0.6, "imbalance": 0.3, "volatility": 0.002},
+            {"buy_ratio": 0.5, "imbalance": 0.1, "volatility": 0.002},
+        ]
+        _, w0, _ = ens.predict(history)
+        ens.predict_and_update(history, actual=0.55)
+        _, w1, _ = ens.predict(history)
+        self.assertTrue(any(len(e) > 0 for e in ens.performance.values()))
 
 
 if __name__ == "__main__":

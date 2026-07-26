@@ -1,5 +1,19 @@
 #!/usr/bin/env python3
 
+"""
+DEPRECATED: use analyze_live_results.py instead.
+
+Legacy analyzer for list-format live JSON results.
+"""
+
+import warnings
+
+warnings.warn(
+    "analyze_results.py is deprecated; use analyze_live_results.py",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 import json
 import os
 import sys

@@ -1,15 +1,17 @@
 # FINAL HARDENING PLAN
 
-## Implementation Status (2026-07-20)
+## Implementation Status (updated 2026-07-26)
 
 | Priority | Total | Fixed | Remaining |
 |----------|-------|-------|-----------|
 | **P0** | 4 | 4 | 0 |
-| **P1** | 4 | 3 | 1 |
+| **P1** | 4 | 4 | 0 |
 | **P2** | 2 | 2 | 0 |
-| **Total** | **10** | **9** | **1** |
+| **Total** | **10** | **10** | **0** |
 
-**Remaining P1:** `pipeline_one_shot.py` — state.json versioning/migration (low impact since old state loads fine — extra keys are silently ignored).
+**P1 state versioning:** Done in `pipeline_one_shot.py` (`STATE_VERSION = 2`, backup before reset, 2-model performance keys).
+
+**Post-hardening (2026-07-23 / 2026-07-26):** Born rule removed from kline evaluation; classical-only backtest/report; live forecast protocol unified; `data_historical` ascending contract fixed.
 
 ---
 
@@ -143,32 +145,11 @@ Recommend option 2: add a wrapper that computes delta from features.
 
 ---
 
-### FIX 6: Serialization Format Compatibility  ⏳ REMAINS (P1, low impact)
+### FIX 6: Serialization Format Compatibility  ✅ DONE (P1)
 
 **Files:** `core/pipeline_one_shot.py`, `_live_results/state.json`, `_live_results/results_ensemble.json`
 
-**Actions:**
-1. Delete old state files (they use 3-model format):
-   ```bash
-   rm core/_live_results/state.json core/_live_results/results_ensemble.json
-   ```
-2. Add version tag to state.json:
-   ```python
-   # In pipeline_one_shot.py _save_state:
-   state["version"] = 2
-   ```
-3. Add migration check when loading:
-   ```python
-   def _load_state():
-       if os.path.exists(STATE_PATH):
-           with open(STATE_PATH) as f:
-               state = json.load(f)
-           if state.get("version", 1) < 2:
-               print("  WARNING: old state format — resetting")
-               return _default_state()
-           return state
-       return _default_state()
-   ```
+**Status (2026-07-26):** `pipeline_one_shot.py` uses `STATE_VERSION = 2` with backup-on-migration. Live ensemble output uses schema v3 with `run_id`.
 
 ---
 
@@ -307,11 +288,11 @@ Before any result is accepted as reliable:
 | 7 | `backtest.py:181` | Pass correct periods_per_year | P0 | ✅ DONE |
 | 8 | `backtest_ensemble.py:115` | Pass correct periods_per_year | P0 | ✅ DONE |
 | 9 | `backtest_ensemble.py:73-75` | Use compute_delta_from_klines | P1 | ✅ DONE |
-| 10 | `pipeline_one_shot.py` | Add version to state.json | P1 | ⏳ REMAINS |
+| 10 | `pipeline_one_shot.py` | Add version to state.json | P1 | ✅ DONE |
 | 11 | `ensemble_adaptive.py:98` | Use relative-gap weighting | P1 | ✅ DONE |
 | 12 | `data_fetcher.py:149-157` | Add conviction alias | P1 | ✅ DONE |
 | 13 | `backtest.py:22-61` | Add buy_ratio alias | P1 | ✅ DONE |
 | 14 | `validation.py:115` | Fix block_len ceiling | P2 | ✅ DONE |
 | 15 | `market_sim.py` | Add random.seed(42) | P2 | ✅ DONE |
 
-**Total: 15 changes across 15 files. 9/10 code changes applied. 1 remaining (P1, low impact).**
+**Total: 15 changes across 15 files. All applied.**
