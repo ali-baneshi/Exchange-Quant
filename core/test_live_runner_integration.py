@@ -49,12 +49,16 @@ class FakeProvider:
             for i in range(min(size, 100))
         ]
 
-    def fetch_features(self, symbol):
+    def fetch_features(self, symbol, feature_lookback_s=None):
         if self._index >= len(self._features):
             return dict(self._features[-1])
         value = dict(self._features[self._index])
         self._index += 1
         return value
+
+    def fetch_features_with_trades(self, symbol, trade_size=50, feature_lookback_s=None):
+        features = self.fetch_features(symbol, feature_lookback_s=feature_lookback_s)
+        return features, self.fetch_trades(symbol, size=trade_size)
 
 
 class LiveRunnerIntegrationTests(unittest.TestCase):

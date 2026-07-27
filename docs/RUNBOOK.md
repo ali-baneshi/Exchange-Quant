@@ -33,6 +33,8 @@ The script runs tests, holds a production lock for the process lifetime, starts 
 | Window | `15` | Accepted-observation warmup size |
 | Completion | `720` eligible resolutions | Minimum primary-study target |
 
+Live `buy_ratio` features use only the most recent `max(60, horizon_s)` seconds of trades (`data_policy_version` 3). Raw trade pages are still captured in full for forward-window labels.
+
 ## What the Runner Stores
 
 For each run:
@@ -68,7 +70,7 @@ The primary target is valid only when the evaluator has locally captured enough 
 | `resolved_label: forward_window` | Valid label source | Normal |
 | `label_unavailable` | Incomplete capture or insufficient future trades | Excluded; inspect API/cadence/liquidity |
 | `short_forward_window` | Too few trades | Excluded; do not substitute a snapshot |
-| `capture_saturated` | Trade response reached configured limit | Excluded; increase capture capacity or reduce interval |
+| `capture_saturated` | Trade response reached configured limit | Diagnostic; excludes only when the full page does not overlap the prior capture frontier (possible missed trades). If holes appear, increase capture capacity or reduce interval |
 | `late_resolution` | Resolution missed the timing tolerance | Excluded; inspect process/API health |
 
 Before relying on an exploratory run, verify that eligible labels—not merely resolved records—are accumulating.
@@ -95,7 +97,7 @@ The runner refuses resume when the requested configuration hash differs from the
 ./scripts/monitor_exploratory.sh
 ```
 
-The fast 60-second profile is useful for validating collection and label coverage. It is **not** a replacement for the one-hour, 720-resolution primary study, because market regime and microstructure differ.
+The fast 60-second profile validates collection and label coverage. It is **not** a replacement for the one-hour, 720-resolution primary study, because market regime and microstructure differ. Exploratory 60s runs may show high buy_ratio noise: compare models against `MAE(constant 0.5)` before interpreting paired MAE. Price-based long simulation (`net_return`, hit rate) is diagnostic only and must not be treated as the primary metric.
 
 ## Stop and Recover
 

@@ -120,7 +120,7 @@ Raw trades are retained locally for 30 days. Trade batches record response satur
 | Duplicate exchange timestamp | Not used in forecast history |
 | Empty trades/depth, crossed market, endpoint skew | Recorded as quality flags; may disqualify a score |
 | Too few future trades | `label_unavailable` |
-| Capture gap or saturated trade response | `label_unavailable` |
+| Capture gap, or saturated response with no overlap to prior frontier | `label_unavailable` |
 | Late resolution | Disqualified from primary scoring |
 
 ## Deprecated and Historical Components

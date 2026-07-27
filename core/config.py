@@ -33,6 +33,18 @@ TRADE_CAPTURE_SIZE = 2000
 TRADE_RETENTION_DAYS = 30
 MAX_TRADE_CAPTURE_GAP_FACTOR = 2
 
+# Live feature buy_ratio uses only recent trades so the lookback matches the
+# forecast horizon scale (full API pages span ~1h and flatten the signal).
+FEATURE_LOOKBACK_FLOOR_S = 60.0
+DATA_POLICY_VERSION = 3
+
+
+def feature_lookback_s(horizon_s=None):
+    """Seconds of recent trades used for live buy_ratio features."""
+    if horizon_s is None:
+        return float(FEATURE_LOOKBACK_FLOOR_S)
+    return float(max(FEATURE_LOOKBACK_FLOOR_S, float(horizon_s)))
+
 # Reject observations when cross-endpoint timestamps differ by more than this (ms).
 MAX_ENDPOINT_SKEW_MS = 5000
 

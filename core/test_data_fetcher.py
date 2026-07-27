@@ -49,6 +49,36 @@ class DataFetcherTests(unittest.TestCase):
         f = compute_features(ticker, depth, trades, [])
         self.assertIn("endpoint_skew", f["quality_flags"])
 
+    def test_feature_lookback_excludes_old_trades(self):
+        ticker = {
+            "close": 100.0,
+            "high": 101,
+            "low": 99,
+            "bid": [99.5, 1.0],
+            "ask": [100.5, 1.0],
+            "ts": 200_000,
+        }
+        depth = {"bids": [[99.5, 2.0]], "asks": [[100.5, 1.0]], "ts": 200_000}
+        trades = [
+            {"direction": "sell", "amount": 1.0, "ts": 10_000},  # outside 60s
+            {"direction": "sell", "amount": 1.0, "ts": 20_000},  # outside 60s
+            {"direction": "buy", "amount": 1.0, "ts": 150_000},
+            {"direction": "buy", "amount": 1.0, "ts": 180_000},
+            {"direction": "buy", "amount": 1.0, "ts": 200_000},
+        ]
+        f = compute_features(ticker, depth, trades, [], feature_lookback_s=60)
+        self.assertIsNotNone(f)
+        self.assertEqual(f["trade_count"], 3)
+        self.assertAlmostEqual(f["buy_ratio"], 1.0)
+        self.assertEqual(f["feature_lookback_s"], 60)
+        self.assertLessEqual(f["trade_window_span_ms"], 60_000)
+
+    def test_default_lookback_floor_is_sixty_seconds(self):
+        from config import feature_lookback_s
+        self.assertEqual(feature_lookback_s(None), 60.0)
+        self.assertEqual(feature_lookback_s(60), 60.0)
+        self.assertEqual(feature_lookback_s(3600), 3600.0)
+
 
 if __name__ == "__main__":
     unittest.main()

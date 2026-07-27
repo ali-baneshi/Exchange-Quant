@@ -40,9 +40,9 @@ An observation is accepted once per exchange timestamp. Duplicate timestamps are
 | Field | Meaning |
 |---|---|
 | `timestamp`, `wall_time_ms`, `collected_at_ms` | Exchange and local collection clocks |
-| `price`, `buy_ratio`, `buy_ratio_volume` | Market and trade-flow features |
+| `price`, `buy_ratio`, `buy_ratio_volume` | Price plus flow features from a recent trade lookback of `max(60, horizon_s)` seconds (not the full API page) |
 | `imbalance`, `volatility`, `spread` | Order-book and market-context features |
-| `trade_count`, `trade_window_*` | Properties of the latest fetched trade response |
+| `trade_count`, `trade_window_*`, `feature_lookback_s` | Properties of the feature lookback window used for `buy_ratio` |
 | `quality_flags` | Data-quality diagnostics |
 
 Important flags include `no_trades`, `stale_trades`, `empty_depth`, `crossed_market`, `endpoint_skew`, and `duplicate_timestamp`.
@@ -89,10 +89,12 @@ Only one pending forecast is allowed. A forecast stores its original raw model p
 
 - fewer than `min_forward_trades(horizon_s)` trades occur in the interval;
 - local capture does not cover the interval;
-- a captured response is saturated at the request limit;
+- a saturated (full-page) trade response fails to overlap the previous capture frontier, so trades may have been missed between polls;
 - capture gaps exceed the allowed sampling tolerance;
 - entry or exit carries a disqualifying quality flag;
 - resolution is excessively late.
+
+A full-page response that still overlaps the prior frontier is recorded as `capture_saturated: true` for diagnostics but does not by itself make `label_capture_complete` false.
 
 The record may still contain a snapshot value for diagnosis, but `resolved_label: "label_unavailable"` and `score_eligible: false` prevent it from changing statistics or ensemble weights.
 

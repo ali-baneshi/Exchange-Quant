@@ -26,6 +26,7 @@ from baselines import classical_ensemble
 from validation import comprehensive_report, print_report
 from live_protocol import forecast_lookback, ready_for_forecast, pending_due
 from config import (
+    DATA_POLICY_VERSION,
     DISQUALIFYING_QUALITY_FLAGS,
     FEE_RATE,
     LONG_THRESHOLD,
@@ -34,6 +35,7 @@ from config import (
     LIVE_SCHEMA_VERSION,
     TRADE_CAPTURE_SIZE,
     TRADE_RETENTION_DAYS,
+    feature_lookback_s,
     min_forward_trades,
 )
 from live_store import LiveRunStore
@@ -226,7 +228,7 @@ def _write_run_state(output_path, store, symbol, mode, horizon_s, sample_interva
         "experiment_id": run_id,
         "config_hash": config_hash,
         "model_version": "born_constructive_v1",
-        "data_policy_version": 2,
+        "data_policy_version": DATA_POLICY_VERSION,
         "experiment_manifest": {
             "model_version": "born_constructive_v1",
             "label_policy": "captured_trade_window_v1",
@@ -261,14 +263,17 @@ def _summarize_resolved(predictions):
         return None
     c_errs = [p["classical_error"] for p in resolved]
     q_errs = [p["prediction_error"] for p in resolved]
+    acts = [p["resolved_actual"] for p in resolved]
     wins = sum(1 for ce, qe in zip(c_errs, q_errs) if qe < ce)
     trades = [p for p in resolved if p.get("signal") == "long"]
     returns = [p["net_return"] for p in trades]
+    null_mae = statistics.mean(abs(0.5 - a) for a in acts) if acts else 0.0
     return {
         "n": len(resolved),
         "wins": wins,
         "mean_c": statistics.mean(c_errs),
         "mean_q": statistics.mean(q_errs),
+        "null_mae": null_mae,
         "trades": len(trades),
         "avg_net_return": statistics.mean(returns) if returns else 0.0,
         "profit_factor": (
@@ -301,7 +306,7 @@ def _config_hash(symbol, mode, horizon_s, sample_interval, window):
             "sample_interval_s": float(sample_interval),
             "window": int(window),
             "model_version": "born_constructive_v1",
-            "data_policy_version": 2,
+            "data_policy_version": DATA_POLICY_VERSION,
             "label_policy": "captured_trade_window_v1",
             "schema_version": LIVE_SCHEMA_VERSION,
         },
@@ -431,9 +436,13 @@ def run(symbol="btcusdt", n_steps=None, delay=3600.0, window=15, mode="ensemble"
             features, captured_trades = hd.fetch_features_with_trades(
                 symbol,
                 trade_size=TRADE_CAPTURE_SIZE,
+                feature_lookback_s=feature_lookback_s(horizon_s),
             )
         else:
-            features = hd.fetch_features(symbol)
+            features = hd.fetch_features(
+                symbol,
+                feature_lookback_s=feature_lookback_s(horizon_s),
+            )
             captured_trades = hd.fetch_trades(symbol, size=TRADE_CAPTURE_SIZE) if features else []
         if features is None:
             print(f"  [{i:5d}] {time.strftime('%H:%M:%S')} NO DATA — retrying in {sample_interval:.0f}s")
@@ -500,9 +509,10 @@ def run(symbol="btcusdt", n_steps=None, delay=3600.0, window=15, mode="ensemble"
         if state_dirty:
             summary = _summarize_resolved(predictions)
             if summary and summary["n"] >= 30:
-                print(f"         --- resolved {summary['n']}: quantum wins {summary['wins']}/{summary['n']} "
-                      f"({summary['wins']/summary['n']*100:.0f}%) trades={summary['trades']} "
-                      f"avg_ret={summary['avg_net_return']:+.5f}")
+                print(f"         --- resolved {summary['n']}: MAE c={summary['mean_c']:.4f} "
+                      f"q={summary['mean_q']:.4f} null(0.5)={summary['null_mae']:.4f} "
+                      f"wins={summary['wins']}/{summary['n']} "
+                      f"({summary['wins']/summary['n']*100:.0f}%)")
             _write_run_state(
                 output_path, store, symbol, mode, horizon_s, sample_interval, window,
                 observations, predictions, ensemble if mode == "ensemble" else None,
@@ -595,9 +605,12 @@ def run(symbol="btcusdt", n_steps=None, delay=3600.0, window=15, mode="ensemble"
         if summary:
             n = summary["n"]
             if n >= 30:
-                print(f"\n  FINAL: resolved={n} quantum wins {summary['wins']}/{n} ({summary['wins']/n*100:.1f}%)  "
-                      f"c_err={summary['mean_c']:.4f}  q_err={summary['mean_q']:.4f}  "
-                      f"trades={summary['trades']} avg_ret={summary['avg_net_return']:+.5f}")
+                print(f"\n  FINAL: resolved={n}  c_err={summary['mean_c']:.4f}  q_err={summary['mean_q']:.4f}  "
+                      f"null(0.5)={summary['null_mae']:.4f}  "
+                      f"wins={summary['wins']}/{n} ({summary['wins']/n*100:.1f}%)")
+                if summary["trades"]:
+                    print(f"         price-sim diagnostic: {summary['trades']} long  "
+                          f"avg_ret={summary['avg_net_return']:+.5f} (not primary metric)")
             else:
                 print(f"\n  FINAL: resolved={n}; exploratory only — suppressing win/loss summary until n>=30")
 

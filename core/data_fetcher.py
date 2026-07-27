@@ -24,6 +24,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import re
 
 from config import (
+    FEATURE_LOOKBACK_FLOOR_S,
     MAX_ENDPOINT_SKEW_MS,
     MIN_FORWARD_WINDOW_TRADES,
     min_forward_trades,
@@ -174,21 +175,47 @@ class HuobiData:
             results.get("klines", []),
         )
 
-    def fetch_features(self, symbol="btcusdt", max_attempts=3):
-        features, _ = self.fetch_features_with_trades(symbol, max_attempts=max_attempts)
+    def fetch_features(self, symbol="btcusdt", max_attempts=3,
+                       feature_lookback_s=None):
+        features, _ = self.fetch_features_with_trades(
+            symbol,
+            max_attempts=max_attempts,
+            feature_lookback_s=feature_lookback_s,
+        )
         return features
 
     def fetch_features_with_trades(self, symbol="btcusdt", max_attempts=3,
-                                   trade_size=30):
+                                   trade_size=30, feature_lookback_s=None):
         symbol = _validate_symbol(symbol)
         for attempt in range(max_attempts):
             t, d, tr, k = self.fetch_all(symbol, trade_size=trade_size)
-            f = compute_live_features(t, d, tr, k)
+            f = compute_live_features(
+                t, d, tr, k, feature_lookback_s=feature_lookback_s,
+            )
             if f is not None:
                 return f, tr
             if attempt < max_attempts - 1:
                 time.sleep(min(2 ** attempt, 30))
         return None, []
+
+
+def _trades_in_lookback(trades, lookback_s):
+    """Keep only trades within lookback_s of the newest trade timestamp."""
+    if not trades or lookback_s is None:
+        return list(trades or [])
+    timestamps = [
+        int(trade["ts"]) for trade in trades
+        if isinstance(trade.get("ts"), (int, float)) and trade["ts"] > 0
+    ]
+    if not timestamps:
+        return []
+    end_ms = max(timestamps)
+    start_ms = end_ms - int(float(lookback_s) * 1000)
+    return [
+        trade for trade in trades
+        if isinstance(trade.get("ts"), (int, float))
+        and start_ms <= int(trade["ts"]) <= end_ms
+    ]
 
 
 def compute_buy_ratio_for_window(trades, start_ms, end_ms, min_trades=None):
@@ -227,7 +254,7 @@ def _best_bid_ask(ticker):
     return float(bid[0]), float(ask[0])
 
 
-def compute_live_features(ticker, depth, trades, klines):
+def compute_live_features(ticker, depth, trades, klines, feature_lookback_s=None):
     if not ticker:
         return None
     ba = _best_bid_ask(ticker)
@@ -243,11 +270,19 @@ def compute_live_features(ticker, depth, trades, klines):
     ]
     if any(not isinstance(value, (int, float)) or not math.isfinite(value) for value in numeric_inputs):
         return None
-    total_trades = len(trades)
-    buy_count = sum(1 for t in trades if t["direction"] == "buy")
+    lookback_s = (
+        FEATURE_LOOKBACK_FLOOR_S
+        if feature_lookback_s is None
+        else float(feature_lookback_s)
+    )
+    # buy_ratio features use a horizon-scaled recent window; capture still
+    # persists the full raw trade page separately for forward labels.
+    feature_trades = _trades_in_lookback(trades, lookback_s)
+    total_trades = len(feature_trades)
+    buy_count = sum(1 for t in feature_trades if t["direction"] == "buy")
     buy_ratio = buy_count / total_trades if total_trades > 0 else 0.5
-    buy_amount = sum(t["amount"] for t in trades if t["direction"] == "buy")
-    sell_amount = sum(t["amount"] for t in trades if t["direction"] != "buy")
+    buy_amount = sum(t["amount"] for t in feature_trades if t["direction"] == "buy")
+    sell_amount = sum(t["amount"] for t in feature_trades if t["direction"] != "buy")
     total_amount = buy_amount + sell_amount
     buy_ratio_volume = buy_amount / total_amount if total_amount > 0 else buy_ratio
     total_bid = sum(q for _, q in depth.get("bids", []))
@@ -263,7 +298,7 @@ def compute_live_features(ticker, depth, trades, klines):
         if vol_prev > 0:
             vol_change = (vols[-1] - vol_prev) / vol_prev
     spread = (ask_px - bid_px) / price
-    trade_ts = [t["ts"] for t in trades if t.get("ts")]
+    trade_ts = [t["ts"] for t in feature_trades if t.get("ts")]
     unique_trade_ts = len(set(trade_ts))
     trade_window_start_ms = min(trade_ts) if trade_ts else None
     trade_window_end_ms = max(trade_ts) if trade_ts else None
@@ -305,6 +340,7 @@ def compute_live_features(ticker, depth, trades, klines):
         "trade_window_start_ms": trade_window_start_ms,
         "trade_window_end_ms": trade_window_end_ms,
         "trade_window_span_ms": trade_window_span_ms,
+        "feature_lookback_s": lookback_s,
         "ticker_timestamp_ms": ticker.get("ts", 0),
         "depth_timestamp_ms": depth.get("ts", 0),
         "quality_flags": quality_flags,

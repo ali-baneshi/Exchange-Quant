@@ -191,7 +191,14 @@ class LiveRunStore:
         return inserted
 
     def trade_window(self, symbol, start_ms, end_ms, sample_interval_s):
-        """Return locally captured forward trades and conservative coverage metadata."""
+        """Return locally captured forward trades and conservative coverage metadata.
+
+        A full-page (saturated) response is only coverage-breaking when its oldest
+        trade is newer than the previous capture frontier — i.e. trades may have
+        fallen off the page between polls. A full page that still overlaps the
+        prior frontier is expected on liquid symbols and does not by itself make
+        the label incomplete.
+        """
         trades = [
             json.loads(row[0])
             for row in self.conn.execute(
@@ -206,7 +213,7 @@ class LiveRunStore:
         expected_gap_ms = max(1, int(float(sample_interval_s) * 1000))
         batches = self.conn.execute(
             """
-            SELECT captured_at_ms, saturated
+            SELECT captured_at_ms, saturated, oldest_trade_ms, newest_trade_ms
             FROM trade_capture_batches
             WHERE symbol = ? AND captured_at_ms >= ? AND captured_at_ms <= ?
             ORDER BY captured_at_ms
@@ -222,7 +229,19 @@ class LiveRunStore:
             [capture_times[index] - capture_times[index - 1] for index in range(1, len(capture_times))],
             default=0,
         )
-        complete = bool(trades and batches) and not any(row[1] for row in batches)
+        saturated_hole = False
+        for index, row in enumerate(batches):
+            saturated = row[1]
+            oldest_trade_ms = row[2]
+            if not saturated:
+                continue
+            frontier_ms = (
+                batches[index - 1][0] if index else int(start_ms) - expected_gap_ms
+            )
+            if oldest_trade_ms is not None and int(oldest_trade_ms) > frontier_ms:
+                saturated_hole = True
+                break
+        complete = bool(trades and batches) and not saturated_hole
         if capture_times:
             complete = complete and capture_times[0] <= start_ms + expected_gap_ms
             complete = complete and capture_times[-1] >= end_ms - expected_gap_ms

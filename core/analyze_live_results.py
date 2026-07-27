@@ -234,6 +234,8 @@ def analyze(results, min_resolved=3, show_segments=True):
     mean_m = statistics.mean(m_errs)
     improvement = (mean_c - mean_m) / mean_c * 100 if mean_c > 0 else 0
     tier = _reporting_tier(n)
+    acts = [r[actual_key] for r in results if actual_key in r]
+    null_mae = statistics.mean(abs(0.5 - a) for a in acts) if acts else None
 
     start_time = results[0].get("created_time", results[0].get("time", "?"))
     end_time = results[-1].get("resolved_time", results[-1].get("time", "?"))
@@ -245,6 +247,10 @@ def analyze(results, min_resolved=3, show_segments=True):
     print(f"  Model:          {model_name}")
     print(f"  Classical err:  {mean_c:.4f}")
     print(f"  {model_name} err:    {mean_m:.4f}")
+    if null_mae is not None:
+        print(f"  Null baseline:  MAE(constant 0.5)={null_mae:.4f}  "
+              f"(classical {'<' if mean_c < null_mae else '>='} null, "
+              f"{model_name.lower()} {'<' if mean_m < null_mae else '>='} null)")
     if tier == "diagnostics":
         print(f"  Status:         diagnostics only (n<30)")
     elif tier == "exploratory":
@@ -312,9 +318,9 @@ def analyze(results, min_resolved=3, show_segments=True):
         loss_sum = abs(sum(r for r in returns if r < 0))
         win_sum = sum(r for r in returns if r > 0)
         pf = win_sum / loss_sum if loss_sum > 0 else float("inf") if win_sum > 0 else 1.0
-        print(f"  Trades:         {len(trades)} long  hit={wins_ret}/{len(trades)} ({wins_ret/len(trades)*100:.1f}%)")
-        print(f"  Avg net ret:    {statistics.mean(returns):+.5f}")
-        print(f"  Profit factor:  {pf:.4f}")
+        print(f"  Price sim:      {len(trades)} long (diagnostic — uses price move, not buy_ratio target)")
+        print(f"  Price sim hit:  {wins_ret}/{len(trades)} ({wins_ret/len(trades)*100:.1f}%)  "
+              f"avg_net={statistics.mean(returns):+.5f}  pf={pf:.4f}")
     non_fallback = [r for r in eligible if r.get("fallback_reason") == "none"]
     born_rate = len(non_fallback) / len(eligible) * 100 if eligible else 0.0
     print(f"  Born active:    {len(non_fallback)}/{len(eligible)} eligible ({born_rate:.1f}%)")
