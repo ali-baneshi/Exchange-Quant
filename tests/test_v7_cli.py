@@ -1,8 +1,11 @@
+from decimal import Decimal
+
 import pytest
 
-from exchange_q.cli import main
-from exchange_q.domain import RunManifest
+from exchange_q.cli import RunProfile, main
+from exchange_q.domain import RunManifest, TradeEvent
 from exchange_q.models import ModelArtifact
+from exchange_q.providers.replay import ReplayProvider
 from exchange_q.store import V7Store
 
 
@@ -30,6 +33,8 @@ def test_missing_artifact_does_not_create_database(tmp_path):
         main(
             [
                 "run",
+                "--profile",
+                "diagnostic",
                 "--database",
                 str(database),
                 "--artifact",
@@ -46,6 +51,8 @@ def test_empty_database_path_is_rejected():
         main(
             [
                 "run",
+                "--profile",
+                "diagnostic",
                 "--database",
                 "",
                 "--artifact",
@@ -62,6 +69,8 @@ def test_empty_run_id_is_rejected(tmp_path):
         main(
             [
                 "run",
+                "--profile",
+                "diagnostic",
                 "--database",
                 str(database),
                 "--artifact",
@@ -107,6 +116,8 @@ def test_existing_run_requires_explicit_resume(tmp_path, monkeypatch):
         main(
             [
                 "run",
+                "--profile",
+                "diagnostic",
                 "--database",
                 str(database),
                 "--artifact",
@@ -147,25 +158,97 @@ def test_artifact_parent_directory_is_created(tmp_path):
     assert output.is_file()
 
 
-def test_monitor_reports_terminal_progress_limit(tmp_path, capsys):
-    database = tmp_path / "monitor.sqlite3"
-    store = V7Store(str(database))
-    try:
-        store.create_run(_manifest("monitor-run"))
-        store.schedule_slot("monitor-run", 1000, 2000)
-        store.skip_slot("monitor-run", 1000, ["diagnostic"])
-    finally:
-        store.close()
+def test_resume_requires_explicit_identity():
+    with pytest.raises(SystemExit):
+        main(["run", "--profile", "diagnostic", "--resume"])
+
+
+def test_invalid_refresh_is_rejected_before_database_creation(tmp_path):
+    database = tmp_path / "invalid-refresh.sqlite3"
+    with pytest.raises(SystemExit):
+        main(
+            [
+                "run",
+                "--profile",
+                "diagnostic",
+                "--database",
+                str(database),
+                "--refresh-s",
+                "0",
+            ]
+        )
+    assert not database.exists()
+
+
+def test_diagnostic_profile_builds_artifact_and_runs_with_generated_defaults(
+    tmp_path,
+    monkeypatch,
+):
+    artifact = tmp_path / "artifacts" / "normalized-born.json"
+    database = tmp_path / "diagnostic.sqlite3"
+    profile = RunProfile(
+        artifact=str(artifact),
+        symbol="btcusdt",
+        provider="htx-ws",
+        horizon_s=1,
+        lookback_s=1,
+        cadence_s=1,
+        minimum_label_trades=1,
+        target_eligible=1,
+        max_terminal_slots=1,
+    )
+    events = [
+        TradeEvent(
+            provider="htx-ws",
+            symbol="btcusdt",
+            exchange_trade_id="first",
+            exchange_time_ms=100,
+            received_time_ms=101,
+            aggressor_side="buy",
+            price=Decimal(100),
+            quantity=Decimal(1),
+        ),
+        TradeEvent(
+            provider="htx-ws",
+            symbol="btcusdt",
+            exchange_trade_id="jump",
+            exchange_time_ms=3000,
+            received_time_ms=3001,
+            aggressor_side="sell",
+            price=Decimal(100),
+            quantity=Decimal(1),
+        ),
+    ]
+    monkeypatch.setattr("exchange_q.cli.DIAGNOSTIC_PROFILE", profile)
+    monkeypatch.setattr(
+        "exchange_q.cli.HtxWebSocketProvider",
+        lambda: ReplayProvider(events),
+    )
+
     assert (
         main(
             [
-                "monitor",
+                "run",
+                "--profile",
+                "diagnostic",
                 "--database",
                 str(database),
                 "--run-id",
-                "monitor-run",
+                "automatic-diagnostic",
+                "--display",
+                "log",
+                "--refresh-s",
+                "0.01",
             ]
         )
         == 0
     )
-    assert "terminal slots: 1/2" in capsys.readouterr().out
+    assert artifact.is_file()
+    store = V7Store(str(database))
+    try:
+        status = store.status("automatic-diagnostic")
+        assert status["status"] == "diagnostic_limit"
+        assert status["lease"] is None
+        assert status["manifest"]["terminal_slot_limit"] == 1
+    finally:
+        store.close()

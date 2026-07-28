@@ -12,84 +12,65 @@ make compile
 Do not start a primary study without a frozen artifact, power-derived sample target,
 and a provider whose health reports `coverage_certifiable=true`.
 
-## Fit
-
-```bash
-./scripts/exchange-q fit tests/fixtures/development-minimal.json \
-  --output artifacts/v7/normalized-born.json
-```
-
-Development data must precede the primary evaluation period.
-
-The bundled fixture and generated `artifacts/v7/normalized-born.json` artifact are
-for diagnostic connectivity tests only. Do not use them for a primary study.
-
 ## Diagnostic Stream
 
 ```bash
-DATABASE="runs/diagnostic.sqlite3"
-RUN_ID="diagnostic-$(date +%Y%m%d-%H%M%S)"
-
-./scripts/exchange-q run \
-  --database "$DATABASE" \
-  --artifact artifacts/v7/normalized-born.json \
-  --run-id "$RUN_ID" \
-  --provider htx-ws \
-  --horizon-s 60 \
-  --lookback-s 300 \
-  --cadence-s 60 \
-  --minimum-label-trades 30 \
-  --target-eligible 100 \
-  --max-terminal-slots 10
+./scripts/exchange-q run --profile diagnostic
 ```
 
-Use a fresh run ID or omit `--run-id` and copy the generated ID printed at startup.
-Reusing an existing ID is rejected unless `--resume` is supplied explicitly.
+This is the normal operator workflow. It automatically:
+
+- creates the bundled diagnostic artifact when missing;
+- generates one unique run ID and matching SQLite path;
+- applies bounded HTX-safe timing and slot defaults;
+- renders one integrated foreground dashboard;
+- switches to compact transition logs when output is redirected.
 
 The bundled HTX adapter cannot certify continuity, so these labels remain
 ineligible by design. This command tests connectivity, persistence, scheduling,
 shutdown, and resource behavior only.
 
-## Monitor and Stop
+## Display and Stop
 
 ```bash
-./scripts/exchange-q monitor \
-  --database "$DATABASE" \
-  --run-id "$RUN_ID"
-
-./scripts/exchange-q monitor \
-  --database "$DATABASE" \
-  --run-id "$RUN_ID" \
-  --watch \
-  --interval-s 5
-
-./scripts/exchange-q status \
-  --database "$DATABASE" \
-  --run-id "$RUN_ID"
-
-./scripts/exchange-q stop \
-  --database "$DATABASE" \
-  --run-id "$RUN_ID"
+./scripts/exchange-q run --profile diagnostic --display dashboard
+./scripts/exchange-q run --profile diagnostic --display log
 ```
 
-Shell variables are names, not values. Use `"$RUN_ID"` after assigning it; do not
-write `"$btcusdt-v7-..."`, which asks the shell to expand a different variable.
+The dashboard shows the generated database path, run identity, provider health,
+stream activity and rates, current slot phase, accurate next action, terminal
+progress, exclusion totals, recent transitions, and the HTX evidence warning.
+Heartbeat lines are not printed.
 
-The run terminal now prints startup, heartbeat, slot, and terminal progress lines.
-`monitor --watch` refreshes one dashboard in an interactive terminal and exits when
-the run finishes or when its writer becomes dead, stale, or orphaned.
-
-The stop command verifies the process working directory and command line before
-sending `SIGTERM`, waits for full exit, and uses `SIGKILL` only after the configurable
-timeout. It removes a verified stale lease if forced termination prevented normal
-cleanup. The foreground runner closes the active socket, updates run state, and
-releases its lease on `SIGINT` or `SIGTERM`.
+Press `Ctrl-C` in the run terminal. The foreground runner closes the active socket,
+updates run state, releases its lease, and exits completely.
 
 ## Restart
 
-Run the same command with the same run ID, database, artifact, and manifest values.
-The runner restores the latest scheduled or pending slot. A configuration mismatch
-is rejected.
+Copy the database, run ID, and artifact shown by the dashboard:
+
+```bash
+./scripts/exchange-q run \
+  --profile diagnostic \
+  --database runs/RUN_ID.sqlite3 \
+  --run-id RUN_ID \
+  --artifact artifacts/v7/normalized-born.json \
+  --resume
+```
+
+Resume requires explicit identity paths. A configuration mismatch is rejected.
+
+## Advanced Overrides
+
+```bash
+./scripts/exchange-q run \
+  --profile diagnostic \
+  --database runs/custom.sqlite3 \
+  --run-id custom-diagnostic \
+  --max-terminal-slots 20 \
+  --display dashboard \
+  --refresh-s 1
+```
 
 ## Analyze and Export
 

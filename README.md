@@ -33,16 +33,19 @@ Python 3.10 or newer is required.
 ## Commands
 
 ```bash
-./scripts/exchange-q fit development.json --output artifacts/v7/model.json
+./scripts/exchange-q run --profile diagnostic
+```
 
-./scripts/exchange-q run \
-  --database runs/example.sqlite3 \
-  --artifact artifacts/v7/model.json \
-  --target-eligible 100 \
-  --max-terminal-slots 10
+This single foreground command creates the diagnostic artifact when needed,
+generates the run ID and SQLite path, applies bounded HTX-safe defaults, and shows
+an integrated live dashboard. Redirected output automatically uses compact logs.
+Press `Ctrl-C` for complete shutdown.
 
-./scripts/exchange-q status --database runs/example.sqlite3 --run-id RUN_ID
-./scripts/exchange-q monitor --database runs/example.sqlite3 --run-id RUN_ID --watch
+Advanced commands:
+
+```bash
+./scripts/exchange-q run --profile diagnostic --display log
+./scripts/exchange-q status --database runs/RUN_ID.sqlite3 --run-id RUN_ID
 ./scripts/exchange-q stop --database runs/example.sqlite3 --run-id RUN_ID
 ./scripts/exchange-q analyze --database runs/example.sqlite3 --run-id RUN_ID
 ./scripts/exchange-q export \
@@ -50,6 +53,8 @@ Python 3.10 or newer is required.
   --run-id RUN_ID \
   --output artifacts/v7/RUN_ID.json
 ```
+
+The run dashboard always identifies the generated database and run ID.
 
 `fit` expects a JSON list containing `feature`, `buy_count`, and `total_count`.
 The feature object follows `exchange_q.domain.FeatureWindow`.

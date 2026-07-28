@@ -9,15 +9,43 @@ import sqlite3
 import sys
 import time
 import uuid
+from dataclasses import dataclass
 
 from exchange_q.analysis import required_sample_size, score_baselines, score_rows
 from exchange_q.artifacts import load_artifact, save_artifact
 from exchange_q.domain import FeatureWindow, RunManifest
 from exchange_q.models import NormalizedBornModel
-from exchange_q.monitor import format_monitor_report, monitor_snapshot
+from exchange_q.monitor import RunConsole
 from exchange_q.providers.htx_ws import HtxWebSocketProvider
 from exchange_q.runner import LiveRunner
 from exchange_q.store import V7Store
+
+
+@dataclass(frozen=True)
+class RunProfile:
+    artifact: str
+    symbol: str
+    provider: str
+    horizon_s: int
+    lookback_s: int
+    cadence_s: int
+    minimum_label_trades: int
+    target_eligible: int
+    max_terminal_slots: int
+
+
+DIAGNOSTIC_PROFILE = RunProfile(
+    artifact="artifacts/v7/normalized-born.json",
+    symbol="btcusdt",
+    provider="htx-ws",
+    horizon_s=60,
+    lookback_s=300,
+    cadence_s=60,
+    minimum_label_trades=30,
+    target_eligible=1,
+    max_terminal_slots=10,
+)
+DIAGNOSTIC_DATASET = "tests/fixtures/development-minimal.json"
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -29,47 +57,37 @@ def _parser() -> argparse.ArgumentParser:
     fit.add_argument("--output", required=True)
 
     run = subparsers.add_parser("run", help="run the schema-v7 live evaluator")
-    run.add_argument("--database", required=True)
-    run.add_argument("--artifact", required=True)
+    run.add_argument("--profile", choices=("diagnostic",), required=True)
+    run.add_argument("--database")
+    run.add_argument("--artifact")
     run.add_argument("--run-id", default=None)
     run.add_argument(
         "--resume",
         action="store_true",
         help="resume an existing run ID; otherwise existing IDs are rejected",
     )
-    run.add_argument("--symbol", default="btcusdt")
-    run.add_argument("--provider", choices=("htx-ws",), default="htx-ws")
-    run.add_argument("--horizon-s", type=int, default=3600)
-    run.add_argument("--lookback-s", type=int, default=3600)
-    run.add_argument("--cadence-s", type=int, default=3600)
-    run.add_argument("--minimum-label-trades", type=int, default=30)
-    run.add_argument("--target-eligible", type=int, required=True)
+    run.add_argument("--symbol")
+    run.add_argument("--provider", choices=("htx-ws",))
+    run.add_argument("--horizon-s", type=int)
+    run.add_argument("--lookback-s", type=int)
+    run.add_argument("--cadence-s", type=int)
+    run.add_argument("--minimum-label-trades", type=int)
+    run.add_argument("--target-eligible", type=int)
     run.add_argument(
         "--max-terminal-slots",
         type=int,
-        default=10,
         help="Bound diagnostic runs even when the provider cannot certify labels",
     )
-    run.add_argument("--progress-interval-s", type=float, default=10.0)
+    run.add_argument(
+        "--display",
+        choices=("auto", "dashboard", "log"),
+        default="auto",
+    )
+    run.add_argument("--refresh-s", type=float, default=2.0)
 
     status = subparsers.add_parser("status", help="show authoritative run status")
     status.add_argument("--database", required=True)
     status.add_argument("--run-id", required=True)
-
-    monitor = subparsers.add_parser(
-        "monitor", help="show a human-readable live activity snapshot"
-    )
-    monitor.add_argument("--database", required=True)
-    monitor.add_argument("--run-id", required=True)
-    monitor.add_argument("--json", action="store_true", help="emit JSON instead of text")
-    monitor.add_argument(
-        "--watch",
-        action="store_true",
-        help="refresh until the run is no longer running",
-    )
-    monitor.add_argument("--interval-s", type=float, default=5.0)
-    monitor.add_argument("--slots", type=int, default=5)
-    monitor.add_argument("--events", type=int, default=8)
 
     analyze = subparsers.add_parser("analyze", help="score eligible v7 forecasts")
     analyze.add_argument("--database", required=True)
@@ -102,16 +120,8 @@ def main(argv=None) -> int:
         if value is not None and not str(value).strip():
             parser.error(f"--{argument.replace('_', '-')} must not be empty")
     if args.command == "fit":
-        with open(args.dataset, encoding="utf-8") as handle:
-            rows = json.load(handle)
-        features = [FeatureWindow(**row["feature"]) for row in rows]
-        artifact = NormalizedBornModel().fit(
-            features,
-            [int(row["buy_count"]) for row in rows],
-            [int(row["total_count"]) for row in rows],
-        )
-        save_artifact(args.output, artifact)
-        print(json.dumps({"artifact_hash": artifact.artifact_hash, "rows": len(rows)}))
+        artifact, row_count = _fit_artifact(args.dataset, args.output)
+        print(json.dumps({"artifact_hash": artifact.artifact_hash, "rows": row_count}))
         return 0
 
     if args.command == "power":
@@ -126,22 +136,16 @@ def main(argv=None) -> int:
         )
         return 0
 
-    if args.command == "run" and not os.path.isfile(args.artifact):
-        parser.error(
-            f"artifact does not exist: {args.artifact}\n"
-            "Create the diagnostic artifact with:\n"
-            "  ./scripts/exchange-q fit tests/fixtures/development-minimal.json "
-            "--output artifacts/v7/normalized-born.json"
-        )
     if args.command != "run" and not os.path.isfile(args.database):
         parser.error(f"database does not exist: {args.database}")
+    if args.command == "run":
+        _run_command(parser, args)
+        return 0
     store = V7Store(args.database)
     try:
         if args.command == "status":
             print(json.dumps(store.status(args.run_id), indent=2, sort_keys=True))
             return 0
-        if args.command == "monitor":
-            return _monitor(store, args)
         if args.command == "analyze":
             rows = store.eligible_rows(args.run_id)
             report = score_rows(rows)
@@ -169,84 +173,120 @@ def main(argv=None) -> int:
             return 0
         if args.command == "stop":
             return _stop_run(store, args.run_id, args.timeout_s)
-        if args.command == "run":
-            artifact = load_artifact(args.artifact)
-            run_id = args.run_id or (
-                f"{args.symbol}-v7-{int(time.time())}-{uuid.uuid4().hex[:8]}"
-            )
-            manifest = RunManifest(
-                run_id=run_id,
-                symbol=args.symbol,
-                provider=args.provider,
-                model_artifact_hash=artifact.artifact_hash,
-                feature_policy="causal_trade_book_v1",
-                label_policy="half_open_streamed_trades_v1",
-                primary_metric="per_trade_negative_log_likelihood",
-                horizon_ms=args.horizon_s * 1000,
-                lookback_ms=args.lookback_s * 1000,
-                cadence_ms=args.cadence_s * 1000,
-                minimum_label_trades=args.minimum_label_trades,
-                target_eligible=args.target_eligible,
-                terminal_slot_limit=args.max_terminal_slots,
-            )
-            try:
-                store.create_run(manifest)
-            except sqlite3.IntegrityError:
-                existing = store.status(run_id)
-                if existing["manifest"] != manifest.to_record():
-                    raise
-                if not args.resume:
-                    parser.error(
-                        f"run ID already exists: {run_id}\n"
-                        "Use a new --run-id, omit --run-id for an automatic ID, "
-                        "or add --resume intentionally."
-                    )
-            print(f"[exchange-q] run_id={run_id}")
-            print(
-                "[exchange-q] monitor with: "
-                f"./scripts/exchange-q monitor --database {args.database} "
-                f"--run-id {run_id} --watch",
-                flush=True,
-            )
-            provider = HtxWebSocketProvider()
-            runner = LiveRunner(
-                store,
-                provider,
-                manifest,
-                artifact,
-                progress_interval_s=args.progress_interval_s,
-            )
-            asyncio.run(runner.run())
-            return 0
     finally:
         store.close()
     return 2
 
 
-def _monitor(store: V7Store, args) -> int:
-    if args.interval_s <= 0 or args.slots <= 0 or args.events <= 0:
-        raise ValueError("monitor interval, slots, and events must be positive")
-    while True:
-        snapshot = monitor_snapshot(
-            store,
-            args.run_id,
-            recent_slots=args.slots,
-            recent_events=args.events,
+def _run_command(parser: argparse.ArgumentParser, args) -> None:
+    profile = DIAGNOSTIC_PROFILE
+    if args.refresh_s <= 0:
+        parser.error("--refresh-s must be positive")
+    if args.resume and (not args.database or not args.run_id or not args.artifact):
+        parser.error("--resume requires explicit --database, --run-id, and --artifact")
+    run_id = args.run_id or (
+        f"{profile.symbol}-diagnostic-{time.strftime('%Y%m%d-%H%M%S')}-"
+        f"{uuid.uuid4().hex[:8]}"
+    )
+    database = args.database or f"runs/{run_id}.sqlite3"
+    artifact_path = args.artifact or profile.artifact
+    if not os.path.isfile(artifact_path):
+        if args.artifact:
+            parser.error(f"artifact does not exist: {artifact_path}")
+        _fit_artifact(DIAGNOSTIC_DATASET, artifact_path)
+        print(
+            f"[exchange-q] created diagnostic-only artifact: {artifact_path}",
+            flush=True,
         )
-        if args.json:
-            print(json.dumps(snapshot, indent=2, sort_keys=True))
-        else:
-            if args.watch and sys.stdout.isatty():
-                print("\033[2J\033[H", end="")
-            print(format_monitor_report(snapshot))
-        if not args.watch:
-            return 0
-        if snapshot["status"] != "running":
-            return 0
-        if snapshot["writer_state"] in {"orphaned", "stale", "dead"}:
-            return 2
-        time.sleep(args.interval_s)
-        print()
+    artifact = load_artifact(artifact_path)
+    manifest = RunManifest(
+        run_id=run_id,
+        symbol=args.symbol or profile.symbol,
+        provider=args.provider or profile.provider,
+        model_artifact_hash=artifact.artifact_hash,
+        feature_policy="causal_trade_book_v1",
+        label_policy="half_open_streamed_trades_v1",
+        primary_metric="per_trade_negative_log_likelihood",
+        horizon_ms=_value_or_default(args.horizon_s, profile.horizon_s) * 1000,
+        lookback_ms=_value_or_default(args.lookback_s, profile.lookback_s) * 1000,
+        cadence_ms=_value_or_default(args.cadence_s, profile.cadence_s) * 1000,
+        minimum_label_trades=(
+            _value_or_default(
+                args.minimum_label_trades,
+                profile.minimum_label_trades,
+            )
+        ),
+        target_eligible=_value_or_default(
+            args.target_eligible,
+            profile.target_eligible,
+        ),
+        terminal_slot_limit=(
+            _value_or_default(
+                args.max_terminal_slots,
+                profile.max_terminal_slots,
+            )
+        ),
+    )
+    store = V7Store(database)
+    try:
+        try:
+            store.create_run(manifest)
+        except sqlite3.IntegrityError:
+            existing = store.status(run_id)
+            if existing["manifest"] != manifest.to_record():
+                raise
+            if not args.resume:
+                parser.error(
+                    f"run ID already exists: {run_id}\n"
+                    "Use a new --run-id or add --resume intentionally."
+                )
+        provider = HtxWebSocketProvider()
+        runner = LiveRunner(store, provider, manifest, artifact)
+        console = RunConsole(
+            store,
+            run_id,
+            provider=provider,
+            database_path=database,
+            artifact_path=artifact_path,
+            display=args.display,
+            refresh_s=args.refresh_s,
+        )
+        asyncio.run(_run_foreground(runner, console))
+    finally:
+        store.close()
+
+
+async def _run_foreground(runner: LiveRunner, console: RunConsole) -> None:
+    runner_task = asyncio.create_task(runner.run())
+    console_task = asyncio.create_task(console.watch(runner_task))
+    done, _ = await asyncio.wait(
+        (runner_task, console_task),
+        return_when=asyncio.FIRST_COMPLETED,
+    )
+    if console_task in done and not runner_task.done():
+        runner.stop()
+        await runner_task
+    if runner_task in done:
+        await console_task
+    runner_task.result()
+    console_task.result()
+
+
+def _fit_artifact(dataset: str, output: str):
+    with open(dataset, encoding="utf-8") as handle:
+        rows = json.load(handle)
+    features = [FeatureWindow(**row["feature"]) for row in rows]
+    artifact = NormalizedBornModel().fit(
+        features,
+        [int(row["buy_count"]) for row in rows],
+        [int(row["total_count"]) for row in rows],
+    )
+    save_artifact(output, artifact)
+    return artifact, len(rows)
+
+
+def _value_or_default(value, default):
+    return default if value is None else value
 
 
 def _stop_run(store: V7Store, run_id: str, timeout_s: float) -> int:

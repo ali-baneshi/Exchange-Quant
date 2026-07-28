@@ -157,3 +157,66 @@ def test_terminal_slot_limit_is_a_hard_bound_during_catch_up(tmp_path):
         assert status["forecast_counts"] == {"skipped": 2}
     finally:
         store.close()
+
+
+def test_live_scheduling_uses_receipt_time_to_avoid_stale_slot_catch_up(tmp_path):
+    model = NormalizedBornModel()
+    artifact = ModelArtifact(model.model_id, (0.0, 0.5, 1.0, 0.0, 1.0), 10)
+    manifest = RunManifest(
+        run_id="receipt-clock-run",
+        symbol="btcusdt",
+        provider="replay",
+        model_artifact_hash=artifact.artifact_hash,
+        feature_policy="causal_trade_book_v1",
+        label_policy="half_open_streamed_trades_v1",
+        primary_metric="per_trade_negative_log_likelihood",
+        horizon_ms=1000,
+        lookback_ms=1000,
+        cadence_ms=1000,
+        minimum_label_trades=1,
+        target_eligible=100,
+        terminal_slot_limit=1,
+    )
+    stale_exchange_event = TradeEvent(
+        provider="replay",
+        symbol="btcusdt",
+        exchange_trade_id="stale",
+        exchange_time_ms=100,
+        received_time_ms=10_100,
+        aggressor_side="buy",
+        price=Decimal(100),
+        quantity=Decimal(1),
+    )
+    next_event = TradeEvent(
+        provider="replay",
+        symbol="btcusdt",
+        exchange_trade_id="next",
+        exchange_time_ms=200,
+        received_time_ms=11_100,
+        aggressor_side="sell",
+        price=Decimal(100),
+        quantity=Decimal(1),
+    )
+    store = V7Store(str(tmp_path / "receipt-clock.sqlite3"))
+    store.create_run(manifest)
+    try:
+        asyncio.run(
+            LiveRunner(
+                store,
+                ReplayProvider([stale_exchange_event, next_event]),
+                manifest,
+                artifact,
+            ).run()
+        )
+        slots = store.connection.execute(
+            """
+            SELECT slot_start_ms, status FROM forecast_slots
+            WHERE run_id = ? ORDER BY slot_start_ms
+            """,
+            (manifest.run_id,),
+        ).fetchall()
+        assert [(row["slot_start_ms"], row["status"]) for row in slots] == [
+            (11_000, "skipped")
+        ]
+    finally:
+        store.close()

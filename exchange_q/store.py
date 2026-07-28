@@ -481,6 +481,8 @@ class V7Store:
         return {
             "run_id": run_id,
             "status": run["status"],
+            "created_at_ms": run["created_at_ms"],
+            "updated_at_ms": run["updated_at_ms"],
             "manifest": json.loads(run["manifest_json"]),
             "forecast_counts": counts,
             "lease": dict(lease) if lease else None,
