@@ -161,4 +161,4 @@ def required_sample_size(
         * standard_deviation
         / abs(expected_mean_difference)
     ) ** 2
-    return int(math.ceil(independent_n * inflation))
+    return math.ceil(independent_n * inflation)

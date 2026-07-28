@@ -16,8 +16,8 @@ def _trade(identifier, timestamp, side):
         exchange_time_ms=timestamp,
         received_time_ms=timestamp + 1,
         aggressor_side=side,
-        price=Decimal("100"),
-        quantity=Decimal("1"),
+        price=Decimal(100),
+        quantity=Decimal(1),
     )
 
 
@@ -27,10 +27,10 @@ def _book(timestamp):
         symbol="btcusdt",
         exchange_time_ms=timestamp,
         received_time_ms=timestamp + 1,
-        best_bid=Decimal("99"),
-        best_ask=Decimal("101"),
-        bid_quantity=Decimal("6"),
-        ask_quantity=Decimal("4"),
+        best_bid=Decimal(99),
+        best_ask=Decimal(101),
+        bid_quantity=Decimal(6),
+        ask_quantity=Decimal(4),
     )
 
 

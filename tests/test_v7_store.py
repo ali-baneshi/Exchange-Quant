@@ -1,5 +1,5 @@
-import os
 import json
+import os
 import sqlite3
 from decimal import Decimal
 
@@ -41,8 +41,8 @@ def _trade(identifier, timestamp, side):
         exchange_time_ms=timestamp,
         received_time_ms=timestamp + 1,
         aggressor_side=side,
-        price=Decimal("100"),
-        quantity=Decimal("1"),
+        price=Decimal(100),
+        quantity=Decimal(1),
     )
 
 
@@ -109,10 +109,10 @@ def test_feature_window_is_causal(tmp_path):
                 symbol="btcusdt",
                 exchange_time_ms=900,
                 received_time_ms=901,
-                best_bid=Decimal("99"),
-                best_ask=Decimal("101"),
-                bid_quantity=Decimal("6"),
-                ask_quantity=Decimal("4"),
+                best_bid=Decimal(99),
+                best_ask=Decimal(101),
+                bid_quantity=Decimal(6),
+                ask_quantity=Decimal(4),
             )
         )
         store.save_trade(_trade("past", 999, "buy"))
@@ -154,8 +154,8 @@ def test_forged_eligible_probability_is_rejected(tmp_path):
             end_ms=2000,
             buy_count=1,
             sell_count=1,
-            buy_quantity=Decimal("1"),
-            sell_quantity=Decimal("1"),
+            buy_quantity=Decimal(1),
+            sell_quantity=Decimal(1),
             coverage_complete=True,
         )
         store.resolve_slot("run-1", 1000, label, 2)
@@ -172,4 +172,3 @@ def test_forged_eligible_probability_is_rejected(tmp_path):
             store.eligible_rows("run-1")
     finally:
         store.close()
-

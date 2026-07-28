@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import AsyncIterator, Protocol, TypeAlias
+from typing import Protocol, TypeAlias
 
 from exchange_q.domain import BookEvent, TradeEvent
 

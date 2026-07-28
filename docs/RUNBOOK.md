@@ -27,10 +27,13 @@ for diagnostic connectivity tests only. Do not use them for a primary study.
 ## Diagnostic Stream
 
 ```bash
+DATABASE="runs/diagnostic.sqlite3"
+RUN_ID="diagnostic-$(date +%Y%m%d-%H%M%S)"
+
 ./scripts/exchange-q run \
-  --database runs/diagnostic.sqlite3 \
+  --database "$DATABASE" \
   --artifact artifacts/v7/normalized-born.json \
-  --run-id diagnostic-001 \
+  --run-id "$RUN_ID" \
   --provider htx-ws \
   --horizon-s 60 \
   --lookback-s 300 \
@@ -51,23 +54,26 @@ shutdown, and resource behavior only.
 
 ```bash
 ./scripts/exchange-q monitor \
-  --database runs/diagnostic.sqlite3 \
-  --run-id diagnostic-001
+  --database "$DATABASE" \
+  --run-id "$RUN_ID"
 
 ./scripts/exchange-q monitor \
-  --database runs/diagnostic.sqlite3 \
-  --run-id diagnostic-001 \
+  --database "$DATABASE" \
+  --run-id "$RUN_ID" \
   --watch \
   --interval-s 5
 
 ./scripts/exchange-q status \
-  --database runs/diagnostic.sqlite3 \
-  --run-id diagnostic-001
+  --database "$DATABASE" \
+  --run-id "$RUN_ID"
 
 ./scripts/exchange-q stop \
-  --database runs/diagnostic.sqlite3 \
-  --run-id diagnostic-001
+  --database "$DATABASE" \
+  --run-id "$RUN_ID"
 ```
+
+Shell variables are names, not values. Use `"$RUN_ID"` after assigning it; do not
+write `"$btcusdt-v7-..."`, which asks the shell to expand a different variable.
 
 The run terminal now prints startup, heartbeat, slot, and terminal progress lines.
 `monitor --watch` refreshes one dashboard in an interactive terminal and exits when

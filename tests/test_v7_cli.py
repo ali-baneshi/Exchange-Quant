@@ -41,6 +41,40 @@ def test_missing_artifact_does_not_create_database(tmp_path):
     assert not database.exists()
 
 
+def test_empty_database_path_is_rejected():
+    with pytest.raises(SystemExit):
+        main(
+            [
+                "run",
+                "--database",
+                "",
+                "--artifact",
+                "artifact.json",
+                "--target-eligible",
+                "1",
+            ]
+        )
+
+
+def test_empty_run_id_is_rejected(tmp_path):
+    database = tmp_path / "run.sqlite3"
+    with pytest.raises(SystemExit):
+        main(
+            [
+                "run",
+                "--database",
+                str(database),
+                "--artifact",
+                "artifact.json",
+                "--run-id",
+                "",
+                "--target-eligible",
+                "1",
+            ]
+        )
+    assert not database.exists()
+
+
 def test_existing_run_requires_explicit_resume(tmp_path, monkeypatch):
     artifact_object = ModelArtifact(
         "normalized-born-v1",

@@ -6,21 +6,23 @@ import os
 import sqlite3
 import statistics
 import time
+from collections.abc import Iterator
 from contextlib import contextmanager
 from decimal import Decimal
-from typing import Any, Iterator
+from itertools import pairwise
+from typing import Any
 
+from exchange_q import IMPLEMENTATION_REVISION, SCHEMA_VERSION
 from exchange_q.domain import (
+    TERMINAL_FORECAST_STATUSES,
     BookEvent,
     FeatureWindow,
     Forecast,
     ForecastStatus,
     Label,
     RunManifest,
-    TERMINAL_FORECAST_STATUSES,
     TradeEvent,
 )
-from exchange_q import IMPLEMENTATION_REVISION, SCHEMA_VERSION
 
 
 ALLOWED_TRANSITIONS = {
@@ -430,7 +432,7 @@ class V7Store:
         prices = [float(row["price"]) for row in trade_rows]
         log_returns = [
             math.log(current / previous)
-            for previous, current in zip(prices, prices[1:])
+            for previous, current in pairwise(prices)
             if previous > 0 and current > 0
         ]
         book = json.loads(book_row["data_json"])

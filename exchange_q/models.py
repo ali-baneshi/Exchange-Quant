@@ -4,8 +4,9 @@ import cmath
 import hashlib
 import json
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Protocol, Sequence
+from typing import Protocol
 
 import numpy as np
 from scipy.optimize import minimize

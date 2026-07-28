@@ -99,7 +99,7 @@ class HtxWebSocketProvider:
                                     self._detail = f"malformed book event: {exc}"
             except asyncio.CancelledError:
                 raise
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 self._detail = f"{type(exc).__name__}: {exc}"
                 self._connected = False
                 self._reconnects += 1

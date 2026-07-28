@@ -8,7 +8,6 @@ from typing import Any
 from exchange_q.domain import TERMINAL_FORECAST_STATUSES, ForecastStatus
 from exchange_q.store import V7Store
 
-
 TERMINAL_STATUS_NAMES = {status.value for status in TERMINAL_FORECAST_STATUSES}
 
 

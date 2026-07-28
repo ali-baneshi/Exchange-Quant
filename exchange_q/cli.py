@@ -13,8 +13,8 @@ import uuid
 from exchange_q.analysis import required_sample_size, score_baselines, score_rows
 from exchange_q.artifacts import load_artifact, save_artifact
 from exchange_q.domain import FeatureWindow, RunManifest
-from exchange_q.monitor import format_monitor_report, monitor_snapshot
 from exchange_q.models import NormalizedBornModel
+from exchange_q.monitor import format_monitor_report, monitor_snapshot
 from exchange_q.providers.htx_ws import HtxWebSocketProvider
 from exchange_q.runner import LiveRunner
 from exchange_q.store import V7Store
@@ -97,6 +97,10 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv=None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
+    for argument in ("database", "artifact", "run_id", "output"):
+        value = getattr(args, argument, None)
+        if value is not None and not str(value).strip():
+            parser.error(f"--{argument.replace('_', '-')} must not be empty")
     if args.command == "fit":
         with open(args.dataset, encoding="utf-8") as handle:
             rows = json.load(handle)

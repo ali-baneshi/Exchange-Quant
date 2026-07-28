@@ -103,7 +103,7 @@ class LiveRunner:
                 await heartbeat_task
             except asyncio.CancelledError:
                 pass
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 heartbeat_error = exc
                 terminal_status = "failed"
                 detail = f"{type(exc).__name__}: {exc}"
