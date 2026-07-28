@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import json
+import os
 
 from exchange_q.models import ModelArtifact
 
 
 def save_artifact(path: str, artifact: ModelArtifact) -> None:
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
     with open(path, "w", encoding="utf-8") as handle:
         json.dump(
             {

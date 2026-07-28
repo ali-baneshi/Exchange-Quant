@@ -1,6 +1,6 @@
 # Schema v7
 
-**Current revision:** `v7r1`
+**Current revision:** `v7r2`
 
 ## Run Manifest
 
@@ -60,4 +60,3 @@ leases, and lifecycle events are normalized tables.
 
 JSON is produced only by `exchange-q export` from a consistent database snapshot.
 It is not accepted as resumable state.
-

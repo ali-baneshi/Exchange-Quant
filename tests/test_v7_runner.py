@@ -106,13 +106,7 @@ def test_resume_continues_after_terminal_slot_without_duplicate(tmp_path):
         _trade("edge", 2000, "buy"),
     ]
     asyncio.run(
-        LiveRunner(
-            store,
-            ReplayProvider(first_events),
-            manifest,
-            artifact,
-            max_terminal_slots=1,
-        ).run()
+        LiveRunner(store, ReplayProvider(first_events), manifest, artifact).run()
     )
     second_events = [
         _book(2100),
@@ -127,5 +121,39 @@ def test_resume_continues_after_terminal_slot_without_duplicate(tmp_path):
         rows = store.eligible_rows(manifest.run_id)
         assert len(rows) == 2
         assert len({row["slot_start_ms"] for row in rows}) == 2
+    finally:
+        store.close()
+
+
+def test_terminal_slot_limit_is_a_hard_bound_during_catch_up(tmp_path):
+    model = NormalizedBornModel()
+    artifact = ModelArtifact(model.model_id, (0.0, 0.5, 1.0, 0.0, 1.0), 10)
+    manifest = RunManifest(
+        run_id="bounded-run",
+        symbol="btcusdt",
+        provider="replay",
+        model_artifact_hash=artifact.artifact_hash,
+        feature_policy="causal_trade_book_v1",
+        label_policy="half_open_streamed_trades_v1",
+        primary_metric="per_trade_negative_log_likelihood",
+        horizon_ms=1000,
+        lookback_ms=1000,
+        cadence_ms=1000,
+        minimum_label_trades=2,
+        target_eligible=100,
+        terminal_slot_limit=2,
+    )
+    events = [
+        _trade("first", 100, "buy"),
+        _trade("jump", 10_000, "sell"),
+    ]
+    store = V7Store(str(tmp_path / "bounded.sqlite3"))
+    store.create_run(manifest)
+    try:
+        asyncio.run(LiveRunner(store, ReplayProvider(events), manifest, artifact).run())
+        status = store.status(manifest.run_id)
+        assert status["status"] == "diagnostic_limit"
+        assert sum(status["forecast_counts"].values()) == 2
+        assert status["forecast_counts"] == {"skipped": 2}
     finally:
         store.close()

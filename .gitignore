@@ -10,6 +10,7 @@ research/kline/_kline_cache/
 core/_live_results/
 
 # Live runtime artifacts
+runs/
 live_quantum_v3.pid
 live_quantum_v3.log
 live_exploratory.pid

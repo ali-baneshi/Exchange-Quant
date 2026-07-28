@@ -1,0 +1,31 @@
+{
+  "baseline_parameters": [
+    [
+      "development_prior_v1",
+      [
+        0.5
+      ]
+    ],
+    [
+      "regularized_logistic_v1",
+      [
+        -5.113927586231239e-08,
+        0.41865058673606254,
+        0.8373013225955673,
+        -1.2663613365272444e-07,
+        1.9457186073122098e-08
+      ]
+    ]
+  ],
+  "calibration_intercept": 0.0,
+  "calibration_slope": 1.0,
+  "development_rows": 4,
+  "model_id": "normalized_born_v1",
+  "parameters": [
+    -0.0026313708521312888,
+    0.46188304387974966,
+    0.019115848268059375,
+    0.14281882843867136,
+    0.8889744751690026
+  ]
+}

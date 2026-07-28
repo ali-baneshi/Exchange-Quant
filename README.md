@@ -6,7 +6,7 @@ trading profitability.
 
 ## Current Contract
 
-The canonical implementation is **schema v7 / revision v7r1**:
+The canonical implementation is **schema v7 / revision v7r2**:
 
 - raw trades and book observations are persisted before feature construction;
 - features use the causal half-open window `[t-lookback, t)`;
@@ -42,6 +42,7 @@ Python 3.10 or newer is required.
   --max-terminal-slots 10
 
 ./scripts/exchange-q status --database runs/example.sqlite3 --run-id RUN_ID
+./scripts/exchange-q monitor --database runs/example.sqlite3 --run-id RUN_ID --watch
 ./scripts/exchange-q stop --database runs/example.sqlite3 --run-id RUN_ID
 ./scripts/exchange-q analyze --database runs/example.sqlite3 --run-id RUN_ID
 ./scripts/exchange-q export \

@@ -15,11 +15,14 @@ and a provider whose health reports `coverage_certifiable=true`.
 ## Fit
 
 ```bash
-./scripts/exchange-q fit development.json \
+./scripts/exchange-q fit tests/fixtures/development-minimal.json \
   --output artifacts/v7/normalized-born.json
 ```
 
 Development data must precede the primary evaluation period.
+
+The bundled fixture and generated `artifacts/v7/normalized-born.json` artifact are
+for diagnostic connectivity tests only. Do not use them for a primary study.
 
 ## Diagnostic Stream
 
@@ -37,6 +40,9 @@ Development data must precede the primary evaluation period.
   --max-terminal-slots 10
 ```
 
+Use a fresh run ID or omit `--run-id` and copy the generated ID printed at startup.
+Reusing an existing ID is rejected unless `--resume` is supplied explicitly.
+
 The bundled HTX adapter cannot certify continuity, so these labels remain
 ineligible by design. This command tests connectivity, persistence, scheduling,
 shutdown, and resource behavior only.
@@ -44,6 +50,16 @@ shutdown, and resource behavior only.
 ## Monitor and Stop
 
 ```bash
+./scripts/exchange-q monitor \
+  --database runs/diagnostic.sqlite3 \
+  --run-id diagnostic-001
+
+./scripts/exchange-q monitor \
+  --database runs/diagnostic.sqlite3 \
+  --run-id diagnostic-001 \
+  --watch \
+  --interval-s 5
+
 ./scripts/exchange-q status \
   --database runs/diagnostic.sqlite3 \
   --run-id diagnostic-001
@@ -53,9 +69,15 @@ shutdown, and resource behavior only.
   --run-id diagnostic-001
 ```
 
+The run terminal now prints startup, heartbeat, slot, and terminal progress lines.
+`monitor --watch` refreshes one dashboard in an interactive terminal and exits when
+the run finishes or when its writer becomes dead, stale, or orphaned.
+
 The stop command verifies the process working directory and command line before
-sending `SIGTERM`. The foreground runner closes the active socket, updates run
-state, and releases its lease on `SIGINT` or `SIGTERM`.
+sending `SIGTERM`, waits for full exit, and uses `SIGKILL` only after the configurable
+timeout. It removes a verified stale lease if forced termination prevented normal
+cleanup. The foreground runner closes the active socket, updates run state, and
+releases its lease on `SIGINT` or `SIGTERM`.
 
 ## Restart
 

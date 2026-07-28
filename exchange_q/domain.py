@@ -232,8 +232,9 @@ class RunManifest:
     cadence_ms: int
     minimum_label_trades: int
     target_eligible: int
+    terminal_slot_limit: int | None = None
     schema_version: int = 7
-    implementation_revision: str = "v7r1"
+    implementation_revision: str = "v7r2"
 
     def __post_init__(self) -> None:
         if not self.run_id or not self.symbol or not self.provider:
@@ -251,6 +252,8 @@ class RunManifest:
             raise ValueError("canonical forecasts must not overlap")
         if self.minimum_label_trades <= 0 or self.target_eligible <= 0:
             raise ValueError("sample requirements must be positive")
+        if self.terminal_slot_limit is not None and self.terminal_slot_limit <= 0:
+            raise ValueError("terminal_slot_limit must be positive when set")
 
     def to_record(self) -> dict[str, Any]:
         return asdict(self)

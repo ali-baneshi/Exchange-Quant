@@ -1,0 +1,62 @@
+[
+  {
+    "feature": {
+      "start_ms": 1,
+      "end_ms": 60000,
+      "trade_count": 20,
+      "buy_count": 6,
+      "sell_count": 14,
+      "buy_ratio": 0.3,
+      "signed_imbalance": -0.8,
+      "spread": 0.001,
+      "volatility": 0.01
+    },
+    "buy_count": 30,
+    "total_count": 100
+  },
+  {
+    "feature": {
+      "start_ms": 60001,
+      "end_ms": 120000,
+      "trade_count": 20,
+      "buy_count": 8,
+      "sell_count": 12,
+      "buy_ratio": 0.4,
+      "signed_imbalance": -0.4,
+      "spread": 0.001,
+      "volatility": 0.01
+    },
+    "buy_count": 40,
+    "total_count": 100
+  },
+  {
+    "feature": {
+      "start_ms": 120001,
+      "end_ms": 180000,
+      "trade_count": 20,
+      "buy_count": 12,
+      "sell_count": 8,
+      "buy_ratio": 0.6,
+      "signed_imbalance": 0.4,
+      "spread": 0.001,
+      "volatility": 0.01
+    },
+    "buy_count": 60,
+    "total_count": 100
+  },
+  {
+    "feature": {
+      "start_ms": 180001,
+      "end_ms": 240000,
+      "trade_count": 20,
+      "buy_count": 14,
+      "sell_count": 6,
+      "buy_ratio": 0.7,
+      "signed_imbalance": 0.8,
+      "spread": 0.001,
+      "volatility": 0.01
+    },
+    "buy_count": 70,
+    "total_count": 100
+  }
+]

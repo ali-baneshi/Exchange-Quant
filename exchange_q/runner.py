@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 import signal
+import time
 import uuid
 
 from exchange_q.domain import BookEvent, ForecastStatus, RunManifest, TradeEvent
@@ -21,7 +22,7 @@ class LiveRunner:
         provider,
         manifest: RunManifest,
         artifact: ModelArtifact,
-        max_terminal_slots: int | None = None,
+        progress_interval_s: float = 10.0,
     ):
         if artifact.artifact_hash != manifest.model_artifact_hash:
             raise ValueError("manifest and model artifact hashes differ")
@@ -37,7 +38,8 @@ class LiveRunner:
         self._stopping = asyncio.Event()
         self._last_slot_start: int | None = None
         self._stream_start_ms: int | None = None
-        self.max_terminal_slots = max_terminal_slots
+        self.progress_interval_s = max(1.0, float(progress_interval_s))
+        self._last_progress_monotonic = 0.0
 
     async def run(self) -> None:
         self.store.acquire_lease(
@@ -49,6 +51,7 @@ class LiveRunner:
         self.store.set_run_status(self.manifest.run_id, "running")
         self._restore_progress()
         self._install_signal_handlers()
+        self._emit_progress("started", force=True)
         terminal_status = "stopped"
         detail = ""
         heartbeat_task = asyncio.create_task(self._heartbeat_loop())
@@ -82,8 +85,8 @@ class LiveRunner:
                     )
                 )
                 if (
-                    self.max_terminal_slots is not None
-                    and terminal_slots >= self.max_terminal_slots
+                    self.manifest.terminal_slot_limit is not None
+                    and terminal_slots >= self.manifest.terminal_slot_limit
                 ):
                     terminal_status = "diagnostic_limit"
                     break
@@ -106,6 +109,7 @@ class LiveRunner:
                 detail = f"{type(exc).__name__}: {exc}"
             self.store.set_run_status(self.manifest.run_id, terminal_status, detail)
             self.store.release_lease(self.manifest.run_id, self.owner_id)
+            self._emit_progress(terminal_status, force=True)
             if heartbeat_error is not None:
                 raise heartbeat_error
 
@@ -120,6 +124,8 @@ class LiveRunner:
             return
 
         while self._last_slot_start <= current_slot.start_ms:
+            if self._terminal_limit_reached():
+                return
             active_start = self._last_slot_start
             active_end = active_start + self.manifest.horizon_ms
             row = self.store.connection.execute(
@@ -131,9 +137,13 @@ class LiveRunner:
             ).fetchone()
             if row and row["status"] == ForecastStatus.SCHEDULED:
                 self._create_or_skip(active_start, active_end)
+                if self._terminal_limit_reached():
+                    return
                 if active_start == current_slot.start_ms:
                     return
             self._resolve(active_start, active_end)
+            if self._terminal_limit_reached():
+                return
             next_slot = self.scheduler.next_after(active_start)
             self.store.schedule_slot(
                 self.manifest.run_id, next_slot.start_ms, next_slot.end_ms
@@ -152,6 +162,7 @@ class LiveRunner:
             self.store.skip_slot(
                 self.manifest.run_id, slot_start_ms, ["insufficient_feature_data"]
             )
+            self._emit_progress("slot_skipped", force=True)
             return
         forecast = self.model.predict(features, self.artifact)
         self.store.create_forecast(
@@ -161,6 +172,7 @@ class LiveRunner:
             forecast,
             self.artifact.artifact_hash,
         )
+        self._emit_progress("forecast_created", force=True)
 
     def _resolve(self, slot_start_ms: int, slot_end_ms: int) -> None:
         row = self.store.connection.execute(
@@ -195,12 +207,13 @@ class LiveRunner:
             slot_start_ms,
             slot_end_ms,
         )
-        self.store.resolve_slot(
+        status = self.store.resolve_slot(
             self.manifest.run_id,
             slot_start_ms,
             label,
             self.manifest.minimum_label_trades,
         )
+        self._emit_progress(status.value, force=True)
 
     def _restore_progress(self) -> None:
         row = self.store.connection.execute(
@@ -227,6 +240,23 @@ class LiveRunner:
         )
         self._last_slot_start = next_slot.start_ms
 
+    def _terminal_limit_reached(self) -> bool:
+        limit = self.manifest.terminal_slot_limit
+        if limit is None:
+            return False
+        counts = self.store.status(self.manifest.run_id)["forecast_counts"]
+        terminal_slots = sum(
+            counts.get(status.value, 0)
+            for status in (
+                ForecastStatus.SKIPPED,
+                ForecastStatus.RESOLVED_ELIGIBLE,
+                ForecastStatus.RESOLVED_INELIGIBLE,
+                ForecastStatus.EXPIRED,
+                ForecastStatus.FAILED,
+            )
+        )
+        return terminal_slots >= limit
+
     def stop(self) -> None:
         self._stopping.set()
         try:
@@ -238,6 +268,36 @@ class LiveRunner:
         while not self._stopping.is_set():
             await asyncio.sleep(self.HEARTBEAT_INTERVAL_S)
             self.store.heartbeat(self.manifest.run_id, self.owner_id)
+            self._emit_progress("heartbeat")
+
+    def _emit_progress(self, reason: str, force: bool = False) -> None:
+        now = time.monotonic()
+        if not force and now - self._last_progress_monotonic < self.progress_interval_s:
+            return
+        self._last_progress_monotonic = now
+        status = self.store.status(self.manifest.run_id)
+        counts = status["forecast_counts"]
+        terminal = sum(
+            counts.get(slot_status.value, 0)
+            for slot_status in (
+                ForecastStatus.SKIPPED,
+                ForecastStatus.RESOLVED_ELIGIBLE,
+                ForecastStatus.RESOLVED_INELIGIBLE,
+                ForecastStatus.EXPIRED,
+                ForecastStatus.FAILED,
+            )
+        )
+        eligible = counts.get(ForecastStatus.RESOLVED_ELIGIBLE.value, 0)
+        health = self.provider.health()
+        limit = self.manifest.terminal_slot_limit
+        terminal_text = f"{terminal}/{limit}" if limit is not None else str(terminal)
+        print(
+            f"[exchange-q] run={self.manifest.run_id} event={reason} "
+            f"eligible={eligible}/{self.manifest.target_eligible} "
+            f"terminal={terminal_text} connected={health.connected} "
+            f"reconnects={health.reconnects} gaps={health.sequence_gaps}",
+            flush=True,
+        )
 
     def _install_signal_handlers(self) -> None:
         loop = asyncio.get_running_loop()
