@@ -12,6 +12,8 @@ Mode:
 """
 
 import argparse
+import atexit
+import fcntl
 import hashlib
 import json
 import os
@@ -33,6 +35,9 @@ from config import (
     FLAT_THRESHOLD,
     MIN_SIGNIFICANCE_N,
     LIVE_SCHEMA_VERSION,
+    LIVE_MODEL_VERSION,
+    MAX_LOCAL_EXCHANGE_OFFSET_MS,
+    MAX_CONSECUTIVE_NO_DATA,
     TRADE_CAPTURE_SIZE,
     TRADE_RETENTION_DAYS,
     feature_lookback_s,
@@ -76,11 +81,26 @@ def _wall_ms(time_fn=None):
 def _observation(features, symbol, step, run_id=None, time_fn=None):
     now = (time_fn or time.time)()
     obs = dict(features)
+    exchange_timestamp_ms = features.get("timestamp") or features.get("ticker_timestamp_ms")
+    clock_offset_ms = (
+        int(now * 1000) - int(exchange_timestamp_ms)
+        if exchange_timestamp_ms
+        else None
+    )
+    quality_flags = list(obs.get("quality_flags", []))
+    if (
+        clock_offset_ms is not None
+        and abs(clock_offset_ms) > MAX_LOCAL_EXCHANGE_OFFSET_MS
+    ):
+        quality_flags.append("clock_skew")
     obs.update({
         "id": step,
         "run_id": run_id,
         "symbol": symbol,
         "wall_time_ms": int(now * 1000),
+        "exchange_timestamp_ms": exchange_timestamp_ms,
+        "clock_offset_ms": clock_offset_ms,
+        "quality_flags": quality_flags,
         "time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now)),
     })
     return obs
@@ -88,6 +108,43 @@ def _observation(features, symbol, step, run_id=None, time_fn=None):
 
 def _exit_code_for_stop_reason(stop_reason):
     return 0 if stop_reason == "max_resolved" else 2
+
+
+def _release_run_resources(store, lock_file):
+    """Close durable resources without masking the original failure."""
+    if store is not None:
+        try:
+            store.close()
+        except Exception:
+            pass
+    if lock_file is not None:
+        try:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+        except (OSError, ValueError):
+            pass
+        try:
+            lock_file.close()
+        except (OSError, ValueError):
+            pass
+
+
+def _write_pid_file(path):
+    if not path:
+        return
+    with open(path, "w") as handle:
+        handle.write(f"{os.getpid()}\n")
+
+
+def _remove_pid_file(path):
+    if not path:
+        return
+    try:
+        with open(path) as handle:
+            if handle.read().strip() != str(os.getpid()):
+                return
+        os.remove(path)
+    except OSError:
+        pass
 
 
 def _signal_from_prediction(pred):
@@ -110,8 +167,10 @@ def _prediction_record(
         "symbol": symbol,
         "mode": mode,
         "status": "pending",
-        "created_at_ms": obs["wall_time_ms"],
-        "target_at_ms": obs["wall_time_ms"] + int(horizon_s * 1000),
+        "created_at_ms": obs.get("exchange_timestamp_ms") or obs["wall_time_ms"],
+        "target_at_ms": (
+            obs.get("exchange_timestamp_ms") or obs["wall_time_ms"]
+        ) + int(horizon_s * 1000),
         "created_time": obs["time"],
         "horizon_s": horizon_s,
         "entry_price": obs["price"],
@@ -152,7 +211,7 @@ def _resolve_prediction(pred, obs, sample_interval_s=60.0, trades=None, horizon_
     target_ms = pred.get("target_at_ms", obs["wall_time_ms"])
     start_ms = pred.get("created_at_ms", target_ms)
     end_ms = target_ms
-    resolved_ms = obs["wall_time_ms"]
+    resolved_ms = obs.get("exchange_timestamp_ms") or obs["wall_time_ms"]
     min_trades = min_forward_trades(horizon_s)
     forward = None
     forward_count = 0
@@ -192,6 +251,7 @@ def _resolve_prediction(pred, obs, sample_interval_s=60.0, trades=None, horizon_
     pred.update({
         "status": "resolved",
         "resolved_at_ms": resolved_ms,
+        "resolved_wall_time_ms": obs["wall_time_ms"],
         "resolved_time": obs["time"],
         "exit_price": exit_price,
         "resolved_actual": actual,
@@ -212,8 +272,16 @@ def _resolve_prediction(pred, obs, sample_interval_s=60.0, trades=None, horizon_
         "net_return": net_return,
         "resolution_lag_s": resolution_lag_s,
         "score_eligible": (
-            not any(f in DISQUALIFYING_QUALITY_FLAGS for f in pred.get("entry_quality_flags", []))
-            and not any(f in DISQUALIFYING_QUALITY_FLAGS for f in exit_quality_flags)
+            resolved_label == "forward_window"
+            and bool(label_complete)
+            and not any(
+                f in DISQUALIFYING_QUALITY_FLAGS
+                for f in pred.get("entry_quality_flags", [])
+            )
+            and not any(
+                f in DISQUALIFYING_QUALITY_FLAGS
+                for f in exit_quality_flags
+            )
         ),
     })
     return pred
@@ -227,10 +295,10 @@ def _write_run_state(output_path, store, symbol, mode, horizon_s, sample_interva
         "run_id": run_id,
         "experiment_id": run_id,
         "config_hash": config_hash,
-        "model_version": "born_constructive_v1",
+        "model_version": LIVE_MODEL_VERSION,
         "data_policy_version": DATA_POLICY_VERSION,
         "experiment_manifest": {
-            "model_version": "born_constructive_v1",
+            "model_version": LIVE_MODEL_VERSION,
             "label_policy": "captured_trade_window_v1",
             "primary_metric": "paired_mae_difference",
             "primary_horizon_s": horizon_s,
@@ -305,7 +373,7 @@ def _config_hash(symbol, mode, horizon_s, sample_interval, window):
             "horizon_s": float(horizon_s),
             "sample_interval_s": float(sample_interval),
             "window": int(window),
-            "model_version": "born_constructive_v1",
+            "model_version": LIVE_MODEL_VERSION,
             "data_policy_version": DATA_POLICY_VERSION,
             "label_policy": "captured_trade_window_v1",
             "schema_version": LIVE_SCHEMA_VERSION,
@@ -330,7 +398,10 @@ def _resume_paths(run_id):
 def run(symbol="btcusdt", n_steps=None, delay=3600.0, window=15, mode="ensemble",
         sample_interval=60.0, max_resolved=None, max_fetches=None,
         max_runtime_s=0.0, resume_run_id=None,
-        _time_fn=None, _monotonic_fn=None, _sleep_fn=None, _data_provider=None):
+        _time_fn=None, _monotonic_fn=None, _sleep_fn=None, _data_provider=None,
+        pid_file=None):
+    global _running
+    _running = True
     signal.signal(signal.SIGTERM, _handle_signal)
     signal.signal(signal.SIGINT, _handle_signal)
 
@@ -356,6 +427,8 @@ def run(symbol="btcusdt", n_steps=None, delay=3600.0, window=15, mode="ensemble"
     last_ts = None
     horizon_s = delay
     fetch_count = 0
+    duplicate_streak = 0
+    no_data_streak = 0
     started_monotonic = monotonic_fn()
     stop_reason = "user_stop"
 
@@ -376,12 +449,32 @@ def run(symbol="btcusdt", n_steps=None, delay=3600.0, window=15, mode="ensemble"
         output_path = base + ".json"
 
     config_hash = _config_hash(symbol, mode, horizon_s, sample_interval, window)
-    store = LiveRunStore(db_path)
-    store.prune_trades_before(_wall_ms(time_fn) - TRADE_RETENTION_DAYS * 24 * 3600 * 1000)
-    restored = store.load_state()
+    lock_path = db_path + ".lock"
+    lock_file = open(lock_path, "a+")
+    try:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError as exc:
+        lock_file.close()
+        raise RuntimeError(f"Live run is already active: {run_id}") from exc
+    store = None
+    try:
+        store = LiveRunStore(db_path)
+        store.prune_trades_before(_wall_ms(time_fn) - TRADE_RETENTION_DAYS * 24 * 3600 * 1000)
+        restored = store.load_state()
+    except Exception:
+        _release_run_resources(store, lock_file)
+        raise
+    _write_pid_file(pid_file)
+    atexit.register(_remove_pid_file, pid_file)
+    atexit.register(_release_run_resources, store, lock_file)
     if restored:
+        if restored.get("schema_version") != LIVE_SCHEMA_VERSION:
+            _release_run_resources(store, lock_file)
+            _remove_pid_file(pid_file)
+            raise ValueError("Stored run is not compatible with the current live schema")
         if restored.get("config_hash") != config_hash:
-            store.close()
+            _release_run_resources(store, lock_file)
+            _remove_pid_file(pid_file)
             raise ValueError("Resume configuration does not match stored run")
         document = store.export_document(restored)
         observations = document.get("observations", [])
@@ -413,6 +506,11 @@ def run(symbol="btcusdt", n_steps=None, delay=3600.0, window=15, mode="ensemble"
     print(f"  PID={os.getpid()}")
     print(f"  Started at {time.strftime('%Y-%m-%d %H:%M:%S')}")
     print()
+    _write_run_state(
+        output_path, store, symbol, mode, horizon_s, sample_interval, window,
+        observations, predictions, ensemble if mode == "ensemble" else None,
+        run_id=run_id, config_hash=config_hash,
+    )
 
     while _running:
         limit_reason = _stop_reason(
@@ -433,21 +531,37 @@ def run(symbol="btcusdt", n_steps=None, delay=3600.0, window=15, mode="ensemble"
             break
 
         if hasattr(hd, "fetch_features_with_trades"):
-            features, captured_trades = hd.fetch_features_with_trades(
-                symbol,
-                trade_size=TRADE_CAPTURE_SIZE,
-                feature_lookback_s=feature_lookback_s(horizon_s),
-            )
+            try:
+                features, captured_trades = hd.fetch_features_with_trades(
+                    symbol,
+                    trade_size=TRADE_CAPTURE_SIZE,
+                    feature_lookback_s=feature_lookback_s(horizon_s),
+                    max_trade_age_s=max(2.0 * sample_interval, 5.0),
+                )
+            except TypeError as exc:
+                if "max_trade_age_s" not in str(exc):
+                    raise
+                features, captured_trades = hd.fetch_features_with_trades(
+                    symbol,
+                    trade_size=TRADE_CAPTURE_SIZE,
+                    feature_lookback_s=feature_lookback_s(horizon_s),
+                )
         else:
             features = hd.fetch_features(
                 symbol,
                 feature_lookback_s=feature_lookback_s(horizon_s),
+                max_trade_age_s=max(2.0 * sample_interval, 5.0),
             )
             captured_trades = hd.fetch_trades(symbol, size=TRADE_CAPTURE_SIZE) if features else []
         if features is None:
+            no_data_streak += 1
             print(f"  [{i:5d}] {time.strftime('%H:%M:%S')} NO DATA — retrying in {sample_interval:.0f}s")
+            if no_data_streak >= MAX_CONSECUTIVE_NO_DATA:
+                stop_reason = "no_data"
+                break
             sleep_fn(sample_interval)
             continue
+        no_data_streak = 0
 
         obs = _observation(features, symbol, i, run_id=run_id, time_fn=time_fn)
         store.save_trade_batch(
@@ -460,19 +574,28 @@ def run(symbol="btcusdt", n_steps=None, delay=3600.0, window=15, mode="ensemble"
         duplicate_ts = ts == last_ts
         if duplicate_ts:
             obs.setdefault("quality_flags", []).append("duplicate_timestamp")
+            duplicate_streak += 1
+        else:
+            duplicate_streak = 0
         accepted = store.save_observation(obs)
         if not accepted:
             duplicate_ts = True
             obs.setdefault("quality_flags", []).append("duplicate_timestamp")
+            duplicate_streak += 1
         else:
             observations.append(obs)
         if not duplicate_ts and accepted:
             last_ts = ts
             history.append(features)
+        if duplicate_streak >= 3:
+            stop_reason = "duplicate_timestamp"
+            break
 
         state_dirty = False
         for pred in predictions:
-            if pred["status"] == "pending" and pending_due(pred, obs["wall_time_ms"]):
+            if pred["status"] == "pending" and pending_due(
+                pred, obs.get("exchange_timestamp_ms") or obs["wall_time_ms"]
+            ):
                 label_window = store.trade_window(
                     symbol,
                     pred.get("created_at_ms", obs["wall_time_ms"]),
@@ -592,13 +715,13 @@ def run(symbol="btcusdt", n_steps=None, delay=3600.0, window=15, mode="ensemble"
     print(f"\n  Stopped at {time.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"  Collected {len(observations)} observations, {len(predictions)} predictions")
 
+    _write_run_state(
+        output_path, store, symbol, mode, horizon_s, sample_interval, window,
+        observations, predictions, ensemble if mode == "ensemble" else None,
+        run_id=run_id, status="completed" if stop_reason == "max_resolved" else "incomplete",
+        stop_reason=stop_reason, config_hash=config_hash,
+    )
     if predictions or observations:
-        _write_run_state(
-            output_path, store, symbol, mode, horizon_s, sample_interval, window,
-            observations, predictions, ensemble if mode == "ensemble" else None,
-            run_id=run_id, status="completed" if stop_reason == "max_resolved" else "incomplete",
-            stop_reason=stop_reason, config_hash=config_hash,
-        )
         print(f"  Saved to {output_path}")
 
         summary = _summarize_resolved(predictions)
@@ -629,7 +752,10 @@ def run(symbol="btcusdt", n_steps=None, delay=3600.0, window=15, mode="ensemble"
             print(f"\n  FINAL: exploratory summary only — need n>={MIN_SIGNIFICANCE_N} for significance report")
         else:
             print("\n  FINAL: exploratory only — need at least 30 resolved eligible predictions")
-    store.close()
+    else:
+        print(f"  Saved terminal state to {output_path}")
+    _release_run_resources(store, lock_file)
+    _remove_pid_file(pid_file)
     return _exit_code_for_stop_reason(stop_reason)
 
 
@@ -645,6 +771,7 @@ if __name__ == "__main__":
     parser.add_argument("--max-fetches", type=int, default=None)
     parser.add_argument("--max-runtime-s", type=float, default=0.0)
     parser.add_argument("--resume", default=None, metavar="RUN_ID")
+    parser.add_argument("--pid-file", default=None, metavar="PATH")
     args = parser.parse_args()
 
     if args.legacy:
@@ -675,4 +802,5 @@ if __name__ == "__main__":
         max_fetches=max_fetches,
         max_runtime_s=args.max_runtime_s,
         resume_run_id=args.resume,
+        pid_file=args.pid_file,
     ))

@@ -21,7 +21,7 @@ from collections import Counter
 from config import MIN_SIGNIFICANCE_N
 
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "_live_results")
-SCHEMA_VERSIONS = (2, 3, 4, 5)
+SCHEMA_VERSIONS = (2, 3, 4, 5, 6)
 
 
 def load_results(path):
@@ -99,7 +99,7 @@ def _normalize_results(data):
     if isinstance(data, dict) and data.get("schema_version") in SCHEMA_VERSIONS:
         predictions = _dedupe_predictions(data.get("predictions", []))
         resolved = [p for p in predictions if p.get("status") == "resolved"]
-        if data.get("schema_version") == 5:
+        if data.get("schema_version") in (5, 6):
             resolved = [
                 p for p in resolved
                 if p.get("resolved_label") == "forward_window"
@@ -194,7 +194,24 @@ def analyze(results, min_resolved=3, show_segments=True):
             w = meta_doc["ensemble_weights"]
             print(f"  Ensemble w:     q={w[0]:.2f} v={w[1]:.2f}")
         print(f"  Observations:   {observations}")
-        print(f"  Predictions:    {total_predictions} total, {pending} pending, {len(results)} resolved (eligible)")
+        resolved_total = sum(
+            1 for p in meta_doc.get("predictions", []) if p.get("status") == "resolved"
+        )
+        excluded = resolved_total - len(results)
+        reasons = Counter()
+        for pred in meta_doc.get("predictions", []):
+            if pred.get("status") != "resolved" or pred in results:
+                continue
+            reasons.update(pred.get("entry_quality_flags", []))
+            reasons.update(pred.get("exit_quality_flags", []))
+            if pred.get("resolved_label") != "forward_window":
+                reasons.update(["non_forward_label"])
+            if pred.get("label_capture_complete") is not True:
+                reasons.update(["incomplete_capture"])
+        print(f"  Predictions:    {total_predictions} total, {pending} pending, "
+              f"{resolved_total} resolved, {len(results)} eligible, {excluded} excluded")
+        if reasons:
+            print(f"  Exclusions:     {dict(reasons)}")
         print(f"  Horizon:        {meta_doc.get('horizon_s')}s")
 
     n = len(results)
@@ -394,8 +411,8 @@ def discover_paths(args):
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description="Analyze live pipeline JSON results")
     parser.add_argument("paths", nargs="*", help="Result JSON paths (default: _live_results/*.json)")
-    parser.add_argument("--schema-version", type=int, choices=list(SCHEMA_VERSIONS), default=5,
-                        help="Only analyze this schema version (default: 5 primary corpus)")
+    parser.add_argument("--schema-version", type=int, choices=list(SCHEMA_VERSIONS), default=6,
+                        help="Only analyze this schema version (default: 6 current corpus)")
     parser.add_argument("--run-id", default=None, help="Only analyze matching run_id")
     parser.add_argument("--exclude-collector", action="store_true",
                         help="Skip collected_* list-format JSON files")
@@ -412,7 +429,7 @@ def main(argv=None):
 
     if not paths:
         print(f"No result files found in {RESULTS_DIR}")
-        print(f"Usage: {sys.argv[0]} [--schema-version 5] [path/to/results.json ...]")
+        print(f"Usage: {sys.argv[0]} [--schema-version 6] [path/to/results.json ...]")
         return
 
     all_summaries = []
@@ -442,8 +459,8 @@ def main(argv=None):
             summary["path"] = path
             all_summaries.append(summary)
 
-    if args.schema_version == 5 and skipped_legacy:
-        print(f"\n  NOTE: skipped {skipped_legacy} file(s) not matching --schema-version 5")
+    if args.schema_version in (5, 6) and skipped_legacy:
+        print(f"\n  NOTE: skipped {skipped_legacy} file(s) not matching --schema-version {args.schema_version}")
 
     if len(all_summaries) > 1:
         groups = {}

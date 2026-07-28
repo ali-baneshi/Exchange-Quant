@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import sqlite3
 import sys
 import tempfile
 import unittest
@@ -159,6 +160,18 @@ class LiveRunStoreTests(unittest.TestCase):
                 window = store.trade_window("btcusdt", 1_000, 5_000, 1.0)
                 self.assertFalse(window["capture_complete"])
                 self.assertEqual(window["capture_max_gap_ms"], 4_000)
+            finally:
+                store.close()
+
+    def test_only_one_pending_forecast_is_allowed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = LiveRunStore(os.path.join(tmp, "run.sqlite3"))
+            try:
+                store.save_forecast({"id": "f-1", "step": 1, "status": "pending"})
+                with self.assertRaises(sqlite3.IntegrityError):
+                    store.save_forecast({"id": "f-2", "step": 2, "status": "pending"})
+                store.save_forecast({"id": "f-1", "step": 1, "status": "resolved"})
+                store.save_forecast({"id": "f-2", "step": 2, "status": "pending"})
             finally:
                 store.close()
 

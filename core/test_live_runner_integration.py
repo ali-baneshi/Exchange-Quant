@@ -38,10 +38,12 @@ class FakeProvider:
         self._index = 0
 
     def fetch_trades(self, symbol, size=50):
+        current_step = max(self._index - 1, 0)
+        current_ms = 1_000_000 + current_step * 1000
         return [
             {
-                "trade_id": str(i),
-                "ts": i * 1000,
+                "trade_id": f"{current_step}-{i}",
+                "ts": current_ms - i,
                 "direction": "buy" if i % 2 == 0 else "sell",
                 "amount": 1.0,
                 "price": 100.0,
@@ -59,6 +61,16 @@ class FakeProvider:
     def fetch_features_with_trades(self, symbol, trade_size=50, feature_lookback_s=None):
         features = self.fetch_features(symbol, feature_lookback_s=feature_lookback_s)
         return features, self.fetch_trades(symbol, size=trade_size)
+
+
+class EmptyProvider:
+    def __init__(self):
+        self.calls = 0
+
+    def fetch_features_with_trades(self, symbol, trade_size=50, feature_lookback_s=None,
+                                   max_trade_age_s=None):
+        self.calls += 1
+        return None, []
 
 
 class LiveRunnerIntegrationTests(unittest.TestCase):
@@ -110,7 +122,7 @@ class LiveRunnerIntegrationTests(unittest.TestCase):
             try:
                 import pipeline_live_ensemble as ple
                 ple.RESULTS_DIR = tmp
-                wall = [0.0]
+                wall = [1_000.0]
                 mono = [0.0]
                 provider = FakeProvider(features)
                 code = run(
@@ -151,7 +163,7 @@ class LiveRunnerIntegrationTests(unittest.TestCase):
             orig_results = ple.RESULTS_DIR
             ple.RESULTS_DIR = tmp
             try:
-                wall = [0.0]
+                wall = [1_000.0]
                 mono = [0.0]
                 provider = FakeProvider(features)
 
@@ -219,6 +231,63 @@ class LiveRunnerIntegrationTests(unittest.TestCase):
                 self.assertTrue(found_json.endswith(".json"))
             finally:
                 ple.RESULTS_DIR = orig
+
+    def test_stops_after_repeated_no_data_and_persists_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            import json
+            import pipeline_live_ensemble as ple
+            original_results = ple.RESULTS_DIR
+            ple.RESULTS_DIR = tmp
+            try:
+                wall = [1_000.0]
+                provider = EmptyProvider()
+                code = run(
+                    symbol="btcusdt",
+                    mode="quantum",
+                    delay=10.0,
+                    window=3,
+                    sample_interval=1.0,
+                    max_resolved=1,
+                    _time_fn=lambda: wall[0],
+                    _monotonic_fn=lambda: wall[0],
+                    _sleep_fn=lambda seconds: wall.__setitem__(0, wall[0] + seconds),
+                    _data_provider=provider,
+                )
+                self.assertEqual(code, 2)
+                self.assertEqual(provider.calls, 12)
+                json_files = [name for name in os.listdir(tmp) if name.endswith(".json")]
+                self.assertEqual(len(json_files), 1)
+                with open(os.path.join(tmp, json_files[0])) as handle:
+                    state = json.load(handle)
+                self.assertEqual(state["stop_reason"], "no_data")
+            finally:
+                ple.RESULTS_DIR = original_results
+
+    def test_pid_file_is_removed_after_runner_exit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            import pipeline_live_ensemble as ple
+            original_results = ple.RESULTS_DIR
+            ple.RESULTS_DIR = tmp
+            try:
+                pidfile = os.path.join(tmp, "live.pid")
+                wall = [1_000.0]
+                code = run(
+                    symbol="btcusdt",
+                    mode="quantum",
+                    delay=10.0,
+                    window=3,
+                    sample_interval=1.0,
+                    max_fetches=1,
+                    _time_fn=lambda: wall[0],
+                    _monotonic_fn=lambda: wall[0],
+                    _sleep_fn=lambda seconds: wall.__setitem__(0, wall[0] + seconds),
+                    _data_provider=FakeProvider([_feature_step(0)]),
+                    pid_file=pidfile,
+                )
+                self.assertEqual(code, 2)
+                self.assertFalse(os.path.exists(pidfile))
+            finally:
+                ple.RESULTS_DIR = original_results
 
 
 if __name__ == "__main__":

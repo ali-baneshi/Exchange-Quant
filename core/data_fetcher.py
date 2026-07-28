@@ -24,7 +24,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import re
 
 from config import (
+    DEFAULT_MAX_TRADE_AGE_S,
     FEATURE_LOOKBACK_FLOOR_S,
+    MAX_FUTURE_TIMESTAMP_MS,
     MAX_ENDPOINT_SKEW_MS,
     MIN_FORWARD_WINDOW_TRADES,
     min_forward_trades,
@@ -176,21 +178,24 @@ class HuobiData:
         )
 
     def fetch_features(self, symbol="btcusdt", max_attempts=3,
-                       feature_lookback_s=None):
+                       feature_lookback_s=None, max_trade_age_s=None):
         features, _ = self.fetch_features_with_trades(
             symbol,
             max_attempts=max_attempts,
             feature_lookback_s=feature_lookback_s,
+            max_trade_age_s=max_trade_age_s,
         )
         return features
 
     def fetch_features_with_trades(self, symbol="btcusdt", max_attempts=3,
-                                   trade_size=30, feature_lookback_s=None):
+                                   trade_size=30, feature_lookback_s=None,
+                                   max_trade_age_s=None):
         symbol = _validate_symbol(symbol)
         for attempt in range(max_attempts):
             t, d, tr, k = self.fetch_all(symbol, trade_size=trade_size)
             f = compute_live_features(
                 t, d, tr, k, feature_lookback_s=feature_lookback_s,
+                max_trade_age_s=max_trade_age_s,
             )
             if f is not None:
                 return f, tr
@@ -254,7 +259,10 @@ def _best_bid_ask(ticker):
     return float(bid[0]), float(ask[0])
 
 
-def compute_live_features(ticker, depth, trades, klines, feature_lookback_s=None):
+def compute_live_features(
+    ticker, depth, trades, klines, feature_lookback_s=None,
+    max_trade_age_s=DEFAULT_MAX_TRADE_AGE_S,
+):
     if not ticker:
         return None
     ba = _best_bid_ask(ticker)
@@ -285,11 +293,25 @@ def compute_live_features(ticker, depth, trades, klines, feature_lookback_s=None
     sell_amount = sum(t["amount"] for t in feature_trades if t["direction"] != "buy")
     total_amount = buy_amount + sell_amount
     buy_ratio_volume = buy_amount / total_amount if total_amount > 0 else buy_ratio
-    total_bid = sum(q for _, q in depth.get("bids", []))
-    total_ask = sum(q for _, q in depth.get("asks", []))
+    try:
+        depth_levels = list(depth.get("bids", [])) + list(depth.get("asks", []))
+        if any(
+            len(level) < 2
+            or not all(isinstance(value, (int, float)) and math.isfinite(value) for value in level[:2])
+            or level[0] <= 0
+            or level[1] < 0
+            for level in depth_levels
+        ):
+            return None
+        total_bid = sum(q for _, q in depth.get("bids", []))
+        total_ask = sum(q for _, q in depth.get("asks", []))
+    except (TypeError, ValueError):
+        return None
     total_liq = total_bid + total_ask
+    if ticker["close"] <= 0 or ticker["high"] < ticker["low"] or total_liq < 0:
+        return None
     imbalance = (total_bid - total_ask) / total_liq if total_liq > 0 else 0.0
-    price = ticker["close"] or 1
+    price = ticker["close"]
     price_range = (ticker["high"] - ticker["low"]) / price
     vol_change = 0.0
     if klines and len(klines) >= 3:
@@ -323,6 +345,20 @@ def compute_live_features(ticker, depth, trades, klines, feature_lookback_s=None
     if ticker_ts and depth_ts:
         if abs(ticker_ts - depth_ts) > MAX_ENDPOINT_SKEW_MS:
             quality_flags.append("endpoint_skew")
+    if ticker_ts and trade_window_end_ms:
+        max_age_ms = int(
+            (DEFAULT_MAX_TRADE_AGE_S if max_trade_age_s is None else max_trade_age_s)
+            * 1000
+        )
+        if trade_window_end_ms < ticker_ts - max_age_ms:
+            quality_flags.append("stale_trades")
+        if trade_window_end_ms > ticker_ts + MAX_FUTURE_TIMESTAMP_MS:
+            quality_flags.append("future_timestamp")
+    if ticker_ts and abs(int(time.time() * 1000) - int(ticker_ts)) > max(
+        MAX_ENDPOINT_SKEW_MS,
+        int((max_trade_age_s or DEFAULT_MAX_TRADE_AGE_S) * 1000),
+    ):
+        quality_flags.append("clock_skew")
 
     return {
         "timestamp": ticker.get("ts", 0),

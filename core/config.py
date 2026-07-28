@@ -26,7 +26,9 @@ MIN_SIGNIFICANCE_N = 720
 # Live protocol defaults
 DEFAULT_WINDOW = 15
 DEFAULT_HORIZON_S = 3600.0
-LIVE_SCHEMA_VERSION = 5
+LIVE_SCHEMA_VERSION = 6
+LIVE_MODEL_VERSION = "born_constructive_v2"
+DATA_POLICY_VERSION = 4
 
 # Raw trade capture for primary live labels.
 TRADE_CAPTURE_SIZE = 2000
@@ -36,7 +38,10 @@ MAX_TRADE_CAPTURE_GAP_FACTOR = 2
 # Live feature buy_ratio uses only recent trades so the lookback matches the
 # forecast horizon scale (full API pages span ~1h and flatten the signal).
 FEATURE_LOOKBACK_FLOOR_S = 60.0
-DATA_POLICY_VERSION = 3
+MAX_LOCAL_EXCHANGE_OFFSET_MS = 5000
+MAX_FUTURE_TIMESTAMP_MS = 1000
+DEFAULT_MAX_TRADE_AGE_S = 120.0
+MAX_CONSECUTIVE_NO_DATA = 12
 
 
 def feature_lookback_s(horizon_s=None):
@@ -60,6 +65,13 @@ MAX_FORWARD_WINDOW_MIN_TRADES = 15
 DISQUALIFYING_QUALITY_FLAGS = frozenset({
     "crossed_market",
     "no_trades",
+    "empty_depth",
+    "stale_trades",
+    "missing_timestamp",
+    "future_timestamp",
+    "stale_ticker",
+    "clock_skew",
+    "malformed_market_data",
     "endpoint_skew",
     "late_resolution",
     "short_forward_window",

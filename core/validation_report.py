@@ -133,13 +133,13 @@ def live_born_status():
         try:
             with open(p) as f:
                 data = json.load(f)
-            if isinstance(data, dict) and data.get("schema_version") in (2, 3, 4, 5):
+            if isinstance(data, dict) and data.get("schema_version") in (2, 3, 4, 5, 6):
                 preds = data.get("predictions", [])
                 resolved += sum(
                     1 for r in preds
                     if isinstance(r, dict) and r.get("status") == "resolved"
                 )
-                if data.get("schema_version") == 5:
+                if data.get("schema_version") in (5, 6):
                     status.setdefault("schema_v5_files", 0)
                     status["schema_v5_files"] += 1
                     if data.get("run_id"):

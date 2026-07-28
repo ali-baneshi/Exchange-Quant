@@ -38,6 +38,8 @@ class LiveRunStore:
                 status TEXT NOT NULL,
                 data_json TEXT NOT NULL
             );
+            CREATE UNIQUE INDEX IF NOT EXISTS forecasts_one_pending
+                ON forecasts(status) WHERE status = 'pending';
             CREATE TABLE IF NOT EXISTS trades (
                 symbol TEXT NOT NULL,
                 trade_key TEXT NOT NULL,
@@ -58,9 +60,16 @@ class LiveRunStore:
                 newest_trade_ms INTEGER,
                 saturated INTEGER NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS store_metadata (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
             CREATE INDEX IF NOT EXISTS trade_capture_batches_symbol_time
                 ON trade_capture_batches(symbol, captured_at_ms);
             """
+        )
+        self.conn.execute(
+            "INSERT OR IGNORE INTO store_metadata(key, value) VALUES('store_version', '2')"
         )
         self.conn.commit()
 
@@ -233,12 +242,13 @@ class LiveRunStore:
         for index, row in enumerate(batches):
             saturated = row[1]
             oldest_trade_ms = row[2]
-            if not saturated:
+            if not saturated or oldest_trade_ms is None or index == 0:
                 continue
-            frontier_ms = (
-                batches[index - 1][0] if index else int(start_ms) - expected_gap_ms
-            )
-            if oldest_trade_ms is not None and int(oldest_trade_ms) > frontier_ms:
+            previous_newest_ms = batches[index - 1][3]
+            if (
+                previous_newest_ms is not None
+                and int(oldest_trade_ms) > int(previous_newest_ms)
+            ):
                 saturated_hole = True
                 break
         complete = bool(trades and batches) and not saturated_hole
