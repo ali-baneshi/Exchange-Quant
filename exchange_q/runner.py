@@ -111,8 +111,8 @@ class LiveRunner:
             if heartbeat_error is not None:
                 raise heartbeat_error
 
-    async def _advance(self, exchange_time_ms: int) -> None:
-        current_slot = self.scheduler.slot_at_or_before(exchange_time_ms)
+    async def _advance(self, observed_time_ms: int) -> None:
+        current_slot = self.scheduler.slot_at_or_before(observed_time_ms)
         if self._last_slot_start is None:
             next_slot = self.scheduler.next_after(current_slot.start_ms)
             self._last_slot_start = next_slot.start_ms
@@ -121,7 +121,7 @@ class LiveRunner:
             )
             return
 
-        while self._last_slot_start <= current_slot.start_ms:
+        while self._last_slot_start <= observed_time_ms:
             if self._terminal_limit_reached():
                 return
             active_start = self._last_slot_start
@@ -133,14 +133,43 @@ class LiveRunner:
                 """,
                 (self.manifest.run_id, active_start),
             ).fetchone()
-            if row and row["status"] == ForecastStatus.SCHEDULED:
+            if not row:
+                raise RuntimeError(f"missing active slot {active_start}")
+            status = ForecastStatus(row["status"])
+            if status == ForecastStatus.SCHEDULED:
+                if observed_time_ms < active_start:
+                    return
                 self._create_or_skip(active_start, active_end)
                 if self._terminal_limit_reached():
                     return
-                if active_start == current_slot.start_ms:
+                row = self.store.connection.execute(
+                    """
+                    SELECT status FROM forecast_slots
+                    WHERE run_id = ? AND slot_start_ms = ?
+                    """,
+                    (self.manifest.run_id, active_start),
+                ).fetchone()
+                status = ForecastStatus(row["status"])
+            if status in (ForecastStatus.CREATED, ForecastStatus.PENDING_LABEL):
+                if observed_time_ms < active_end:
                     return
-            self._resolve(active_start, active_end)
+                self._resolve(active_start, active_end)
             if self._terminal_limit_reached():
+                return
+            row = self.store.connection.execute(
+                """
+                SELECT status FROM forecast_slots
+                WHERE run_id = ? AND slot_start_ms = ?
+                """,
+                (self.manifest.run_id, active_start),
+            ).fetchone()
+            if ForecastStatus(row["status"]) not in (
+                ForecastStatus.SKIPPED,
+                ForecastStatus.RESOLVED_ELIGIBLE,
+                ForecastStatus.RESOLVED_INELIGIBLE,
+                ForecastStatus.EXPIRED,
+                ForecastStatus.FAILED,
+            ):
                 return
             next_slot = self.scheduler.next_after(active_start)
             self.store.schedule_slot(

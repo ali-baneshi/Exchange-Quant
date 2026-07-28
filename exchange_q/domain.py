@@ -234,7 +234,7 @@ class RunManifest:
     target_eligible: int
     terminal_slot_limit: int | None = None
     schema_version: int = 7
-    implementation_revision: str = "v7r2"
+    implementation_revision: str = "v7r3"
 
     def __post_init__(self) -> None:
         if not self.run_id or not self.symbol or not self.provider:

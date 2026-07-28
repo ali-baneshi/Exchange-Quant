@@ -486,10 +486,14 @@ class V7Store:
             "manifest": json.loads(run["manifest_json"]),
             "forecast_counts": counts,
             "lease": dict(lease) if lease else None,
+            "integrity": self.run_integrity(run_id),
         }
 
     def eligible_rows(self, run_id: str) -> list[dict[str, Any]]:
-        manifest = self.status(run_id)["manifest"]
+        status = self.status(run_id)
+        if not status["integrity"]["valid"]:
+            raise ValueError("run timing integrity is invalid; analysis is blocked")
+        manifest = status["manifest"]
         rows = self.connection.execute(
             """
             SELECT slot_start_ms, slot_end_ms, model_id, artifact_hash,
@@ -531,6 +535,121 @@ class V7Store:
             if label["trade_count"] < manifest["minimum_label_trades"]:
                 raise ValueError("eligible row does not meet the minimum trade count")
         return parsed_rows
+
+    def run_integrity(self, run_id: str) -> dict[str, Any]:
+        run = self.connection.execute(
+            "SELECT manifest_json, status FROM runs WHERE run_id = ?", (run_id,)
+        ).fetchone()
+        if not run:
+            raise KeyError(run_id)
+        manifest = json.loads(run["manifest_json"])
+        transitions: dict[tuple[int, str], int] = {}
+        for row in self.connection.execute(
+            """
+            SELECT slot_start_ms, payload_json, created_at_ms
+            FROM lifecycle_events
+            WHERE run_id = ? AND event_type = 'forecast_transition'
+            ORDER BY event_id
+            """,
+            (run_id,),
+        ):
+            payload = json.loads(row["payload_json"])
+            transitions[(row["slot_start_ms"], payload["to"])] = row["created_at_ms"]
+
+        errors: list[dict[str, Any]] = []
+        checked_slots = 0
+        for slot in self.connection.execute(
+            """
+            SELECT slot_start_ms, slot_end_ms, status, forecast_json, label_json
+            FROM forecast_slots WHERE run_id = ? ORDER BY slot_start_ms
+            """,
+            (run_id,),
+        ):
+            checked_slots += 1
+            slot_start = int(slot["slot_start_ms"])
+            slot_end = int(slot["slot_end_ms"])
+            if slot["forecast_json"]:
+                created_at = transitions.get((slot_start, ForecastStatus.CREATED.value))
+                if created_at is None:
+                    errors.append(
+                        {"code": "missing_forecast_transition", "slot_start_ms": slot_start}
+                    )
+                elif created_at < slot_start:
+                    errors.append(
+                        {
+                            "code": "forecast_created_early",
+                            "slot_start_ms": slot_start,
+                            "observed_at_ms": created_at,
+                            "required_at_ms": slot_start,
+                        }
+                    )
+            status = ForecastStatus(slot["status"])
+            if status in (
+                ForecastStatus.RESOLVED_ELIGIBLE,
+                ForecastStatus.RESOLVED_INELIGIBLE,
+            ):
+                resolved_at = transitions.get((slot_start, status.value))
+                if resolved_at is None:
+                    errors.append(
+                        {"code": "missing_resolution_transition", "slot_start_ms": slot_start}
+                    )
+                elif resolved_at < slot_end:
+                    errors.append(
+                        {
+                            "code": "label_resolved_early",
+                            "slot_start_ms": slot_start,
+                            "observed_at_ms": resolved_at,
+                            "required_at_ms": slot_end,
+                        }
+                    )
+                if not slot["label_json"]:
+                    errors.append(
+                        {"code": "missing_resolved_label", "slot_start_ms": slot_start}
+                    )
+                else:
+                    persisted_count = json.loads(slot["label_json"])["trade_count"]
+                    raw_count = self.connection.execute(
+                        """
+                        SELECT COUNT(*) FROM trades
+                        WHERE provider = ? AND symbol = ?
+                          AND exchange_time_ms >= ? AND exchange_time_ms < ?
+                        """,
+                        (
+                            manifest["provider"],
+                            manifest["symbol"],
+                            slot_start,
+                            slot_end,
+                        ),
+                    ).fetchone()[0]
+                    if persisted_count != raw_count:
+                        errors.append(
+                            {
+                                "code": "label_trade_count_mismatch",
+                                "slot_start_ms": slot_start,
+                                "persisted_count": persisted_count,
+                                "raw_count": raw_count,
+                            }
+                        )
+
+        codes: dict[str, int] = {}
+        for error in errors:
+            codes[error["code"]] = codes.get(error["code"], 0) + 1
+        valid = not errors
+        terminal = run["status"] != "running"
+        return {
+            "valid": valid,
+            "state": (
+                "valid"
+                if valid and terminal
+                else "valid_so_far"
+                if valid
+                else "quarantined"
+            ),
+            "checked_slots": checked_slots,
+            "error_count": len(errors),
+            "error_codes": codes,
+            "errors": errors,
+        }
 
     def export_run(self, run_id: str) -> dict[str, Any]:
         self.connection.execute("BEGIN")

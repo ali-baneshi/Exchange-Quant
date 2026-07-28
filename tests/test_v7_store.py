@@ -172,3 +172,42 @@ def test_forged_eligible_probability_is_rejected(tmp_path):
             store.eligible_rows("run-1")
     finally:
         store.close()
+
+
+def test_early_resolution_is_quarantined_and_blocks_analysis(tmp_path):
+    store = V7Store(str(tmp_path / "quarantined.sqlite3"))
+    try:
+        store.create_run(_manifest())
+        store.save_trade(_trade("label-1", 1000, "buy"))
+        store.mark_coverage("replay", "btcusdt", 1000, 2000, True)
+        store.schedule_slot("run-1", 1000, 2000)
+        features = FeatureWindow(0, 1000, 2, 1, 1, 0.5, 0.0, 0.001, 0.0)
+        store.create_forecast(
+            "run-1",
+            1000,
+            features,
+            Forecast("model", 0.5, 0.5),
+            "hash",
+        )
+        label = store.build_label("replay", "btcusdt", 1000, 2000)
+        store.resolve_slot("run-1", 1000, label, 1)
+        store.connection.execute(
+            """
+            UPDATE lifecycle_events SET created_at_ms = 1500
+            WHERE run_id = 'run-1' AND slot_start_ms = 1000
+              AND event_type = 'forecast_transition'
+              AND json_extract(payload_json, '$.to') = 'resolved_eligible'
+            """
+        )
+        store.save_trade(_trade("label-2", 1500, "sell"))
+
+        integrity = store.status("run-1")["integrity"]
+        assert integrity["state"] == "quarantined"
+        assert integrity["error_codes"] == {
+            "label_resolved_early": 1,
+            "label_trade_count_mismatch": 1,
+        }
+        with pytest.raises(ValueError, match="timing integrity"):
+            store.eligible_rows("run-1")
+    finally:
+        store.close()

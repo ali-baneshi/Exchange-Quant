@@ -400,3 +400,28 @@ The suite does not cover the highest-risk production cases:
 **Current empirical claim:** Existing artifacts do not establish Born-rule superiority. Several exploratory results are below the constant-0.5 null baseline, and production evidence is far below the required 720 eligible observations.  
 **Security risk:** Low for exchange-account compromise; moderate for operational/data-integrity risk.  
 **Recommended status:** No-go for new primary claims; continue only as diagnostic collection after the immediate data-integrity fixes.
+
+## Schema-v7 Timing Incident — July 28, 2026
+
+Two schema-v7r2 HTX diagnostic runs were inspected after completion:
+
+- `btcusdt-diagnostic-20260728-124453-c3e38bf0`
+- `btcusdt-diagnostic-20260728-130620-02577b4a`
+
+Both SQLite databases pass `PRAGMA integrity_check`, have no active lease, and
+reached their configured 10-slot diagnostic limit. Connectivity and raw persistence
+worked: the first run stored 83 trades and 547 books; the second stored 58 trades
+and 580 books.
+
+The forecast lifecycle was invalid. Every pending forecast was resolved roughly
+58.5 seconds before its 60-second label window ended. The first database persisted
+one labeled trade while its raw events reconstruct 82 trades in the same windows.
+The second persisted one while raw events reconstruct 57. The defect was caused by
+resolving `pending_label` on the next event inside the active slot instead of waiting
+for `slot_end_ms`.
+
+These databases are immutable audit evidence and must not be repaired in place.
+Schema-v7r3 status/export integrity checks classify both as `quarantined`, and
+analysis is blocked. They support only connectivity, raw persistence, forecast
+creation, and shutdown observations. They support no accuracy, profitability, or
+model-quality claim.

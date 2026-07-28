@@ -6,7 +6,7 @@ trading profitability.
 
 ## Current Contract
 
-The canonical implementation is **schema v7 / revision v7r2**:
+The canonical implementation is **schema v7 / revision v7r3**:
 
 - raw trades and book observations are persisted before feature construction;
 - features use the causal half-open window `[t-lookback, t)`;

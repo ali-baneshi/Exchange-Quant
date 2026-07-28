@@ -1,4 +1,5 @@
 import asyncio
+import json
 from decimal import Decimal
 
 from exchange_q.domain import BookEvent, RunManifest, TradeEvent
@@ -218,5 +219,60 @@ def test_live_scheduling_uses_receipt_time_to_avoid_stale_slot_catch_up(tmp_path
         assert [(row["slot_start_ms"], row["status"]) for row in slots] == [
             (11_000, "skipped")
         ]
+    finally:
+        store.close()
+
+
+def test_pending_label_does_not_resolve_before_slot_end(tmp_path):
+    model = NormalizedBornModel()
+    artifact = ModelArtifact(model.model_id, (0.0, 0.5, 1.0, 0.0, 1.0), 10)
+    manifest = RunManifest(
+        run_id="timing-run",
+        symbol="btcusdt",
+        provider="replay",
+        model_artifact_hash=artifact.artifact_hash,
+        feature_policy="causal_trade_book_v1",
+        label_policy="half_open_streamed_trades_v1",
+        primary_metric="per_trade_negative_log_likelihood",
+        horizon_ms=1000,
+        lookback_ms=1000,
+        cadence_ms=1000,
+        minimum_label_trades=2,
+        target_eligible=1,
+    )
+    events = [
+        _book(100),
+        _trade("history-1", 200, "buy"),
+        _trade("history-2", 800, "sell"),
+        _trade("label-start", 1000, "buy"),
+        _trade("inside-early", 1001, "sell"),
+        _trade("inside-late", 1999, "buy"),
+        _trade("boundary-end", 2000, "sell"),
+    ]
+    store = V7Store(str(tmp_path / "timing.sqlite3"))
+    store.create_run(manifest)
+    try:
+        asyncio.run(LiveRunner(store, ReplayProvider(events), manifest, artifact).run())
+        row = store.connection.execute(
+            """
+            SELECT label_json FROM forecast_slots
+            WHERE run_id = ? AND slot_start_ms = 1000
+            """,
+            (manifest.run_id,),
+        ).fetchone()
+        label = json.loads(row["label_json"])
+        assert label["trade_count"] == 3
+        assert label["buy_count"] == 2
+        assert label["sell_count"] == 1
+        resolution = store.connection.execute(
+            """
+            SELECT created_at_ms FROM lifecycle_events
+            WHERE run_id = ? AND slot_start_ms = 1000
+              AND event_type = 'forecast_transition'
+              AND json_extract(payload_json, '$.to') = 'resolved_eligible'
+            """,
+            (manifest.run_id,),
+        ).fetchone()
+        assert resolution is not None
     finally:
         store.close()

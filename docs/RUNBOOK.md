@@ -37,10 +37,10 @@ shutdown, and resource behavior only.
 ./scripts/exchange-q run --profile diagnostic --display log
 ```
 
-The dashboard shows the generated database path, run identity, provider health,
-stream activity and rates, current slot phase, accurate next action, terminal
-progress, exclusion totals, recent transitions, and the HTX evidence warning.
-Heartbeat lines are not printed.
+The compact dashboard shows provider health, rolling one-minute activity, current
+slot phase, accurate next action, live label count, bounded progress, latest result,
+and timing-integrity state. Full paths appear only in the final summary. Heartbeat
+lines and raw lifecycle dumps are not printed.
 
 Press `Ctrl-C` in the run terminal. The foreground runner closes the active socket,
 updates run state, releases its lease, and exits completely.
@@ -84,6 +84,10 @@ Resume requires explicit identity paths. A configuration mismatch is rejected.
 
 No significance or superiority claim is permitted merely because these commands
 produce output.
+
+`status`, `export`, and `analyze` validate lifecycle timing. Runs with forecasts
+created before their slot or labels resolved before the horizon ends are
+quarantined. Analysis fails closed rather than consuming them.
 
 ## Failure Rules
 
