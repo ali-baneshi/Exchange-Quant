@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "exchange-q"
+version = "7.0.0"
+description = "Fail-closed live trade-flow forecasting research infrastructure"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=2.0,<3",
+  "scipy>=1.14,<2",
+  "statsmodels>=0.14,<1",
+  "websockets>=15,<17",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=9,<10",
+  "ruff>=0.12,<1",
+]
+
+[project.scripts]
+exchange-q = "exchange_q.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["exchange_q*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+

@@ -1,123 +1,89 @@
-# Exchange-Q Architecture
+# Exchange-Q v7 Architecture
 
-> Current references: [schema v6](docs/SCHEMA_V6.md) ·
-> [statistics](docs/STATISTICS.md) · [runbook](docs/RUNBOOK.md) ·
-> [evidence status](docs/EVIDENCE_STATUS.md)
+## Trust Boundary
 
-## Boundary
-
-Exchange-Q evaluates a prediction hypothesis using public market data. The current
-runtime identity is schema v6 with implementation revision `v6r1` and acquisition
-policy v1. It does not
-authenticate to an exchange, place orders, maintain positions, or demonstrate
-profitability. The architecture keeps three non-comparable experiments separate:
-
-| Question | Data and target | Canonical path |
-|---|---|---|
-| Are classical candle features useful? | Historical OHLCV; binary direction | `backtest.py` |
-| Does the gated Born policy improve live trade-flow prediction? | Live depth/trades; future `buy_ratio` | `pipeline_live_ensemble.py` |
-| Does the formula behave under assumptions? | Simulated market target | `experiment.py` |
-
-## Live Data Flow
+The system accepts untrusted public market events and produces auditable forecast
+records. It has no authenticated exchange or order-execution capability.
 
 ```text
-exchange ticker + depth + trades
-        │
-        ├─ validate timestamps, freshness, spread, and endpoint agreement
-        ├─ persist and deduplicate raw trades in SQLite
-        └─ accept a feature observation when its exchange timestamp is new
-                    │
-                    ▼
-     recent feature history reaches warmup window?
-                    │
-                    ▼
-     create one pending forecast anchored to exchange time
-                    │
-                    ▼
-     capture future trades until target time is covered
-                    │
-          ┌─────────┴──────────┐
-          ▼                    ▼
-complete forward label    incomplete/unavailable label
-          │                    │
-          ▼                    ▼
-eligible paired errors    diagnostics only, excluded
-          │
-          ▼
-SQLite authoritative state → atomic JSON export → schema-aware analyzer
+provider adapter
+    │
+    ├── validate and normalize immutable events
+    ├── persist raw trades/books
+    └── expose explicit health and continuity capability
+            │
+            ▼
+fixed non-overlapping scheduler
+            │
+            ├── causal feature window [t-lookback, t)
+            ├── frozen model artifact
+            └── pending label window [t, t+horizon)
+                        │
+                        ▼
+             complete coverage proof?
+                 │               │
+                yes              no
+                 │               │
+       resolved eligible   resolved ineligible
+                 │
+                 ▼
+proper scoring and calibration analysis
 ```
 
-Feature `buy_ratio` uses the preceding `max(60, horizon_s)` seconds. The resolved
-target is separately computed from locally captured future trades in the inclusive
-forecast interval. This separation prevents using the target window as a feature.
-
-## Core Components
+## Components
 
 | Component | Responsibility |
 |---|---|
-| `data_fetcher.py` | Fetches untrusted exchange endpoints; returns structured per-endpoint status, latency, errors, raw trades, features, and quality flags |
-| `live_store.py` | SQLite state, observation/forecast persistence, raw-trade capture, deduplication, retention |
-| `live_protocol.py` | Forecast timing helpers and pending lifecycle |
-| `pipeline_live_ensemble.py` | Canonical v6 runner, quality gating, resolution, export, signals, cleanup |
-| `quantum_core.py`, `delta_adaptive.py` | Born-rule construction, phase calculation, and fallback metadata |
-| `baselines.py`, `ensemble.py` | Classical comparator and optional adaptive ensemble |
-| `validation.py`, `analyze_live_results.py` | Paired-error inference and eligible-row aggregation |
+| `exchange_q/domain.py` | Typed events, windows, forecasts, labels, manifests, and lifecycle states |
+| `exchange_q/providers/` | Provider protocol, replay adapter, and diagnostic HTX stream adapter |
+| `exchange_q/models.py` | Frozen normalized Born-inspired model and defensible baselines |
+| `exchange_q/scheduler.py` | Horizon-aligned, non-overlapping forecast slots |
+| `exchange_q/store.py` | Transactional schema-v7 SQLite state, leases, events, labels, and exports |
+| `exchange_q/runner.py` | Acquisition supervision, deterministic recovery, and lifecycle orchestration |
+| `exchange_q/analysis.py` | Proper scores, calibration, HAC paired inference, and power calculations |
+| `exchange_q/cli.py` | Single operational interface |
 
-## State, Persistence, and Concurrency
+## Mathematical Boundary
 
-Each run has an SQLite database plus an atomic JSON export. SQLite uses WAL mode and
-full synchronous writes. Unique indexes prevent duplicate accepted observations,
-duplicate trades, and more than one pending forecast.
+The model is quantum-inspired, not quantum computation. Buy and sell outcome
+amplitudes are constructed separately and normalized:
 
-The runner takes a non-blocking `fcntl` lock on its run database, validates a
-resumed run’s schema and configuration hash, and closes its store/unlocks on normal
-exit or `SIGINT`/`SIGTERM`. The start scripts run in the foreground, write a PID
-file for the process lifetime, and are designed to stop cleanly on `Ctrl-C`.
+```text
+p_buy = |A_buy|² / (|A_buy|² + |A_sell|²)
+```
 
-SQLite is authoritative. JSON checkpoints are written on material lifecycle events
-and bounded periodic intervals. JSON is useful for inspection but is not a substitute for
-the database during recovery or when it briefly lags a state transaction.
+Signed imbalance is preserved. Constructive and destructive phases remain
+representable. There is no saturation gate, output clipping, destructive fallback,
+or silent substitution of a classical model.
 
-## Prediction Policy and Gates
+Parameters are fitted on time-ordered development data and represented by a hashed
+immutable artifact. Primary runs do not update model parameters online.
 
-The recorded `prediction` is the actual evaluated policy output. It is not always
-the raw Born-rule value:
+## State and Recovery
 
-- bounded feature history is partitioned into high/low buckets;
-- the runner records a classical component and interference term;
-- destructive/negative behavior, unusable history, and saturation/constructive
-  overshoot can use a fallback;
-- `fallback_reason` identifies the execution path and must be reported as a
-  diagnostic.
+Forecast state transitions are validated transactionally:
 
-The current model uses a magnitude-oriented imbalance treatment. That is an
-intentional implementation limitation, not proof that signed imbalance has no
-predictive value.
+```text
+scheduled → created → pending_label
+scheduled → skipped
+pending_label → resolved_eligible | resolved_ineligible | expired | failed
+```
 
-## Eligibility and Observability
+Terminal states cannot transition again. Forecast creation, resolution, labels,
+exclusions, and lifecycle events commit atomically.
 
-Only resolved records with a complete `forward_window` label and no disqualifying
-entry/exit quality flag are score eligible. Important flags include stale trades,
-crossed or empty books, timestamp problems, local/exchange clock skew, endpoint
-skew, late resolution, short windows, and unavailable labels.
+A database lease identifies the single permitted writer. Restart recovery inspects
+the latest persisted slot and continues without recreating a terminal forecast.
+JSON exports use a consistent read transaction and are never used for recovery.
 
-`SKIP forecast — pending unresolved` is normal: the protocol deliberately permits
-only one unresolved forecast. Monitor SQLite-backed state, pending target time,
-eligible/excluded counts, capture coverage, and fallback reasons before diagnosing a
-hang.
+## Fail-Closed Eligibility
 
-## Version and Change Boundary
+A forecast is eligible only when:
 
-Behavior-preserving reliability fixes use v6r1. The manifest and configuration hash
-include `implementation_revision` and `acquisition_policy_version`, so
-pre-hardening v6 runs cannot silently resume or aggregate with v6r1.
+- raw events cover the complete half-open label interval;
+- the provider reports certifiable continuity;
+- no reconnect or sequence gap intersects the interval;
+- the label meets the preregistered minimum trade count;
+- the run, model artifact, provider semantics, timing, and policy identities match.
 
-Changes to the target definition, Born formula, signed imbalance semantics, bucket
-ordering, fallback policy, or saturation thresholds require a new v7 protocol and a
-fresh evidence corpus.
-
-## Historical Components
-
-Schema v3/v5 documents, dated lessons, kline-era Born claims, and older verification
-reports are historical context only. See `docs/EVIDENCE_STATUS.md` for the current
-claim boundary and `docs/SCHEMA_V6.md` for the active contract.
+Unsupported provider continuity produces diagnostics, never primary evidence.

@@ -2,9 +2,11 @@ __pycache__/
 *.pyc
 *.pyo
 *.tmp
+*.egg-info/
 
 # Cached data
 core/_kline_cache/
+research/kline/_kline_cache/
 core/_live_results/
 
 # Live runtime artifacts

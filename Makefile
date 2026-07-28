@@ -1,7 +1,10 @@
-.PHONY: test compile
+.PHONY: test compile lint
 
 test:
-	cd core && python -m pytest test_*.py -v
+	python -m pytest -q
 
 compile:
-	python -m compileall core
+	python -m compileall exchange_q research
+
+lint:
+	python -m ruff check exchange_q tests
