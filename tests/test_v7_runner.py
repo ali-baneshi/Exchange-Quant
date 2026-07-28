@@ -269,7 +269,9 @@ def test_pending_label_does_not_resolve_before_slot_end(tmp_path):
             SELECT created_at_ms FROM lifecycle_events
             WHERE run_id = ? AND slot_start_ms = 1000
               AND event_type = 'forecast_transition'
-              AND json_extract(payload_json, '$.to') = 'resolved_eligible'
+              AND json_extract(payload_json, '$.to') IN (
+                  'resolved_eligible', 'resolved_scoreable'
+              )
             """,
             (manifest.run_id,),
         ).fetchone()

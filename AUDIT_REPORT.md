@@ -1,10 +1,8 @@
 # Exchange-Q Technical Audit
 
 > **Historical audit record — superseded for current operation.** This audit
-> evaluated the schema-v5/model-v1 baseline before the v6 remediation documented in
-> the current references. Preserve its findings as evidence of what was inspected;
-> use `docs/SCHEMA_V6.md`, `docs/RUNBOOK.md`, and `docs/EVIDENCE_STATUS.md` for
-> current behavior and claims.
+> evaluated the schema-v5/model-v1 baseline. For schema v8 see
+> `AUDIT_REPORT_V8.md`, `docs/SCHEMA_V8.md`, and `docs/RUNBOOK.md`.
 
 **Audit date:** July 28, 2026  
 **Baseline:** Current working tree, including uncommitted files and active artifacts  

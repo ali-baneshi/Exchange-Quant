@@ -5,6 +5,7 @@ import os
 import signal
 import uuid
 
+from exchange_q.capture import CaptureHooks
 from exchange_q.domain import BookEvent, ForecastStatus, RunManifest, TradeEvent
 from exchange_q.models import ModelArtifact, NormalizedBornModel
 from exchange_q.scheduler import FixedSlotScheduler
@@ -36,6 +37,72 @@ class LiveRunner:
         self._stopping = asyncio.Event()
         self._last_slot_start: int | None = None
         self._stream_start_ms: int | None = None
+        self._capture_sessions: set[tuple[str, str]] = set()
+        self._install_capture_hooks()
+
+    def _install_capture_hooks(self) -> None:
+        if not hasattr(self.provider, "set_capture_hooks"):
+            return
+        self.provider.set_capture_hooks(
+            CaptureHooks(
+                record_clock_sample=self._record_clock_sample,
+                record_recovery=self._record_recovery,
+                record_continuity_gap=self._record_continuity_gap,
+            )
+        )
+
+    def _record_clock_sample(
+        self, local_send_ms: int, local_receive_ms: int, exchange_time_ms: int
+    ) -> None:
+        self.store.record_clock_sample(
+            self.manifest.provider,
+            local_send_ms,
+            local_receive_ms,
+            exchange_time_ms,
+        )
+
+    def _record_recovery(
+        self,
+        stream_kind: str,
+        missing_from: int,
+        missing_to: int,
+        status: str,
+        recovered_count: int,
+        detail: str,
+    ) -> None:
+        self.store.record_recovery(
+            self.manifest.provider,
+            self.manifest.symbol,
+            stream_kind,
+            missing_from,
+            missing_to,
+            status,
+            recovered_count,
+            detail,
+        )
+
+    def _record_continuity_gap(
+        self,
+        stream_kind: str,
+        start_ms: int,
+        end_ms: int,
+        *,
+        complete: bool,
+        first_sequence: int | None,
+        last_sequence: int | None,
+        reasons: tuple[str, ...],
+    ) -> None:
+        self.store.record_continuity_gap(
+            self.manifest.provider,
+            self.manifest.symbol,
+            stream_kind,
+            start_ms,
+            end_ms,
+            complete=complete,
+            first_sequence=first_sequence,
+            last_sequence=last_sequence,
+            reasons=reasons,
+        )
 
     async def run(self) -> None:
         self.store.acquire_lease(
@@ -57,18 +124,23 @@ class LiveRunner:
                 if self._stream_start_ms is None:
                     self._stream_start_ms = event.exchange_time_ms
                 if isinstance(event, TradeEvent):
+                    if self._is_late_event(event):
+                        continue
                     self.store.save_trade(event)
+                    self._checkpoint_event(event, "trades")
                 elif isinstance(event, BookEvent):
                     self.store.save_book(event)
-                scheduling_time_ms = max(
-                    event.exchange_time_ms,
-                    event.received_time_ms,
+                    self._checkpoint_event(event, "books")
+                scheduling_time_ms = (
+                    event.exchange_time_ms
+                    if self.manifest.mode == "primary"
+                    else max(event.exchange_time_ms, event.received_time_ms)
                 )
                 await self._advance(scheduling_time_ms)
                 self.store.heartbeat(self.manifest.run_id, self.owner_id)
                 status = self.store.status(self.manifest.run_id)
                 eligible = status["forecast_counts"].get(
-                    ForecastStatus.RESOLVED_ELIGIBLE, 0
+                    ForecastStatus.RESOLVED_SCOREABLE.value, 0
                 )
                 if eligible >= self.manifest.target_eligible:
                     terminal_status = "completed"
@@ -77,6 +149,9 @@ class LiveRunner:
                     status["forecast_counts"].get(slot_status, 0)
                     for slot_status in (
                         ForecastStatus.SKIPPED,
+                        ForecastStatus.RESOLVED_SCOREABLE,
+                        ForecastStatus.RESOLVED_UNSCOREABLE,
+                        ForecastStatus.CANCELLED,
                         ForecastStatus.RESOLVED_ELIGIBLE,
                         ForecastStatus.RESOLVED_INELIGIBLE,
                         ForecastStatus.EXPIRED,
@@ -106,6 +181,14 @@ class LiveRunner:
                 heartbeat_error = exc
                 terminal_status = "failed"
                 detail = f"{type(exc).__name__}: {exc}"
+            if terminal_status in {"stopped", "failed", "completed", "diagnostic_limit"}:
+                reason = {
+                    "stopped": "operator_stop_before_slot_completion",
+                    "failed": "runner_failed_before_slot_completion",
+                    "completed": "target_reached_before_slot_completion",
+                    "diagnostic_limit": "diagnostic_limit_before_slot_completion",
+                }[terminal_status]
+                self.store.cancel_open_slots(self.manifest.run_id, reason)
             self.store.set_run_status(self.manifest.run_id, terminal_status, detail)
             self.store.release_lease(self.manifest.run_id, self.owner_id)
             if heartbeat_error is not None:
@@ -121,7 +204,10 @@ class LiveRunner:
             )
             return
 
-        while self._last_slot_start <= observed_time_ms:
+        while (
+            self._last_slot_start - self.manifest.decision_lead_ms
+            <= observed_time_ms
+        ):
             if self._terminal_limit_reached():
                 return
             active_start = self._last_slot_start
@@ -137,7 +223,8 @@ class LiveRunner:
                 raise RuntimeError(f"missing active slot {active_start}")
             status = ForecastStatus(row["status"])
             if status == ForecastStatus.SCHEDULED:
-                if observed_time_ms < active_start:
+                decision_at = active_start - self.manifest.decision_lead_ms
+                if observed_time_ms < decision_at:
                     return
                 self._create_or_skip(active_start, active_end)
                 if self._terminal_limit_reached():
@@ -150,11 +237,21 @@ class LiveRunner:
                     (self.manifest.run_id, active_start),
                 ).fetchone()
                 status = ForecastStatus(row["status"])
-            if status in (ForecastStatus.CREATED, ForecastStatus.PENDING_LABEL):
-                if observed_time_ms < active_end:
+            if status in (
+                ForecastStatus.FORECASTED,
+                ForecastStatus.AWAITING_LABEL,
+                ForecastStatus.CREATED,
+                ForecastStatus.PENDING_LABEL,
+            ):
+                resolution_at = active_end + self.manifest.settlement_delay_ms
+                if observed_time_ms < resolution_at:
+                    return
+                if not self._capture_is_settled(active_end):
                     return
                 self._resolve(active_start, active_end)
             if self._terminal_limit_reached():
+                return
+            if self._target_reached():
                 return
             row = self.store.connection.execute(
                 """
@@ -165,6 +262,9 @@ class LiveRunner:
             ).fetchone()
             if ForecastStatus(row["status"]) not in (
                 ForecastStatus.SKIPPED,
+                ForecastStatus.RESOLVED_SCOREABLE,
+                ForecastStatus.RESOLVED_UNSCOREABLE,
+                ForecastStatus.CANCELLED,
                 ForecastStatus.RESOLVED_ELIGIBLE,
                 ForecastStatus.RESOLVED_INELIGIBLE,
                 ForecastStatus.EXPIRED,
@@ -178,12 +278,13 @@ class LiveRunner:
             self._last_slot_start = next_slot.start_ms
 
     def _create_or_skip(self, slot_start_ms: int, slot_end_ms: int) -> None:
-        feature_start = slot_start_ms - self.manifest.lookback_ms
+        feature_end = slot_start_ms - self.manifest.decision_lead_ms
+        feature_start = feature_end - self.manifest.lookback_ms
         features = self.store.build_features(
             self.manifest.provider,
             self.manifest.symbol,
             feature_start,
-            slot_start_ms,
+            feature_end,
         )
         if features is None:
             self.store.skip_slot(
@@ -207,13 +308,16 @@ class LiveRunner:
             """,
             (self.manifest.run_id, slot_start_ms),
         ).fetchone()
-        if not row or row["status"] != ForecastStatus.PENDING_LABEL:
+        if not row or row["status"] not in {
+            ForecastStatus.AWAITING_LABEL,
+            ForecastStatus.PENDING_LABEL,
+        }:
             return
         health = self.provider.health()
         complete = (
             health.coverage_certifiable
             and health.sequence_gaps == 0
-            and health.reconnects == 0
+            and health.unresolved_gaps == 0
             and self._stream_start_ms is not None
             and self._stream_start_ms <= slot_start_ms
         )
@@ -253,6 +357,8 @@ class LiveRunner:
         latest_status = ForecastStatus(row["status"])
         if latest_status in (
             ForecastStatus.SCHEDULED,
+            ForecastStatus.FORECASTED,
+            ForecastStatus.AWAITING_LABEL,
             ForecastStatus.CREATED,
             ForecastStatus.PENDING_LABEL,
         ):
@@ -273,6 +379,9 @@ class LiveRunner:
             counts.get(status.value, 0)
             for status in (
                 ForecastStatus.SKIPPED,
+                ForecastStatus.RESOLVED_SCOREABLE,
+                ForecastStatus.RESOLVED_UNSCOREABLE,
+                ForecastStatus.CANCELLED,
                 ForecastStatus.RESOLVED_ELIGIBLE,
                 ForecastStatus.RESOLVED_INELIGIBLE,
                 ForecastStatus.EXPIRED,
@@ -280,6 +389,84 @@ class LiveRunner:
             )
         )
         return terminal_slots >= limit
+
+    def _target_reached(self) -> bool:
+        counts = self.store.status(self.manifest.run_id)["forecast_counts"]
+        scoreable = counts.get(ForecastStatus.RESOLVED_SCOREABLE.value, 0)
+        return scoreable >= self.manifest.target_eligible
+
+    def _capture_is_settled(self, slot_end_ms: int) -> bool:
+        if self.manifest.mode != "primary":
+            return True
+        health = self.provider.health()
+        watermarks = [
+            value
+            for value in (health.trade_watermark_ms, health.book_watermark_ms)
+            if value is not None
+        ]
+        return (
+            health.connected
+            and health.coverage_certifiable
+            and bool(watermarks)
+            and max(watermarks) >= slot_end_ms
+        )
+
+    def _is_late_event(self, event: TradeEvent) -> bool:
+        if self.manifest.mode != "primary":
+            return False
+        row = self.store.connection.execute(
+            """
+            SELECT slot_start_ms, status FROM forecast_slots
+            WHERE run_id = ? AND status IN (?, ?, ?, ?)
+            ORDER BY slot_start_ms DESC LIMIT 1
+            """,
+            (
+                self.manifest.run_id,
+                ForecastStatus.FORECASTED.value,
+                ForecastStatus.AWAITING_LABEL.value,
+                ForecastStatus.CREATED.value,
+                ForecastStatus.PENDING_LABEL.value,
+            ),
+        ).fetchone()
+        if not row:
+            return False
+        feature_end = int(row["slot_start_ms"]) - self.manifest.decision_lead_ms
+        if event.exchange_time_ms >= feature_end:
+            return False
+        self.store.record_continuity_gap(
+            self.manifest.provider,
+            self.manifest.symbol,
+            "trades",
+            event.exchange_time_ms,
+            feature_end,
+            complete=False,
+            first_sequence=event.sequence,
+            last_sequence=event.sequence,
+            reasons=("late_event_crossed_boundary",),
+        )
+        return True
+
+    def _checkpoint_event(self, event, stream_kind: str) -> None:
+        if event.sequence is None or not event.session_id:
+            return
+        session_key = (event.session_id, stream_kind)
+        if session_key not in self._capture_sessions:
+            self.store.start_capture_session(
+                event.session_id + "-" + stream_kind,
+                event.provider,
+                event.symbol,
+                stream_kind,
+            )
+            self._capture_sessions.add(session_key)
+        self.store.checkpoint_capture(
+            event.provider,
+            event.symbol,
+            stream_kind,
+            event.sequence,
+            event.exchange_time_ms,
+            event.received_time_ms,
+            event.session_id + "-" + stream_kind,
+        )
 
     def stop(self) -> None:
         self._stopping.set()

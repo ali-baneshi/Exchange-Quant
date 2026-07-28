@@ -1,4 +1,4 @@
-# Exchange-Q v7 Architecture
+# Exchange-Q v8 Architecture
 
 ## Trust Boundary
 
@@ -9,81 +9,64 @@ records. It has no authenticated exchange or order-execution capability.
 provider adapter
     │
     ├── validate and normalize immutable events
-    ├── persist raw trades/books
+    ├── persist raw trades/books before evaluation
+    ├── checkpoint sequenced capture (primary)
     └── expose explicit health and continuity capability
             │
             ▼
 fixed non-overlapping scheduler
             │
-            ├── causal feature window [t-lookback, t)
-            ├── frozen model artifact
-            └── pending label window [t, t+horizon)
+            ├── causal feature window ending before slot start
+            ├── frozen model artifact with provenance
+            └── awaiting label window [t, t+horizon)
                         │
                         ▼
-             complete coverage proof?
+             continuity and watermark settled?
                  │               │
                 yes              no
                  │               │
-       resolved eligible   resolved ineligible
+       resolved scoreable   resolved unscoreable
                  │
                  ▼
-proper scoring and calibration analysis
+proper scoring and optional HAC inference
 ```
+
+## Modes
+
+| Mode | Provider | Evidence |
+|------|----------|----------|
+| Diagnostic | HTX WebSocket | pipeline validation only |
+| Primary | Binance sequenced | scoreable when certified |
 
 ## Components
 
 | Component | Responsibility |
 |---|---|
-| `exchange_q/domain.py` | Typed events, windows, forecasts, labels, manifests, and lifecycle states |
-| `exchange_q/providers/` | Provider protocol, replay adapter, and diagnostic HTX stream adapter |
-| `exchange_q/models.py` | Frozen normalized Born-inspired model and defensible baselines |
-| `exchange_q/scheduler.py` | Horizon-aligned, non-overlapping forecast slots |
-| `exchange_q/store.py` | Transactional schema-v7 SQLite state, leases, events, labels, and exports |
-| `exchange_q/runner.py` | Acquisition supervision, deterministic recovery, and lifecycle orchestration |
-| `exchange_q/analysis.py` | Proper scores, calibration, HAC paired inference, and power calculations |
-| `exchange_q/cli.py` | Single operational interface |
-
-## Mathematical Boundary
-
-The model is quantum-inspired, not quantum computation. Buy and sell outcome
-amplitudes are constructed separately and normalized:
-
-```text
-p_buy = |A_buy|² / (|A_buy|² + |A_sell|²)
-```
-
-Signed imbalance is preserved. Constructive and destructive phases remain
-representable. There is no saturation gate, output clipping, destructive fallback,
-or silent substitution of a classical model.
-
-Parameters are fitted on time-ordered development data and represented by a hashed
-immutable artifact. Primary runs do not update model parameters online.
+| `exchange_q/domain.py` | Events, windows, v8 lifecycle states, evidence helpers |
+| `exchange_q/capture.py` | Provider-to-store capture hook contract |
+| `exchange_q/providers/` | HTX diagnostic adapter, Binance sequenced adapter, replay |
+| `exchange_q/store.py` | Schema v8 SQLite, capture ledger, v7 read-only compatibility |
+| `exchange_q/runner.py` | Lifecycle orchestration, settlement, shutdown cleanup |
+| `exchange_q/monitor.py` | Outcome and detail operator console |
+| `exchange_q/cli.py` | Doctor, certify, dataset, run, analyze, export |
+| `exchange_q/analysis.py` | Proper scores, calibration diagnostics, HAC paired tests |
 
 ## State and Recovery
 
-Forecast state transitions are validated transactionally:
-
 ```text
-scheduled → created → pending_label
-scheduled → skipped
-pending_label → resolved_eligible | resolved_ineligible | expired | failed
+scheduled → forecasted → awaiting_label
+pending_label → resolved_*        (legacy v7 read-only)
 ```
 
-Terminal states cannot transition again. Forecast creation, resolution, labels,
-exclusions, and lifecycle events commit atomically.
+Terminal runs must not retain open slots. Stopped, failed, completed, and
+diagnostic-limit exits cancel open work with structured reasons.
 
-A database lease identifies the single permitted writer. Restart recovery inspects
-the latest persisted slot and continues without recreating a terminal forecast.
-JSON exports use a consistent read transaction and are never used for recovery.
+## Evidence semantics
 
-## Fail-Closed Eligibility
+Three independent axes are reported on every status export:
 
-A forecast is eligible only when:
+1. **Integrity** — lifecycle validity
+2. **Capture quality** — certified / uncertified / gapped
+3. **Evidence status** — diagnostic / unscoreable / scoreable
 
-- raw events cover the complete half-open label interval;
-- the provider reports certifiable continuity;
-- no reconnect or sequence gap intersects the interval;
-- the label meets the preregistered minimum trade count;
-- the run, model artifact, provider semantics, timing, and policy identities match.
-
-Unsupported provider continuity produces diagnostics, never primary evidence.
+See [docs/SCHEMA_V8.md](docs/SCHEMA_V8.md) for policy IDs and capture ledger tables.

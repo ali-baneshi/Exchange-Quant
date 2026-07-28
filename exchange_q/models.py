@@ -36,6 +36,15 @@ class ModelArtifact:
     baseline_parameters: tuple[tuple[str, tuple[float, ...]], ...] = field(
         default_factory=tuple
     )
+    purpose: str = "diagnostic_fixture"
+    dataset_hash: str = ""
+    fitting_revision: str = "v8r1"
+    feature_policy: str = "causal_trade_book_v1"
+    label_policy: str = "half_open_streamed_trades_v1"
+    development_start_ms: int | None = None
+    development_end_ms: int | None = None
+    calibration_rows: int = 0
+    calibration_status: str = "uncalibrated"
 
     @property
     def artifact_hash(self) -> str:
@@ -47,6 +56,15 @@ class ModelArtifact:
                 "calibration_intercept": self.calibration_intercept,
                 "calibration_slope": self.calibration_slope,
                 "baseline_parameters": self.baseline_parameters,
+                "purpose": self.purpose,
+                "dataset_hash": self.dataset_hash,
+                "fitting_revision": self.fitting_revision,
+                "feature_policy": self.feature_policy,
+                "label_policy": self.label_policy,
+                "development_start_ms": self.development_start_ms,
+                "development_end_ms": self.development_end_ms,
+                "calibration_rows": self.calibration_rows,
+                "calibration_status": self.calibration_status,
             },
             sort_keys=True,
             separators=(",", ":"),
@@ -114,7 +132,15 @@ class NormalizedBornModel:
             "normalization": normalization,
         }
 
-    def fit(self, features, buy_counts, total_counts) -> ModelArtifact:
+    def fit(
+        self,
+        features,
+        buy_counts,
+        total_counts,
+        *,
+        purpose: str = "diagnostic_fixture",
+        dataset_hash: str = "",
+    ) -> ModelArtifact:
         if not features or len(features) != len(buy_counts) or len(features) != len(total_counts):
             raise ValueError("aligned development rows are required")
         if any(total <= 0 or buy < 0 or buy > total for buy, total in zip(buy_counts, total_counts)):
@@ -147,6 +173,10 @@ class NormalizedBornModel:
             parameters=tuple(float(value) for value in result.x),
             development_rows=len(features),
             baseline_parameters=baseline_parameters,
+            purpose=purpose,
+            dataset_hash=dataset_hash,
+            development_start_ms=min(feature.start_ms for feature in features),
+            development_end_ms=max(feature.end_ms for feature in features),
         )
 
     def predict(self, context: FeatureWindow, artifact: ModelArtifact) -> Forecast:

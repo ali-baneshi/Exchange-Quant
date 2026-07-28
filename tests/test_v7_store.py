@@ -71,7 +71,7 @@ def test_half_open_labels_and_transactional_resolution(tmp_path):
         assert label.buy_count == 1
         assert label.sell_count == 1
         status = store.resolve_slot("run-1", 1000, label, 2)
-        assert status == ForecastStatus.RESOLVED_ELIGIBLE
+        assert status == ForecastStatus.RESOLVED_SCOREABLE
         assert len(store.eligible_rows("run-1")) == 1
     finally:
         store.close()
@@ -196,7 +196,9 @@ def test_early_resolution_is_quarantined_and_blocks_analysis(tmp_path):
             UPDATE lifecycle_events SET created_at_ms = 1500
             WHERE run_id = 'run-1' AND slot_start_ms = 1000
               AND event_type = 'forecast_transition'
-              AND json_extract(payload_json, '$.to') = 'resolved_eligible'
+              AND json_extract(payload_json, '$.to') IN (
+                  'resolved_eligible', 'resolved_scoreable'
+              )
             """
         )
         store.save_trade(_trade("label-2", 1500, "sell"))

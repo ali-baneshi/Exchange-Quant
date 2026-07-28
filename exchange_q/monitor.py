@@ -9,6 +9,7 @@ import sys
 import time
 from typing import Any
 
+from exchange_q.artifacts import load_artifact
 from exchange_q.domain import TERMINAL_FORECAST_STATUSES, ForecastStatus
 from exchange_q.store import V7Store
 
@@ -26,6 +27,7 @@ class RunConsole:
         artifact_path: str,
         display: str = "auto",
         refresh_s: float = 2.0,
+        view: str = "outcome",
     ):
         if refresh_s <= 0:
             raise ValueError("refresh interval must be positive")
@@ -35,6 +37,17 @@ class RunConsole:
         self.database_path = database_path
         self.artifact_path = artifact_path
         self.refresh_s = refresh_s
+        self.view = view
+        try:
+            artifact = load_artifact(artifact_path)
+            self.artifact_summary = {
+                "purpose": artifact.purpose,
+                "development_rows": artifact.development_rows,
+                "calibration_status": artifact.calibration_status,
+                "dataset_hash": artifact.dataset_hash,
+            }
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            self.artifact_summary = {}
         self.display = (
             "dashboard"
             if display == "auto" and sys.stdout.isatty()
@@ -73,6 +86,7 @@ class RunConsole:
         snapshot = monitor_snapshot(self.store, self.run_id)
         snapshot["database_path"] = self.database_path
         snapshot["artifact_path"] = self.artifact_path
+        snapshot["artifact"] = self.artifact_summary
         health = self.provider.health()
         snapshot["provider_health"] = {
             "connected": health.connected,
@@ -81,6 +95,13 @@ class RunConsole:
             "sequence_gaps": health.sequence_gaps,
             "coverage_certifiable": health.coverage_certifiable,
             "detail": health.detail,
+            "last_trade_sequence": health.last_trade_sequence,
+            "last_book_sequence": health.last_book_sequence,
+            "unresolved_gaps": health.unresolved_gaps,
+            "clock_offset_ms": health.clock_offset_ms,
+            "clock_uncertainty_ms": health.clock_uncertainty_ms,
+            "trade_watermark_ms": health.trade_watermark_ms,
+            "book_watermark_ms": health.book_watermark_ms,
         }
         self._previous = snapshot
         return snapshot
@@ -100,7 +121,9 @@ class RunConsole:
     def _render_dashboard(self, snapshot: dict[str, Any]) -> None:
         width = shutil.get_terminal_size((80, 24)).columns
         print(
-            "\033[H" + format_monitor_report(snapshot, width=width) + "\033[J",
+            "\033[H"
+            + format_monitor_report(snapshot, width=width, view=self.view)
+            + "\033[J",
             end="",
             flush=True,
         )
@@ -247,7 +270,10 @@ def monitor_snapshot(
     terminal_slots = sum(
         forecast_counts.get(name, 0) for name in TERMINAL_STATUS_NAMES
     )
-    eligible = forecast_counts.get(ForecastStatus.RESOLVED_ELIGIBLE.value, 0)
+    eligible = forecast_counts.get(
+        ForecastStatus.RESOLVED_SCOREABLE.value,
+        forecast_counts.get(ForecastStatus.RESOLVED_ELIGIBLE.value, 0),
+    )
     stream_data = dict(stream) if stream else {}
     latest_stream_ms = max(
         stream_data.get("last_trade_ms") or 0,
@@ -263,17 +289,25 @@ def monitor_snapshot(
     latest_slot = slots[0] if slots else None
     next_action, next_action_ms = _next_action(latest_slot)
     current_slot = _current_slot(store, provider, symbol, latest_slot)
+    market = _market_snapshot(store, provider, symbol)
     latest_result = next(
         (
             slot
             for slot in slots
-            if slot["status"] in TERMINAL_STATUS_NAMES
+            if slot["status"]
+            in {
+                ForecastStatus.RESOLVED_SCOREABLE.value,
+                ForecastStatus.RESOLVED_UNSCOREABLE.value,
+                ForecastStatus.RESOLVED_ELIGIBLE.value,
+                ForecastStatus.RESOLVED_INELIGIBLE.value,
+            }
         ),
         None,
     )
     lease = status["lease"]
     writer_state = _writer_state(lease, observed_at_ms, status["status"])
     exclusions = _exclusion_counts(store, run_id)
+    slot_tally = _slot_tally(forecast_counts)
     return {
         "observed_at_ms": observed_at_ms,
         "run_id": run_id,
@@ -282,6 +316,7 @@ def monitor_snapshot(
         "updated_at_ms": status["updated_at_ms"],
         "manifest": status["manifest"],
         "integrity": status["integrity"],
+        "evidence": status.get("evidence", {}),
         "forecast_counts": forecast_counts,
         "terminal_slots": terminal_slots,
         "terminal_slot_limit": status["manifest"].get("terminal_slot_limit"),
@@ -293,6 +328,7 @@ def monitor_snapshot(
         "writer_state": writer_state,
         "stream": stream_data,
         "stream_state": stream_state,
+        "market": market,
         "latest_slot_end_ms": latest_slot["slot_end_ms"] if latest_slot else None,
         "current_slot": current_slot,
         "latest_result": latest_result,
@@ -300,6 +336,7 @@ def monitor_snapshot(
         "next_action": next_action,
         "next_action_ms": next_action_ms,
         "exclusion_counts": exclusions,
+        "slot_tally": slot_tally,
         "recent_slots": list(reversed(slots)),
         "recent_events": list(reversed(events)),
     }
@@ -309,6 +346,7 @@ def format_monitor_report(
     snapshot: dict[str, Any],
     *,
     width: int = 80,
+    view: str = "outcome",
 ) -> str:
     width = max(52, width)
     color = _supports_color()
@@ -319,20 +357,16 @@ def format_monitor_report(
     )
     elapsed_s = max(0, (elapsed_end_ms - snapshot["created_at_ms"]) / 1000)
     status = snapshot["status"].upper()
+    manifest = snapshot["manifest"]
+    mode = manifest.get("mode", "diagnostic").upper()
     status_color = "green" if status == "RUNNING" else "red" if status == "FAILED" else "cyan"
     header = (
-        f"EXCHANGE-Q  DIAGNOSTIC  {_style(status, status_color, color)}"
-        f"  elapsed {_format_duration(elapsed_s)}"
+        f"EXCHANGE-Q | {mode} | {_style(status, status_color, color)}"
+        f" | elapsed {_format_duration(elapsed_s)}"
     )
 
     provider = snapshot.get("provider_health") or {}
     connected = bool(provider.get("connected"))
-    last_event_ms = provider.get("last_event_received_ms")
-    event_age = (
-        max(0.0, (snapshot["observed_at_ms"] - last_event_ms) / 1000)
-        if last_event_ms
-        else None
-    )
     data_state = (
         _style("OK", "green", color)
         if connected and snapshot["stream_state"] == "active"
@@ -341,13 +375,28 @@ def format_monitor_report(
         else _style("WARN", "red", color)
     )
     stream = snapshot["stream"]
+    provider_name = manifest["provider"]
     data_line = (
-        f"DATA  [{data_state}] HTX {'connected' if connected else 'disconnected'}"
-        f" | age {_format_age(event_age)}"
-        f" | {stream.get('trades_last_60s', 0)} t/min"
-        f" | {stream.get('books_last_60s', 0)} b/min"
-        f" | r{provider.get('reconnects', 0)}"
-        f" g{provider.get('sequence_gaps', 0)}"
+        f"DATA     [{data_state}] {provider_name}"
+        f" | trade age {_format_ms_age(snapshot['observed_at_ms'], stream.get('last_trade_ms'))}"
+        f" | book age {_format_ms_age(snapshot['observed_at_ms'], stream.get('last_book_ms'))}"
+        f" | last minute {stream.get('trades_last_60s', 0)} trades,"
+        f" {stream.get('books_last_60s', 0)} books"
+    )
+
+    market = snapshot["market"]
+    market_line = (
+        f"MARKET   latest trade {_format_price(market.get('last_price'))}"
+        f" {str(market.get('last_side') or '-').upper()}"
+        f" | top book {_format_price(market.get('best_bid'))} /"
+        f" {_format_price(market.get('best_ask'))}"
+        f" | spread {_format_spread(market.get('spread'))}"
+    )
+    market_detail_line = (
+        f"         book-depth imbalance {_format_signed(market.get('book_imbalance'))}"
+        f" | bid/ask depth {_format_compact_number(market.get('bid_quantity'))} /"
+        f" {_format_compact_number(market.get('ask_quantity'))}"
+        f" | latest trade quantity {_format_compact_number(market.get('last_quantity'))}"
     )
 
     terminal = snapshot["terminal_slots"]
@@ -355,17 +404,35 @@ def format_monitor_report(
     progress = _progress_bar(terminal, limit, 18)
     remaining = max(0, limit - terminal) if limit is not None else None
     eta = _estimate_remaining_seconds(snapshot)
-    run_line = (
-        f"RUN   {progress} {_format_progress(terminal, limit)}"
-        f" | remaining {remaining if remaining is not None else '-'}"
-        f" | ETA {_format_duration(eta) if eta is not None else '-'}"
-    )
+    scoreable = snapshot["eligible_progress"]["eligible"]
+    target = snapshot["eligible_progress"]["target"]
+    tally = snapshot.get("slot_tally") or _slot_tally(snapshot.get("forecast_counts", {}))
+    slots_line = _format_slots_line(tally, mode=manifest.get("mode", "diagnostic"))
+    exclusions_line = _format_exclusions_line(snapshot.get("exclusion_counts", {}))
+    if manifest.get("mode") == "primary":
+        run_line = (
+            f"PROGRESS {progress} scoreable outcomes {scoreable}/{target}"
+            f" | unscoreable {tally['unscoreable']}"
+            f" | ETA {_format_duration(eta) if eta is not None else '-'}"
+        )
+    else:
+        run_line = (
+            f"PROGRESS {progress} diagnostic slots {_format_progress(terminal, limit)}"
+            f" | remaining {remaining if remaining is not None else '-'}"
+            f" | ETA {_format_duration(eta) if eta is not None else '-'}"
+        )
 
     current = snapshot["current_slot"]
     phase = _style(snapshot["phase"], "cyan", color)
     if snapshot["status"] != "running":
-        now_line = f"NOW   {phase} | no active processing"
-        detail_line = "      p(buy) - | label trades -"
+        now_line = f"ACTION   {phase} | no active processing"
+        window_line = "WINDOWS  no active forecast"
+        forecast_line = "FORECAST no active forecast"
+        outcome_line = "OUTCOME  no active target window"
+        feature_line = "FEATURES no active feature window"
+        model_line = "MODELS   no active forecast"
+        label_line = ""
+        label_detail_line = ""
     elif current:
         slot_range = (
             f"{_format_clock(current['slot_start_ms'])}"
@@ -376,42 +443,112 @@ def format_monitor_report(
             if snapshot["next_action_ms"]
             else None
         )
-        now_line = (
-            f"NOW   {phase} | {slot_range}"
-            f" | {_format_action(snapshot['next_action'], action_s)}"
+        now_line = f"ACTION   {phase} | {_format_action(snapshot['next_action'], action_s)}"
+        features = current.get("features") or {}
+        feature_duration = manifest["lookback_ms"] / 1000
+        target_duration = manifest["horizon_ms"] / 1000
+        window_line = (
+            f"WINDOWS  input {feature_duration:g}s ending "
+            f"{_format_clock(features.get('end_ms')) if features else '-'}"
+            f" | future target {target_duration:g}s {slot_range}"
         )
-        probability = current.get("probability_buy")
-        probability_text = f"{probability:.3f}" if probability is not None else "-"
-        detail_line = (
-            f"      p(buy) {probability_text}"
-            f" | label trades {current['live_label_trades']}/"
+        forecast = current.get("forecast") or {}
+        forecast_line = (
+            "FORECAST future aggressor-buy trade share"
+            f" | probability {_format_probability(forecast.get('probability_buy'))}"
+        )
+        minimum_trades = manifest["minimum_label_trades"]
+        live_trades = current["live_label_trades"]
+        if live_trades >= minimum_trades:
+            label_state = "on track"
+        elif live_trades > 0:
+            label_state = "below minimum"
+        else:
+            label_state = "collecting"
+        diagnostic_note = (
+            " | diagnostic capture — not scored"
+            if manifest.get("mode") == "diagnostic"
+            else ""
+        )
+        if live_trades:
+            outcome_line = (
+                f"OUTCOME  {label_state}"
+                f" | {live_trades}/{minimum_trades} label trades"
+                f" | captured buy share {_format_probability(current.get('live_buy_ratio'))}"
+                f"{diagnostic_note}"
+            )
+        else:
+            outcome_line = (
+                f"OUTCOME  {label_state}"
+                f" | 0/{minimum_trades} label trades"
+                f" | no trades observed yet{diagnostic_note}"
+            )
+        feature_line = (
+            f"FEATURES input trades {features.get('trade_count', '-')}"
+            f" | buy/sell {features.get('buy_count', '-')}/{features.get('sell_count', '-')}"
+            f" | historical buy share {_format_probability(features.get('buy_ratio'))}"
+            f" | closing book imbalance {_format_signed(features.get('signed_imbalance'))}"
+        )
+        diagnostics = forecast.get("diagnostics") or {}
+        baselines = diagnostics.get("baseline_probabilities") or {}
+        artifact = snapshot.get("artifact") or {}
+        raw_probability = forecast.get("raw_probability_buy")
+        calibration_note = ""
+        if artifact.get("calibration_status") not in (None, "fitted"):
+            calibration_note = (
+                f" | raw (uncalibrated) {_format_probability(raw_probability)}"
+            )
+        model_line = (
+            f"MODELS   Born {_format_probability(forecast.get('probability_buy'))}"
+            f"{calibration_note}"
+            f" | persistence {_format_probability(baselines.get('flow_persistence_v1'))}"
+            f" | development prior {_format_probability(baselines.get('development_prior_v1'))}"
+            f" | logistic {_format_probability(baselines.get('regularized_logistic_v1'))}"
+        )
+        label_line = (
+            f"         minimum label trades {current['live_label_trades']}/"
             f"{snapshot['manifest']['minimum_label_trades']}"
         )
+        label_detail_line = (
+            f"      quantity {current['live_buy_quantity']}/"
+            f"{current['live_sell_quantity']}"
+            f" | quantity buy ratio {_format_probability(current.get('live_buy_quantity_ratio'))}"
+        )
     else:
-        now_line = f"NOW   {phase} | waiting for the first actionable slot"
-        detail_line = "      p(buy) - | label trades -"
+        now_line = f"ACTION   {phase} | waiting for the first finalized input window"
+        window_line = "WINDOWS  waiting for sufficient causal history"
+        forecast_line = "FORECAST not created"
+        outcome_line = "OUTCOME  unavailable until a forecast exists"
+        feature_line = "FEATURES waiting for first feature window"
+        model_line = "MODELS   waiting for first forecast"
+        label_line = ""
+        label_detail_line = ""
 
     latest = snapshot["latest_result"]
     if latest:
         probability = latest.get("probability_buy")
         probability_text = f"{probability:.3f}" if probability is not None else "-"
         label = latest.get("label") or {}
-        result = (
-            "ELIGIBLE"
-            if latest["status"] == ForecastStatus.RESOLVED_ELIGIBLE
-            else "INELIGIBLE"
-            if latest["status"] == ForecastStatus.RESOLVED_INELIGIBLE
-            else latest["status"].upper()
-        )
-        result_color = "green" if result == "ELIGIBLE" else "yellow"
+        scoreable_statuses = {
+            ForecastStatus.RESOLVED_SCOREABLE.value,
+            ForecastStatus.RESOLVED_ELIGIBLE.value,
+        }
+        scoreable_result = latest["status"] in scoreable_statuses
+        result = "SCOREABLE" if scoreable_result else "NOT SCORED"
+        result_color = "green" if scoreable_result else "yellow"
         last_line = (
-            f"LAST  {_format_clock(latest['slot_start_ms'])}"
-            f" | p {probability_text}"
-            f" | trades {label.get('trade_count', '-')}"
+            f"LAST     forecast {probability_text}"
+            f" | captured buy share {_format_probability(label.get('buy_ratio'))}"
+            f" from {label.get('trade_count', '-')} trades"
             f" | {_style(result, result_color, color)}"
+        )
+        exclusions = ", ".join(latest.get("exclusions") or ()) or "-"
+        last_detail_line = (
+            f"         reason {'none' if scoreable_result else exclusions}"
         )
     else:
         last_line = "LAST  no completed slot yet"
+        last_detail_line = ""
 
     integrity = snapshot["integrity"]
     integrity_text = (
@@ -423,7 +560,14 @@ def format_monitor_report(
             color,
         )
     )
-    integrity_line = f"CHECK integrity {integrity_text}"
+    integrity_line = f"SYSTEM   lifecycle integrity {integrity_text}"
+    artifact = snapshot.get("artifact") or {}
+    evidence_line = (
+        f"EVIDENCE {manifest.get('mode', 'diagnostic').upper()}"
+        f" | artifact {artifact.get('purpose', manifest.get('artifact_purpose', 'unknown'))}"
+        f" | calibration {artifact.get('calibration_status', 'unknown')}"
+        f" | continuity {'certifiable' if provider.get('coverage_certifiable') else 'not certifiable'}"
+    )
     warning = _warning_line(snapshot, color)
     footer = (
         f"Ctrl-C stop | run ...{snapshot['run_id'][-24:]}"
@@ -433,16 +577,53 @@ def format_monitor_report(
     lines = [
         header,
         _rule(width),
-        data_line,
         run_line,
+        slots_line,
+        exclusions_line,
         now_line,
-        detail_line,
+        window_line,
+        forecast_line,
+        outcome_line,
         last_line,
+        evidence_line,
+        data_line,
         integrity_line,
         warning,
+    ]
+    if view == "detail":
+        detail_lines = [
+            _rule(width),
+            market_line,
+            market_detail_line,
+            feature_line,
+            model_line,
+        ]
+        if label_line:
+            detail_lines.append(label_line)
+        if label_detail_line:
+            detail_lines.append(
+                "         quantity context "
+                f"{current['live_buy_quantity']} buy / "
+                f"{current['live_sell_quantity']} sell"
+                " (not the forecast target)"
+            )
+        provider_detail = (
+            f"CAPTURE  reconnects {provider.get('reconnects', 0)}"
+            f" | detected gaps {provider.get('sequence_gaps', 0)}"
+            f" | unresolved gaps {provider.get('unresolved_gaps', 0)}"
+            f" | clock uncertainty "
+            f"{_format_decimal(provider.get('clock_uncertainty_ms'), 1)}ms"
+        )
+        detail_lines.append(provider_detail)
+        lines.extend(detail_lines)
+    if last_detail_line:
+        lines.append(last_detail_line)
+    lines.extend(
+        [
         _rule(width),
         footer,
-    ]
+        ]
+    )
     return "\n".join(_fit_line(line, width) for line in lines) + "\n"
 
 
@@ -452,17 +633,50 @@ def format_final_summary(snapshot: dict[str, Any]) -> str:
         (snapshot["updated_at_ms"] - snapshot["created_at_ms"]) / 1000,
     )
     integrity = snapshot["integrity"]
+    manifest = snapshot["manifest"]
+    mode = manifest.get("mode", "diagnostic")
+    evidence = snapshot.get("evidence") or {}
+    scoreable = snapshot["eligible_progress"]["eligible"]
+    target = snapshot["eligible_progress"]["target"]
+    tally = snapshot.get("slot_tally") or _slot_tally(snapshot.get("forecast_counts", {}))
+    exclusions = snapshot.get("exclusion_counts", {})
+    database = snapshot.get("database_path") or "-"
+    run_id = snapshot["run_id"]
     lines = [
-        "Exchange-Q diagnostic finished",
-        f"status:    {snapshot['status']}",
-        f"duration:  {_format_duration(elapsed_s)}",
-        f"slots:     {_format_progress(snapshot['terminal_slots'], snapshot['terminal_slot_limit'])}",
-        f"integrity: {integrity['state']} ({integrity['error_count']} errors)",
-        f"run ID:    {snapshot['run_id']}",
-        f"database:  {snapshot.get('database_path') or '-'}",
-        f"artifact:  {snapshot.get('artifact_path') or '-'}",
-        "evidence:  diagnostic-only; HTX continuity is not certifiable",
+        f"Exchange-Q {mode} run finished",
+        f"status:      {snapshot['status']}",
+        f"duration:    {_format_duration(elapsed_s)}",
+        f"progress:    {_format_progress(snapshot['terminal_slots'], snapshot['terminal_slot_limit'])}",
+        f"scoreable:   {scoreable}/{target}",
+        (
+            "slot tally:  "
+            f"awaiting {tally['awaiting']} | "
+            f"scoreable {tally['scoreable']} | "
+            f"unscoreable {tally['unscoreable']} | "
+            f"skipped {tally['skipped']} | "
+            f"cancelled {tally['cancelled']}"
+        ),
+        f"exclusions:  {_format_exclusions_line(exclusions, limit=5).removeprefix('EXCLUSIONS ')}",
+        f"integrity:   {integrity['state']} ({integrity['error_count']} errors)",
+        f"capture:     {evidence.get('capture_quality', 'uncertified')}",
+        f"evidence:    {evidence.get('evidence_status', mode)}",
+        f"run ID:      {run_id}",
+        f"database:    {database}",
+        f"artifact:    {snapshot.get('artifact_path') or '-'}",
     ]
+    if mode == "diagnostic":
+        lines.append(
+            "note:        diagnostic captured ratios are descriptive, not scored evidence"
+        )
+    if database != "-":
+        lines.extend(
+            [
+                "status cmd:  ./scripts/exchange-q status "
+                f"--database {database} --run-id {run_id} --json",
+                "analyze cmd: ./scripts/exchange-q analyze "
+                f"--database {database} --run-id {run_id}",
+            ]
+        )
     return "\n".join(lines)
 
 
@@ -531,6 +745,8 @@ def _next_action(slot: dict[str, Any] | None) -> tuple[str | None, int | None]:
     if slot["status"] == ForecastStatus.SCHEDULED:
         return "create forecast", slot["slot_start_ms"]
     if slot["status"] in {
+        ForecastStatus.FORECASTED,
+        ForecastStatus.AWAITING_LABEL,
         ForecastStatus.CREATED,
         ForecastStatus.PENDING_LABEL,
     }:
@@ -546,14 +762,24 @@ def _current_slot(
 ) -> dict[str, Any] | None:
     if not slot or slot["status"] in TERMINAL_STATUS_NAMES:
         return None
-    live_label_trades = 0
+    live_buy_count = 0
+    live_sell_count = 0
+    live_buy_quantity = 0.0
+    live_sell_quantity = 0.0
     if slot["status"] in {
+        ForecastStatus.FORECASTED,
+        ForecastStatus.AWAITING_LABEL,
         ForecastStatus.CREATED,
         ForecastStatus.PENDING_LABEL,
     }:
-        live_label_trades = store.connection.execute(
+        row = store.connection.execute(
             """
-            SELECT COUNT(*) FROM trades
+            SELECT
+                SUM(CASE WHEN aggressor_side = 'buy' THEN 1 ELSE 0 END),
+                SUM(CASE WHEN aggressor_side = 'sell' THEN 1 ELSE 0 END),
+                SUM(CASE WHEN aggressor_side = 'buy' THEN CAST(quantity AS REAL) ELSE 0 END),
+                SUM(CASE WHEN aggressor_side = 'sell' THEN CAST(quantity AS REAL) ELSE 0 END)
+            FROM trades
             WHERE provider = ? AND symbol = ?
               AND exchange_time_ms >= ? AND exchange_time_ms < ?
             """,
@@ -563,11 +789,98 @@ def _current_slot(
                 slot["slot_start_ms"],
                 slot["slot_end_ms"],
             ),
-        ).fetchone()[0]
+        ).fetchone()
+        live_buy_count = row[0] or 0
+        live_sell_count = row[1] or 0
+        live_buy_quantity = row[2] or 0.0
+        live_sell_quantity = row[3] or 0.0
+    live_label_trades = live_buy_count + live_sell_count
+    live_quantity = live_buy_quantity + live_sell_quantity
     return {
         **slot,
         "live_label_trades": live_label_trades,
+        "live_buy_count": live_buy_count,
+        "live_sell_count": live_sell_count,
+        "live_buy_ratio": (
+            live_buy_count / live_label_trades if live_label_trades else None
+        ),
+        "live_buy_quantity": _format_quantity(live_buy_quantity),
+        "live_sell_quantity": _format_quantity(live_sell_quantity),
+        "live_buy_quantity_ratio": (
+            live_buy_quantity / live_quantity if live_quantity else None
+        ),
     }
+
+
+def _market_snapshot(store: V7Store, provider: str, symbol: str) -> dict[str, Any]:
+    trade = store.connection.execute(
+        """
+        SELECT aggressor_side, price, quantity, received_time_ms
+        FROM trades
+        WHERE provider = ? AND symbol = ?
+        ORDER BY received_time_ms DESC
+        LIMIT 1
+        """,
+        (provider, symbol),
+    ).fetchone()
+    book = store.connection.execute(
+        """
+        SELECT data_json, received_time_ms
+        FROM books
+        WHERE provider = ? AND symbol = ?
+        ORDER BY received_time_ms DESC
+        LIMIT 1
+        """,
+        (provider, symbol),
+    ).fetchone()
+    result: dict[str, Any] = {
+        "last_price": None,
+        "last_side": None,
+        "last_quantity": None,
+        "last_trade_ms": None,
+        "best_bid": None,
+        "best_ask": None,
+        "bid_quantity": None,
+        "ask_quantity": None,
+        "midpoint": None,
+        "spread": None,
+        "book_imbalance": None,
+        "last_book_ms": None,
+    }
+    if trade:
+        result.update(
+            {
+                "last_side": trade["aggressor_side"],
+                "last_price": float(trade["price"]),
+                "last_quantity": trade["quantity"],
+                "last_trade_ms": trade["received_time_ms"],
+            }
+        )
+    if book:
+        payload = json.loads(book["data_json"])
+        best_bid = float(payload["best_bid"])
+        best_ask = float(payload["best_ask"])
+        bid_quantity = float(payload["bid_quantity"])
+        ask_quantity = float(payload["ask_quantity"])
+        midpoint = (best_bid + best_ask) / 2
+        total_quantity = bid_quantity + ask_quantity
+        result.update(
+            {
+                "best_bid": best_bid,
+                "best_ask": best_ask,
+                "bid_quantity": payload["bid_quantity"],
+                "ask_quantity": payload["ask_quantity"],
+                "midpoint": midpoint,
+                "spread": (best_ask - best_bid) / midpoint if midpoint else None,
+                "book_imbalance": (
+                    (bid_quantity - ask_quantity) / total_quantity
+                    if total_quantity
+                    else 0.0
+                ),
+                "last_book_ms": book["received_time_ms"],
+            }
+        )
+    return result
 
 
 def _phase(run_status: str, slot: dict[str, Any] | None) -> str:
@@ -578,6 +891,8 @@ def _phase(run_status: str, slot: dict[str, Any] | None) -> str:
     if slot["status"] == ForecastStatus.SCHEDULED:
         return "WAITING"
     if slot["status"] in {
+        ForecastStatus.FORECASTED,
+        ForecastStatus.AWAITING_LABEL,
         ForecastStatus.CREATED,
         ForecastStatus.PENDING_LABEL,
     }:
@@ -597,6 +912,8 @@ def _estimate_remaining_seconds(snapshot: dict[str, Any]) -> float | None:
     cadence_s = snapshot["manifest"]["cadence_ms"] / 1000
     horizon_s = snapshot["manifest"]["horizon_ms"] / 1000
     if current and current["status"] in {
+        ForecastStatus.FORECASTED,
+        ForecastStatus.AWAITING_LABEL,
         ForecastStatus.CREATED,
         ForecastStatus.PENDING_LABEL,
     }:
@@ -662,6 +979,7 @@ def _integrity_label(code: str) -> str:
         "missing_forecast_transition": "missing forecast event",
         "missing_resolution_transition": "missing resolution event",
         "missing_resolved_label": "missing label",
+        "terminal_run_has_open_slots": "terminal run has open slots",
     }.get(code, code.replace("_", " "))
 
 
@@ -672,8 +990,62 @@ def _rule(width: int) -> str:
 def _fit_line(line: str, width: int) -> str:
     visible = re.sub(r"\x1b\[[0-9;]*m", "", line)
     if len(visible) <= width:
-        return line
+        return line + " " * (width - len(visible))
     return visible[: max(1, width - 1)] + "…"
+
+
+def _format_probability(value: Any) -> str:
+    return f"{float(value):.3f}" if value is not None else "-"
+
+
+def _format_signed(value: Any) -> str:
+    return f"{float(value):+.3f}" if value is not None else "-"
+
+
+def _format_decimal(value: Any, places: int) -> str:
+    return f"{float(value):.{places}f}" if value is not None else "-"
+
+
+def _format_bps(value: Any) -> str:
+    return f"{float(value) * 10_000:.2f}bp" if value is not None else "-"
+
+
+def _format_spread(value: Any) -> str:
+    if value is None:
+        return "-"
+    basis_points = float(value) * 10_000
+    if basis_points >= 0.01:
+        return f"{basis_points:.3f} bp"
+    return f"{float(value) * 1_000_000:.3f} ppm"
+
+
+def _format_price(value: Any) -> str:
+    if value is None:
+        return "-"
+    number = float(value)
+    return f"{number:,.2f}" if number >= 10 else f"{number:.6f}"
+
+
+def _format_quantity(value: float) -> str:
+    return f"{value:.8g}"
+
+
+def _format_compact_number(value: Any) -> str:
+    if value is None:
+        return "-"
+    number = float(value)
+    absolute = abs(number)
+    if absolute >= 1_000_000:
+        return f"{number / 1_000_000:.2f}M"
+    if absolute >= 1_000:
+        return f"{number / 1_000:.2f}K"
+    return f"{number:.4g}"
+
+
+def _format_ms_age(observed_at_ms: int, timestamp_ms: int | None) -> str:
+    if timestamp_ms is None:
+        return "-"
+    return _format_age(max(0.0, (observed_at_ms - timestamp_ms) / 1000))
 
 
 def _exclusion_counts(store: V7Store, run_id: str) -> dict[str, int]:
@@ -689,6 +1061,58 @@ def _exclusion_counts(store: V7Store, run_id: str) -> dict[str, int]:
         for reason in json.loads(row["exclusion_json"]):
             counts[reason] = counts.get(reason, 0) + 1
     return counts
+
+
+def _slot_tally(counts: dict[str, int]) -> dict[str, int]:
+    awaiting_statuses = (
+        ForecastStatus.SCHEDULED,
+        ForecastStatus.FORECASTED,
+        ForecastStatus.AWAITING_LABEL,
+        ForecastStatus.CREATED,
+        ForecastStatus.PENDING_LABEL,
+    )
+    scoreable = counts.get(ForecastStatus.RESOLVED_SCOREABLE.value, 0) + counts.get(
+        ForecastStatus.RESOLVED_ELIGIBLE.value, 0
+    )
+    unscoreable = counts.get(
+        ForecastStatus.RESOLVED_UNSCOREABLE.value, 0
+    ) + counts.get(ForecastStatus.RESOLVED_INELIGIBLE.value, 0)
+    return {
+        "awaiting": sum(counts.get(status.value, 0) for status in awaiting_statuses),
+        "scoreable": scoreable,
+        "unscoreable": unscoreable,
+        "skipped": counts.get(ForecastStatus.SKIPPED.value, 0),
+        "cancelled": counts.get(ForecastStatus.CANCELLED.value, 0),
+        "failed": counts.get(ForecastStatus.FAILED.value, 0),
+    }
+
+
+def _format_slots_line(tally: dict[str, int], *, mode: str) -> str:
+    scoreable_label = "not scored" if mode == "diagnostic" else "scoreable"
+    return (
+        f"SLOTS    awaiting {tally['awaiting']}"
+        f" | {scoreable_label} {tally['scoreable']}"
+        f" | unscoreable {tally['unscoreable']}"
+        f" | skipped {tally['skipped']}"
+        f" | cancelled {tally['cancelled']}"
+    )
+
+
+def _format_exclusions_line(
+    exclusion_counts: dict[str, int],
+    *,
+    limit: int = 3,
+) -> str:
+    if not exclusion_counts:
+        return "EXCLUSIONS none yet"
+    parts = [
+        f"{reason}={count}"
+        for reason, count in sorted(
+            exclusion_counts.items(),
+            key=lambda item: (-item[1], item[0]),
+        )[:limit]
+    ]
+    return "EXCLUSIONS " + " | ".join(parts)
 
 
 def _events_after(

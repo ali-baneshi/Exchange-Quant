@@ -1,4 +1,4 @@
-"""Exchange-Q schema-v7 forecasting infrastructure."""
+"""Exchange-Q forecasting infrastructure."""
 
-SCHEMA_VERSION = 7
-IMPLEMENTATION_REVISION = "v7r3"
+SCHEMA_VERSION = 8
+IMPLEMENTATION_REVISION = "v8r1"

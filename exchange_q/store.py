@@ -16,19 +16,41 @@ from exchange_q import IMPLEMENTATION_REVISION, SCHEMA_VERSION
 from exchange_q.domain import (
     TERMINAL_FORECAST_STATUSES,
     BookEvent,
+    EvidenceSummary,
     FeatureWindow,
     Forecast,
     ForecastStatus,
     Label,
+    OPEN_SLOT_STATUSES,
     RunManifest,
+    SCOREABLE_STATUSES,
     TradeEvent,
+    compute_capture_quality,
+    compute_evidence_status,
+    forecast_created_statuses,
+    resolution_statuses,
+    transition_timestamp,
 )
 
 
 ALLOWED_TRANSITIONS = {
     ForecastStatus.SCHEDULED: {
+        ForecastStatus.FORECASTED,
         ForecastStatus.CREATED,
         ForecastStatus.SKIPPED,
+        ForecastStatus.CANCELLED,
+        ForecastStatus.FAILED,
+    },
+    ForecastStatus.FORECASTED: {
+        ForecastStatus.AWAITING_LABEL,
+        ForecastStatus.FAILED,
+        ForecastStatus.CANCELLED,
+    },
+    ForecastStatus.AWAITING_LABEL: {
+        ForecastStatus.RESOLVED_SCOREABLE,
+        ForecastStatus.RESOLVED_UNSCOREABLE,
+        ForecastStatus.EXPIRED,
+        ForecastStatus.CANCELLED,
         ForecastStatus.FAILED,
     },
     ForecastStatus.CREATED: {
@@ -52,15 +74,21 @@ class V7Store:
             os.makedirs(directory, exist_ok=True)
         self.connection = sqlite3.connect(path, timeout=30, isolation_level=None)
         self.connection.row_factory = sqlite3.Row
+        existing_version = self.connection.execute("PRAGMA user_version").fetchone()[0]
+        self.schema_version = existing_version or SCHEMA_VERSION
+        self.legacy_read_only = existing_version == 7 and SCHEMA_VERSION != 7
+        if existing_version not in (0, 7, SCHEMA_VERSION):
+            self.connection.close()
+            raise RuntimeError(
+                f"unsupported SQLite schema version {existing_version}; "
+                f"expected 7 or {SCHEMA_VERSION}"
+            )
+        if self.legacy_read_only:
+            self.connection.execute("PRAGMA query_only=ON")
+            return
         self.connection.execute("PRAGMA journal_mode=WAL")
         self.connection.execute("PRAGMA synchronous=FULL")
         self.connection.execute("PRAGMA foreign_keys=ON")
-        existing_version = self.connection.execute("PRAGMA user_version").fetchone()[0]
-        if existing_version not in (0, SCHEMA_VERSION):
-            self.connection.close()
-            raise RuntimeError(
-                f"unsupported SQLite schema version {existing_version}; expected {SCHEMA_VERSION}"
-            )
         self.connection.executescript(
             """
             CREATE TABLE IF NOT EXISTS runs (
@@ -130,15 +158,83 @@ class V7Store:
                 payload_json TEXT NOT NULL,
                 created_at_ms INTEGER NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS capture_sessions (
+                session_id TEXT PRIMARY KEY,
+                provider TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                stream_kind TEXT NOT NULL,
+                status TEXT NOT NULL,
+                started_at_ms INTEGER NOT NULL,
+                ended_at_ms INTEGER,
+                first_sequence INTEGER,
+                last_sequence INTEGER,
+                detail_json TEXT NOT NULL DEFAULT '{}'
+            );
+            CREATE TABLE IF NOT EXISTS capture_checkpoints (
+                provider TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                stream_kind TEXT NOT NULL,
+                sequence_no INTEGER NOT NULL,
+                exchange_time_ms INTEGER NOT NULL,
+                received_time_ms INTEGER NOT NULL,
+                session_id TEXT NOT NULL,
+                source TEXT NOT NULL,
+                PRIMARY KEY(provider, symbol, stream_kind, sequence_no)
+            );
+            CREATE TABLE IF NOT EXISTS continuity_intervals (
+                interval_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                provider TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                stream_kind TEXT NOT NULL,
+                start_ms INTEGER NOT NULL,
+                end_ms INTEGER NOT NULL,
+                complete INTEGER NOT NULL,
+                first_sequence INTEGER,
+                last_sequence INTEGER,
+                reasons_json TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS recovery_attempts (
+                attempt_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                provider TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                stream_kind TEXT NOT NULL,
+                missing_from INTEGER NOT NULL,
+                missing_to INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                recovered_count INTEGER NOT NULL,
+                detail TEXT NOT NULL,
+                created_at_ms INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS clock_samples (
+                sample_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                provider TEXT NOT NULL,
+                local_send_ms INTEGER NOT NULL,
+                local_receive_ms INTEGER NOT NULL,
+                exchange_time_ms INTEGER NOT NULL,
+                offset_ms REAL NOT NULL,
+                uncertainty_ms REAL NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS provider_certifications (
+                certification_id TEXT PRIMARY KEY,
+                provider TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                adapter_revision TEXT NOT NULL,
+                valid INTEGER NOT NULL,
+                issued_at_ms INTEGER NOT NULL,
+                expires_at_ms INTEGER,
+                report_json TEXT NOT NULL
+            );
             """
         )
         self.connection.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
+        self.schema_version = SCHEMA_VERSION
 
     def close(self) -> None:
         self.connection.close()
 
     @contextmanager
     def transaction(self) -> Iterator[sqlite3.Connection]:
+        self._require_writable()
         self.connection.execute("BEGIN IMMEDIATE")
         try:
             yield self.connection
@@ -149,6 +245,7 @@ class V7Store:
             self.connection.execute("COMMIT")
 
     def create_run(self, manifest: RunManifest) -> None:
+        self._require_writable()
         now = int(time.time() * 1000)
         with self.transaction() as connection:
             connection.execute(
@@ -296,11 +393,21 @@ class V7Store:
     ) -> None:
         now = int(time.time() * 1000)
         with self.transaction() as connection:
+            created_status = (
+                ForecastStatus.FORECASTED
+                if self.schema_version >= 8
+                else ForecastStatus.CREATED
+            )
+            awaiting_status = (
+                ForecastStatus.AWAITING_LABEL
+                if self.schema_version >= 8
+                else ForecastStatus.PENDING_LABEL
+            )
             self._transition(
                 connection,
                 run_id,
                 slot_start_ms,
-                ForecastStatus.CREATED,
+                created_status,
                 {
                     "model_id": forecast.model_id,
                     "artifact_hash": artifact_hash,
@@ -321,7 +428,7 @@ class V7Store:
                 connection,
                 run_id,
                 slot_start_ms,
-                ForecastStatus.PENDING_LABEL,
+                awaiting_status,
                 {},
                 now,
             )
@@ -351,9 +458,9 @@ class V7Store:
         if label.trade_count < minimum_trades:
             reasons.append("insufficient_label_trades")
         status = (
-            ForecastStatus.RESOLVED_ELIGIBLE
+            ForecastStatus.RESOLVED_SCOREABLE
             if not reasons
-            else ForecastStatus.RESOLVED_INELIGIBLE
+            else ForecastStatus.RESOLVED_UNSCOREABLE
         )
         now = int(time.time() * 1000)
         with self.transaction() as connection:
@@ -369,6 +476,32 @@ class V7Store:
                 now,
             )
         return status
+
+    def cancel_open_slots(self, run_id: str, reason: str) -> int:
+        now = int(time.time() * 1000)
+        cancelled = 0
+        open_statuses = tuple(status.value for status in OPEN_SLOT_STATUSES)
+        placeholders = ", ".join("?" for _ in open_statuses)
+        with self.transaction() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT slot_start_ms, status FROM forecast_slots
+                WHERE run_id = ? AND status IN ({placeholders})
+                ORDER BY slot_start_ms
+                """,
+                (run_id, *open_statuses),
+            ).fetchall()
+            for row in rows:
+                self._transition(
+                    connection,
+                    run_id,
+                    row["slot_start_ms"],
+                    ForecastStatus.CANCELLED,
+                    {"exclusion_json": json.dumps([reason])},
+                    now,
+                )
+                cancelled += 1
+        return cancelled
 
     def build_label(self, provider: str, symbol: str, start_ms: int, end_ms: int) -> Label:
         rows = self.connection.execute(
@@ -478,15 +611,38 @@ class V7Store:
         lease = self.connection.execute(
             "SELECT owner_id, pid, heartbeat_ms FROM leases WHERE run_id = ?", (run_id,)
         ).fetchone()
+        integrity = self.run_integrity(run_id)
+        manifest = json.loads(run["manifest_json"])
+        scoreable = sum(
+            counts.get(status.value, 0) for status in SCOREABLE_STATUSES
+        )
+        unresolved_gaps = self.unresolved_gap_count(
+            manifest["provider"], manifest["symbol"]
+        )
+        evidence = EvidenceSummary(
+            integrity_state=integrity["state"],
+            capture_quality=compute_capture_quality(
+                mode=manifest.get("mode", "diagnostic"),
+                unresolved_gaps=unresolved_gaps,
+                coverage_certifiable=unresolved_gaps == 0
+                and manifest.get("mode") == "primary",
+            ),
+            evidence_status=compute_evidence_status(
+                mode=manifest.get("mode", "diagnostic"),
+                scoreable_slots=scoreable,
+                unresolved_gaps=unresolved_gaps,
+            ),
+        )
         return {
             "run_id": run_id,
             "status": run["status"],
             "created_at_ms": run["created_at_ms"],
             "updated_at_ms": run["updated_at_ms"],
-            "manifest": json.loads(run["manifest_json"]),
+            "manifest": manifest,
             "forecast_counts": counts,
             "lease": dict(lease) if lease else None,
-            "integrity": self.run_integrity(run_id),
+            "integrity": integrity,
+            "evidence": evidence.to_record(),
         }
 
     def eligible_rows(self, run_id: str) -> list[dict[str, Any]]:
@@ -502,8 +658,22 @@ class V7Store:
             WHERE run_id = ? AND status = ?
             ORDER BY slot_start_ms
             """,
-            (run_id, ForecastStatus.RESOLVED_ELIGIBLE),
+            (
+                run_id,
+                ForecastStatus.RESOLVED_SCOREABLE,
+            ),
         ).fetchall()
+        if not rows and self.schema_version == 7:
+            rows = self.connection.execute(
+                """
+                SELECT slot_start_ms, slot_end_ms, model_id, artifact_hash,
+                       features_json, forecast_json, label_json
+                FROM forecast_slots
+                WHERE run_id = ? AND status = ?
+                ORDER BY slot_start_ms
+                """,
+                (run_id, ForecastStatus.RESOLVED_ELIGIBLE),
+            ).fetchall()
         parsed_rows = [
             {
                 **dict(row),
@@ -569,7 +739,9 @@ class V7Store:
             slot_start = int(slot["slot_start_ms"])
             slot_end = int(slot["slot_end_ms"])
             if slot["forecast_json"]:
-                created_at = transitions.get((slot_start, ForecastStatus.CREATED.value))
+                created_at = transition_timestamp(
+                    transitions, slot_start, forecast_created_statuses()
+                )
                 if created_at is None:
                     errors.append(
                         {"code": "missing_forecast_transition", "slot_start_ms": slot_start}
@@ -584,11 +756,13 @@ class V7Store:
                         }
                     )
             status = ForecastStatus(slot["status"])
-            if status in (
-                ForecastStatus.RESOLVED_ELIGIBLE,
+            if status in SCOREABLE_STATUSES or status in {
+                ForecastStatus.RESOLVED_UNSCOREABLE,
                 ForecastStatus.RESOLVED_INELIGIBLE,
-            ):
-                resolved_at = transitions.get((slot_start, status.value))
+            }:
+                resolved_at = transition_timestamp(
+                    transitions, slot_start, resolution_statuses()
+                )
                 if resolved_at is None:
                     errors.append(
                         {"code": "missing_resolution_transition", "slot_start_ms": slot_start}
@@ -636,6 +810,25 @@ class V7Store:
             codes[error["code"]] = codes.get(error["code"], 0) + 1
         valid = not errors
         terminal = run["status"] != "running"
+        if terminal:
+            open_statuses = tuple(status.value for status in OPEN_SLOT_STATUSES)
+            placeholders = ", ".join("?" for _ in open_statuses)
+            open_count = self.connection.execute(
+                f"""
+                SELECT COUNT(*) FROM forecast_slots
+                WHERE run_id = ? AND status IN ({placeholders})
+                """,
+                (run_id, *open_statuses),
+            ).fetchone()[0]
+            if open_count:
+                errors.append(
+                    {
+                        "code": "terminal_run_has_open_slots",
+                        "open_slot_count": open_count,
+                    }
+                )
+                codes["terminal_run_has_open_slots"] = open_count
+                valid = False
         return {
             "valid": valid,
             "state": (
@@ -685,7 +878,7 @@ class V7Store:
                 )
             ]
             return {
-                "schema_version": SCHEMA_VERSION,
+                "schema_version": self.schema_version,
                 "implementation_revision": IMPLEMENTATION_REVISION,
                 **status,
                 "forecast_slots": slots,
@@ -693,6 +886,209 @@ class V7Store:
             }
         finally:
             self.connection.execute("ROLLBACK")
+
+    def start_capture_session(
+        self,
+        session_id: str,
+        provider: str,
+        symbol: str,
+        stream_kind: str,
+        detail: dict[str, Any] | None = None,
+    ) -> None:
+        self.connection.execute(
+            """
+            INSERT INTO capture_sessions(
+                session_id, provider, symbol, stream_kind, status,
+                started_at_ms, detail_json
+            ) VALUES(?, ?, ?, ?, 'running', ?, ?)
+            """,
+            (
+                session_id,
+                provider,
+                symbol,
+                stream_kind,
+                int(time.time() * 1000),
+                json.dumps(detail or {}, sort_keys=True),
+            ),
+        )
+
+    def checkpoint_capture(
+        self,
+        provider: str,
+        symbol: str,
+        stream_kind: str,
+        sequence_no: int,
+        exchange_time_ms: int,
+        received_time_ms: int,
+        session_id: str,
+        source: str = "websocket",
+    ) -> bool:
+        cursor = self.connection.execute(
+            """
+            INSERT OR IGNORE INTO capture_checkpoints(
+                provider, symbol, stream_kind, sequence_no,
+                exchange_time_ms, received_time_ms, session_id, source
+            ) VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                provider,
+                symbol,
+                stream_kind,
+                sequence_no,
+                exchange_time_ms,
+                received_time_ms,
+                session_id,
+                source,
+            ),
+        )
+        self.connection.execute(
+            """
+            UPDATE capture_sessions
+            SET first_sequence=COALESCE(first_sequence, ?), last_sequence=?
+            WHERE session_id=?
+            """,
+            (sequence_no, sequence_no, session_id),
+        )
+        return cursor.rowcount == 1
+
+    def record_recovery(
+        self,
+        provider: str,
+        symbol: str,
+        stream_kind: str,
+        missing_from: int,
+        missing_to: int,
+        status: str,
+        recovered_count: int,
+        detail: str = "",
+    ) -> None:
+        self.connection.execute(
+            """
+            INSERT INTO recovery_attempts(
+                provider, symbol, stream_kind, missing_from, missing_to,
+                status, recovered_count, detail, created_at_ms
+            ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                provider,
+                symbol,
+                stream_kind,
+                missing_from,
+                missing_to,
+                status,
+                recovered_count,
+                detail,
+                int(time.time() * 1000),
+            ),
+        )
+
+    def record_clock_sample(
+        self,
+        provider: str,
+        local_send_ms: int,
+        local_receive_ms: int,
+        exchange_time_ms: int,
+    ) -> None:
+        midpoint = (local_send_ms + local_receive_ms) / 2
+        self.connection.execute(
+            """
+            INSERT INTO clock_samples(
+                provider, local_send_ms, local_receive_ms, exchange_time_ms,
+                offset_ms, uncertainty_ms
+            ) VALUES(?, ?, ?, ?, ?, ?)
+            """,
+            (
+                provider,
+                local_send_ms,
+                local_receive_ms,
+                exchange_time_ms,
+                exchange_time_ms - midpoint,
+                (local_receive_ms - local_send_ms) / 2,
+            ),
+        )
+
+    def record_continuity_gap(
+        self,
+        provider: str,
+        symbol: str,
+        stream_kind: str,
+        start_ms: int,
+        end_ms: int,
+        *,
+        complete: bool,
+        first_sequence: int | None = None,
+        last_sequence: int | None = None,
+        reasons: tuple[str, ...] = (),
+    ) -> None:
+        self.connection.execute(
+            """
+            INSERT INTO continuity_intervals(
+                provider, symbol, stream_kind, start_ms, end_ms, complete,
+                first_sequence, last_sequence, reasons_json
+            ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                provider,
+                symbol,
+                stream_kind,
+                start_ms,
+                end_ms,
+                int(complete),
+                first_sequence,
+                last_sequence,
+                json.dumps(list(reasons)),
+            ),
+        )
+
+    def unresolved_gap_count(self, provider: str, symbol: str) -> int:
+        if self.schema_version < 8:
+            return 0
+        row = self.connection.execute(
+            """
+            SELECT COUNT(*) FROM continuity_intervals
+            WHERE provider = ? AND symbol = ? AND complete = 0
+            """,
+            (provider, symbol),
+        ).fetchone()
+        return int(row[0]) if row else 0
+
+    def save_provider_certification(
+        self,
+        certification_id: str,
+        provider: str,
+        symbol: str,
+        adapter_revision: str,
+        valid: bool,
+        report: dict[str, Any],
+        *,
+        expires_at_ms: int | None = None,
+    ) -> None:
+        self._require_writable()
+        self.connection.execute(
+            """
+            INSERT OR REPLACE INTO provider_certifications(
+                certification_id, provider, symbol, adapter_revision, valid,
+                issued_at_ms, expires_at_ms, report_json
+            ) VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                certification_id,
+                provider,
+                symbol.lower(),
+                adapter_revision,
+                int(valid),
+                int(time.time() * 1000),
+                expires_at_ms,
+                json.dumps(report, sort_keys=True),
+            ),
+        )
+
+    def _require_writable(self) -> None:
+        if self.legacy_read_only:
+            raise RuntimeError(
+                "schema-v7 databases are read-only under schema v8; "
+                "export or inspect them instead of resuming"
+            )
 
     def _transition(
         self,

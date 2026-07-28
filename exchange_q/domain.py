@@ -9,6 +9,11 @@ from typing import Any, Literal
 
 class ForecastStatus(str, Enum):
     SCHEDULED = "scheduled"
+    FORECASTED = "forecasted"
+    AWAITING_LABEL = "awaiting_label"
+    RESOLVED_SCOREABLE = "resolved_scoreable"
+    RESOLVED_UNSCOREABLE = "resolved_unscoreable"
+    CANCELLED = "cancelled"
     CREATED = "created"
     SKIPPED = "skipped"
     PENDING_LABEL = "pending_label"
@@ -21,12 +26,64 @@ class ForecastStatus(str, Enum):
 TERMINAL_FORECAST_STATUSES = frozenset(
     {
         ForecastStatus.SKIPPED,
+        ForecastStatus.RESOLVED_SCOREABLE,
+        ForecastStatus.RESOLVED_UNSCOREABLE,
+        ForecastStatus.CANCELLED,
         ForecastStatus.RESOLVED_ELIGIBLE,
         ForecastStatus.RESOLVED_INELIGIBLE,
         ForecastStatus.EXPIRED,
         ForecastStatus.FAILED,
     }
 )
+
+SCOREABLE_STATUSES = frozenset(
+    {ForecastStatus.RESOLVED_SCOREABLE, ForecastStatus.RESOLVED_ELIGIBLE}
+)
+UNSCOREABLE_RESOLVED_STATUSES = frozenset(
+    {ForecastStatus.RESOLVED_UNSCOREABLE, ForecastStatus.RESOLVED_INELIGIBLE}
+)
+ACTIVE_FORECAST_STATUSES = frozenset(
+    {
+        ForecastStatus.FORECASTED,
+        ForecastStatus.AWAITING_LABEL,
+        ForecastStatus.CREATED,
+        ForecastStatus.PENDING_LABEL,
+    }
+)
+OPEN_SLOT_STATUSES = frozenset(
+    {
+        ForecastStatus.SCHEDULED,
+        ForecastStatus.FORECASTED,
+        ForecastStatus.AWAITING_LABEL,
+        ForecastStatus.CREATED,
+        ForecastStatus.PENDING_LABEL,
+    }
+)
+
+
+def forecast_created_statuses() -> tuple[str, ...]:
+    return (ForecastStatus.FORECASTED.value, ForecastStatus.CREATED.value)
+
+
+def resolution_statuses() -> tuple[str, ...]:
+    return (
+        ForecastStatus.RESOLVED_SCOREABLE.value,
+        ForecastStatus.RESOLVED_UNSCOREABLE.value,
+        ForecastStatus.RESOLVED_ELIGIBLE.value,
+        ForecastStatus.RESOLVED_INELIGIBLE.value,
+    )
+
+
+def transition_timestamp(
+    transitions: dict[tuple[int, str], int],
+    slot_start: int,
+    status_names: tuple[str, ...],
+) -> int | None:
+    for name in status_names:
+        timestamp = transitions.get((slot_start, name))
+        if timestamp is not None:
+            return timestamp
+    return None
 
 
 @dataclass(frozen=True)
@@ -157,7 +214,10 @@ class FeatureWindow:
             raise ValueError("spread and volatility must be finite and non-negative")
 
     def to_record(self) -> dict[str, Any]:
-        return asdict(self)
+        record = asdict(self)
+        record["historical_aggressor_buy_share"] = self.buy_ratio
+        record["closing_book_depth_imbalance"] = self.signed_imbalance
+        return record
 
 
 @dataclass(frozen=True)
@@ -233,8 +293,16 @@ class RunManifest:
     minimum_label_trades: int
     target_eligible: int
     terminal_slot_limit: int | None = None
-    schema_version: int = 7
-    implementation_revision: str = "v7r3"
+    mode: Literal["diagnostic", "primary"] = "diagnostic"
+    capture_policy: str = "uncertified_stream_v1"
+    clock_policy: str = "exchange_event_time_v1"
+    eligibility_policy: str = "explicit_capture_coverage_v1"
+    decision_lead_ms: int = 0
+    settlement_delay_ms: int = 0
+    artifact_purpose: Literal["diagnostic_fixture", "primary"] = "diagnostic_fixture"
+    book_depth_levels: int = 1000
+    schema_version: int = 8
+    implementation_revision: str = "v8r1"
 
     def __post_init__(self) -> None:
         if not self.run_id or not self.symbol or not self.provider:
@@ -254,6 +322,52 @@ class RunManifest:
             raise ValueError("sample requirements must be positive")
         if self.terminal_slot_limit is not None and self.terminal_slot_limit <= 0:
             raise ValueError("terminal_slot_limit must be positive when set")
+        if self.decision_lead_ms < 0 or self.settlement_delay_ms < 0:
+            raise ValueError("decision lead and settlement delay must be non-negative")
+        if self.mode == "primary" and self.artifact_purpose != "primary":
+            raise ValueError("primary runs require a primary artifact")
 
     def to_record(self) -> dict[str, Any]:
         return asdict(self)
+
+
+@dataclass(frozen=True)
+class EvidenceSummary:
+    integrity_state: str
+    capture_quality: str
+    evidence_status: str
+
+    def to_record(self) -> dict[str, str]:
+        return {
+            "integrity_state": self.integrity_state,
+            "capture_quality": self.capture_quality,
+            "evidence_status": self.evidence_status,
+        }
+
+
+def compute_capture_quality(
+    *,
+    mode: str,
+    unresolved_gaps: int,
+    coverage_certifiable: bool,
+) -> str:
+    if mode == "diagnostic":
+        return "uncertified"
+    if unresolved_gaps > 0:
+        return "gapped"
+    if coverage_certifiable:
+        return "certified"
+    return "uncertified"
+
+
+def compute_evidence_status(
+    *,
+    mode: str,
+    scoreable_slots: int,
+    unresolved_gaps: int,
+) -> str:
+    if mode == "diagnostic":
+        return "diagnostic"
+    if scoreable_slots > 0 and unresolved_gaps == 0:
+        return "scoreable"
+    return "unscoreable"

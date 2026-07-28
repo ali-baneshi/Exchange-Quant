@@ -1,0 +1,26 @@
+{
+  "adapter_revision": "binance-spot-sequenced-v1",
+  "certification_id": "example-invalid",
+  "clock_uncertainty_ms": null,
+  "fault_results": {
+    "detail": "example fixture only",
+    "expected_events": 3,
+    "observed_events": 3,
+    "passed": false
+  },
+  "issued_at_ms": 0,
+  "live_soak": {
+    "duration_s": 0,
+    "health": {},
+    "passed": false
+  },
+  "provider": "binance-sequenced",
+  "replay_results": {
+    "counts": {},
+    "health": {},
+    "passed": false
+  },
+  "symbol": "btcusdt",
+  "unresolved_gaps": 1,
+  "valid": false
+}

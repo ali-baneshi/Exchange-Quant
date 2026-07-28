@@ -17,6 +17,13 @@ class ProviderHealth:
     sequence_gaps: int
     coverage_certifiable: bool
     detail: str = ""
+    last_trade_sequence: int | None = None
+    last_book_sequence: int | None = None
+    unresolved_gaps: int = 0
+    clock_offset_ms: float | None = None
+    clock_uncertainty_ms: float | None = None
+    trade_watermark_ms: int | None = None
+    book_watermark_ms: int | None = None
 
 
 class MarketDataProvider(Protocol):

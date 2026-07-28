@@ -1,0 +1,11 @@
+{
+  "artifact": "artifacts/v8/btcusdt-born.json",
+  "provider": "binance-sequenced",
+  "provider_certification": "certifications/binance-btcusdt.example.json",
+  "symbol": "btcusdt",
+  "target_eligible": 720,
+  "max_terminal_slots": null,
+  "capture_policy": "binance_trade_depth_sequenced_v1",
+  "clock_policy": "exchange_clock_watermark_v1",
+  "eligibility_policy": "certified_continuity_v1"
+}
