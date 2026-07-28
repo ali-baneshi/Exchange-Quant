@@ -14,7 +14,13 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: make test
       - run: make compile
-      - run: for file in scripts/*.sh; do sh -n "$file"; done
+      - run: |
+          for file in scripts/*.sh; do
+            case "$(head -1 "$file")" in
+              *bash) bash -n "$file" ;;
+              *) sh -n "$file" ;;
+            esac
+          done
       - run: |
           command -v curl
           python3 core/validation_report.py --period 60min --output /tmp/validation_report.json

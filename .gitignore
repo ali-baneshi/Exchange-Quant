@@ -10,8 +10,11 @@ core/_live_results/
 # Live runtime artifacts
 live_quantum_v3.pid
 live_quantum_v3.log
+live_exploratory.pid
+live_exploratory.log
 live_smoke_*.log
 .live_quantum_v3.lock
+.live_quantum_v5.lock
 
 # OS files
 .DS_Store

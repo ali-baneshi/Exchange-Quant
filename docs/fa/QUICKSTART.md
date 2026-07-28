@@ -1,134 +1,78 @@
 # راهنمای سریع عملیاتی
 
-**English:** [../../WORKFLOW.md](../../WORKFLOW.md) | **واژه‌نامه:** [GLOSSARY.md](./GLOSSARY.md)
+**English:** [../../WORKFLOW.md](../../WORKFLOW.md) | **قرارداد:** [../SCHEMA_V6.md](../SCHEMA_V6.md)
 
----
-
-## پیش‌نیاز
+## آماده‌سازی
 
 ```bash
-python3 --version   # ۳.۸+
-command -v curl     # برای data_historical.py
-cd Exchange-Q
-make test           # ۶۶ تست سبز
+pip install -r requirements-dev.txt
+make test
+make compile
 ```
 
----
+## Production
 
-## گام ۱: داده تاریخی
-
-```bash
-python3 core/data_historical.py
-```
-
-خروجی در `core/_kline_cache/` — ۵۰۰۰ کندل برای ۱۵min، ۶۰min، ۱day.
-
----
-
-## گام ۲: بک‌تست کلاسیک
-
-```bash
-python3 core/backtest.py
-python3 core/experiment_ablation.py
-```
-
-هدف: **جهت باینری** کندل بعدی. قانون Born در این مسیر **حذف شده** (۲۰۲۶-۰۷-۲۳).
-
----
-
-## گام ۳: گزارش اعتبارسنجی
-
-```bash
-python3 core/validation_report.py --period 60min
-python3 core/validation_report.py --period 60min --output report_60min.json
-```
-
-کلاسیک روی کندل + وضعیت فایل‌های live روی دیسک.
-
----
-
-## گام ۴: آزمایش مصنوعی (اختیاری)
-
-```bash
-python3 core/experiment.py
-python3 core/visualize.py
-```
-
-در داده مصنوعی کوانتوم معمولاً **بدتر** از کلاسیک است — فقط تشخیصی.
-
----
-
-## گام ۵: pipeline زنده (مسیر معتبر Born)
-
-### شروع تولید (توصیه‌شده)
+در ترمینال اول:
 
 ```bash
 ./scripts/start_production_run.sh
 ```
 
-این اسکریپت `make test` را اجرا می‌کند و سپس:
-
-```bash
-python3 core/pipeline_live_ensemble.py btcusdt 720 3600 quantum 60 15
-```
-
-### پارامترها
-
-| آرگومان | مثال | معنی |
-|---------|------|------|
-| symbol | btcusdt | جفت معاملاتی |
-| n_steps | 720 | حداکثر تکرار نمونه‌گیری |
-| horizon | 3600 | افق پیش‌بینی (ثانیه) |
-| mode | quantum | حالت کوانتومی خالص |
-| sample_interval | 60 | فاصله fetch از Huobi |
-| window | 15 | اندازه lookback |
-
-### معنی ۷۲۰ در برابر ۴۳۲۰۰
-
-- فقط **یک forecast pending** در هر لحظه.
-- با `horizon=3600` و `sample_interval=60`، هر ساعت یک forecast resolve می‌شود.
-- **۷۲۰ n_steps** ≈ حداکثر ۷۲۰ resolve (حدود ۳۰ روز).
-- **۴۳۲۰۰ n_steps** = ۷۲۰ ساعت × ۶۰ fetch/ساعت — همان تعداد resolve، با حاشیه بیشتر برای warmup و تأخیر.
-
----
-
-## گام ۶: پایش و تحلیل
+در ترمینال دوم:
 
 ```bash
 ./scripts/monitor_live.sh
 tail -f live_quantum_v3.log
-
-python3 core/analyze_live_results.py --schema-version 3 --exclude-collector
-python3 core/analyze_live_results.py --schema-version 3 --run-id btcusdt-quantum-XXXX
 ```
 
-### آستانه ادعا
+فرآیند start در foreground است. `Ctrl-C` در ترمینال اول خروج تمیز انجام می‌دهد.
+برای توقف اضطراری یا وقتی ترمینال اول در دسترس نیست:
 
-| n (resolved eligible) | گزارش |
-|----------------------|--------|
-| < 30 | فقط تشخیصی |
-| ≥ 30 | خلاصه exploratory مجاز |
-| ≥ 720 | ادعای معناداری تولید |
+```bash
+./scripts/stop_all_runs.sh
+```
 
----
+تنظیم production: `horizon=3600s`، interval=`60s`، window=`15` و هدف
+`720` resolve واجد شرایط است. نام log قدیمی است اما قرارداد خروجی فعلی v6r1 است.
 
-## چک‌لیست قبل از ادعای جدید
+## Exploratory
 
-1. فقط JSON با `schema_version: 3`
-2. `--exclude-collector` — فایل‌های collector را حذف کن
-3. `born_active_rate` (`fallback_reason=none`) را گزارش کن
-4. p-value Bonferroni را ذکر کن
-5. v2 آرشیو را با v3 مخلوط نکن
+```bash
+./scripts/start_exploratory_run.sh
+```
 
----
+از ترمینال دیگر:
 
-## عیب‌یابی سریع
+```bash
+./scripts/monitor_exploratory.sh
+tail -f live_exploratory.log
+```
 
-| علامت | اقدام |
-|-------|-------|
-| `NO DATA` | API Huobi — `quality_flags` را ببین |
-| forecast نمی‌سازد | pending هنوز resolve نشده — صبر کن |
-| `born_active_rate` ≈ 0 | `fallback_reason` را در analyze ببین |
-| `destructive_interference` | تداخل منفی — پیش‌بینی به classical_part برگشت |
+این run با horizon 60 ثانیه فقط برای بررسی زیرساخت، cadence و کیفیت label است؛
+جای production و شواهد اصلی را نمی‌گیرد.
 
-جزئیات: [../RUNBOOK.md](../RUNBOOK.md)
+## وقتی «گیر کرده» به نظر می‌رسد
+
+بعد از warmup فقط یک forecast pending مجاز است. بنابراین پیام زیر تا رسیدن target
+طبیعی است:
+
+```text
+SKIP forecast — pending unresolved
+```
+
+monitor مبتنی بر SQLite را بررسی کنید: target pending، تعداد labelهای eligible،
+دلیل exclusion و خطاهای capture. JSON فقط export قابل مشاهده است و ممکن است
+لحظه‌ای عقب‌تر باشد.
+
+## تحلیل و ادعا
+
+```bash
+python3 core/analyze_live_results.py --schema-version 6 --exclude-collector
+```
+
+برای مشاهدهٔ فایل v6 پیش از hardening باید صریحاً
+`--allow-pre-hardening-v6` را اضافه کنید. این فایل‌ها وارد aggregate فعلی نمی‌شوند.
+
+فقط رکوردهای `forward_window` با capture کامل و `score_eligible == true` برای
+امتیاز اصلی معتبرند. MAE معیار اصلی است. win rate، `net_return` و شبیه‌سازی قیمت
+diagnostic هستند و اثبات سودآوری نیستند.

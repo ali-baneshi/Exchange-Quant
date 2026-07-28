@@ -14,4 +14,10 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: make test
       - run: make compile
-      - run: for file in scripts/*.sh; do sh -n "$file"; done
+      - run: |
+          for file in scripts/*.sh; do
+            case "$(head -1 "$file")" in
+              *bash) bash -n "$file" ;;
+              *) sh -n "$file" ;;
+            esac
+          done

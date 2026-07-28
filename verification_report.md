@@ -1,5 +1,11 @@
 # Verification Report
 
+> **Historical report — not current v6 evidence.** This July 20, 2026 report
+> evaluates earlier kline/live-era material and uses terminology that predates the
+> current documentation correction. It remains valuable for its dated negative
+> finding, but current live claims must follow `docs/STATISTICS.md` and
+> `docs/EVIDENCE_STATUS.md`.
+
 **Date:** 2026-07-20  
 **Subject:** Does the Born rule, with all fixes applied, consistently beat classical baselines on large-scale, out-of-sample data?
 

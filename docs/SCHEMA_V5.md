@@ -1,4 +1,9 @@
-# Schema v5 — Live Evaluation Contract
+# Schema v5 — Historical Live Evaluation Contract
+
+> **Historical reference only.** Schema v5 is superseded by
+> [SCHEMA_V6.md](./SCHEMA_V6.md) as of July 28, 2026. Do not use v5 rows for v6
+> primary analysis. The original contract below is retained to interpret dated
+> runs and audit artifacts.
 
 Schema v5 is the only result format eligible for the current primary live study. It is written by `core/pipeline_live_ensemble.py`, stored durably in SQLite through `core/live_store.py`, and analyzed with:
 
@@ -16,6 +21,12 @@ python3 core/analyze_live_results.py --schema-version 5 --exclude-collector
 | Primary score eligibility | `resolved_label == "forward_window"`, `label_capture_complete == true`, and `score_eligible == true` |
 | Corpus isolation | Never aggregate schema v2–v4 with v5 |
 | Durable source | SQLite is authoritative; JSON is an inspectable export |
+
+## data_policy_version 3
+
+When `data_policy_version == 3`, live **feature** `buy_ratio` uses only trades from the most recent `max(60, horizon_s)` seconds (`feature_lookback_s` in observations). Raw trade pages are still captured in full for **forward-window labels**. This keeps features aligned with forecast horizon scale (exploratory 60s vs production 3600s).
+
+Config helpers: `feature_lookback_s(horizon_s)`, `min_forward_trades(horizon_s)` in `core/config.py`.
 
 ## Top-Level Document
 

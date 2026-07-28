@@ -1,59 +1,32 @@
-# فهرست مستندات Exchange-Q
+# فهرست مستندات فارسی Exchange-Q
 
 **English:** [../README.md](../README.md) | **خلاصه فارسی:** [../../README.fa.md](../../README.fa.md)
 
----
+## منابع فعلی
 
-## از کجا شروع کنم؟
+| نیاز | سند |
+|---|---|
+| اجرای، پایش، توقف و resume | [../RUNBOOK.md](../RUNBOOK.md) |
+| معماری و جریان داده | [../../ARCHITECTURE.md](../../ARCHITECTURE.md) |
+| قرارداد خروجی v6 | [../SCHEMA_V6.md](../SCHEMA_V6.md) |
+| آمار و محدودیت ادعا | [../STATISTICS.md](../STATISTICS.md) |
+| وضعیت صادقانهٔ شواهد | [../EVIDENCE_STATUS.md](../EVIDENCE_STATUS.md) |
+| راهنمای سریع فارسی | [QUICKSTART.md](QUICKSTART.md) |
+| واژه‌نامه | [GLOSSARY.md](GLOSSARY.md) |
+| درسنامه فارسی | [darsname/README.md](darsname/README.md) |
 
-| هدف | سند |
-|-----|-----|
-| **درسنامه (آموزش فارسی، Q&A)** | **[darsname/README.md](./darsname/README.md)** ← شروع یادگیری |
-| اجرای اولیه پروژه | [QUICKSTART.md](./QUICKSTART.md) |
-| درک اصطلاحات | [GLOSSARY.md](./GLOSSARY.md) |
-| pipeline زنده (جزئیات) | [../RUNBOOK.md](../RUNBOOK.md) |
-| معماری سیستم | [../../ARCHITECTURE.md](../../ARCHITECTURE.md) |
-| JSON خروجی و fallback | [../SCHEMA_V3.md](../SCHEMA_V3.md) |
-| آمار و p-value | [../STATISTICS.md](../STATISTICS.md) |
-| حکم تجربی | [../../verification_report.md](../../verification_report.md) |
+مسیر live معتبر:
 
----
+```text
+pipeline_live_ensemble.py → SQLite منبع حقیقت → JSON schema v6r1
+→ analyze_live_results.py --schema-version 6
+```
 
-## مستندات عملیاتی (فارسی)
+## وضعیت اسناد قدیمی
 
-| سند | توضیح |
-|-----|--------|
-| [../../README.fa.md](../../README.fa.md) | خلاصه اجرایی + دستورات |
-| [QUICKSTART.md](./QUICKSTART.md) | گام‌های WORKFLOW به فارسی |
-| [GLOSSARY.md](./GLOSSARY.md) | Born rule، δ، schema v3 |
+فایل‌های v6 پیش از revision `v6r1` و همچنین درس‌های تاریخ‌دار، schema v3/v5،
+artifactها، گزارش audit و verification برای حفظ
+سابقه نگه‌داری می‌شوند. آن‌ها دستور عملیاتی فعلی یا شاهد v6 نیستند.
 
----
-
-## تحقیقات (فارسی — تئوری)
-
-| سند | موضوع |
-|-----|--------|
-| [../../core/research_INDEX.md](../../core/research_INDEX.md) | نگاشت تحقیق → کد |
-| research_01 | سه‌گانه قصد (Intent Trilemma) |
-| research_02 | مکانیزم‌های الهام‌گرفته از کوانتوم |
-| research_03 | پارادوکس‌های تصمیم‌گیری |
-| research_04 | ICDS (چشم‌انداز — با پیاده‌سازی فرق دارد) |
-| research_05 | آرشیو نتایج |
-
----
-
-## فقط مطالعه پس‌زمینه (برای ops استفاده نکنید)
-
-- `quantum_inspired_programming.md` — برنامه‌نویسی الهام‌گرفته از کوانتوم (عمومی)
-- `ai_research_study_guide_fa.md` — PHCA / FEP (پروژه دیگر)
-- `code_audit_v1/` — ممیزی تاریخی ۲۰۲۶-۰۷-۲۰
-
----
-
-## اسکریپت‌ها
-
-| اسکریپت | کاربرد |
-|---------|--------|
-| `scripts/start_production_run.sh` | شروع اجرای تولید v3 |
-| `scripts/monitor_live.sh` | پایش log و JSON |
-| `scripts/archive_legacy_results.sh` | آرشیو JSON قدیمی |
+مطالعه‌های عمومی کوانتوم، PHCA و شناخت کوانتومی نیز پس‌زمینه‌اند؛ برای اجرای
+Exchange-Q یا اثبات عملکرد مدل به آن‌ها استناد نکنید.

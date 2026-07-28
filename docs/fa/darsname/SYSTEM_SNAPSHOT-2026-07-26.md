@@ -1,5 +1,7 @@
 # Snapshot وضعیت سیستم — 2026-07-26
 
+> **Superseded:** نسخه فعلی: [SYSTEM_SNAPSHOT-2026-07-27.md](./SYSTEM_SNAPSHOT-2026-07-27.md) — schema **v5**.
+
 **تاریخ snapshot:** 2026-07-26 08:38 (+0330)  
 **Git commit (مرجع):** `5495b86` (worktree ممکن است dirty باشد)  
 **Python تست‌شده:** 3.14 محلی؛ CI هدف 3.12  

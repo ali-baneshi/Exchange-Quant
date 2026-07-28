@@ -1,22 +1,21 @@
 # Exchange-Q Workflow Guide
 
-This guide describes the complete research workflow. Start with the section matching your goal; do not treat every command as part of one comparable experiment.
+These workflows intentionally produce different targets and evidence. Do not merge
+their metrics or use a convenient result from one path to support a claim about
+another.
 
-## 1. Prepare the Environment
+## 1. Prepare
 
 ```bash
-python3 --version
-command -v curl
 pip install -r requirements-dev.txt
 make test
 make compile
 ```
 
-Runtime code uses the Python standard library. `pytest` is a development dependency. Historical collection requires `curl`.
+Runtime code is standard-library based; development checks use the development
+requirements. Historical collection additionally needs `curl`.
 
-## 2. Classical Historical Analysis
-
-Use this path to check data ordering and classical baselines on historical OHLCV.
+## 2. Historical Classical Analysis
 
 ```bash
 python3 core/data_historical.py
@@ -25,14 +24,9 @@ python3 core/experiment_ablation.py
 python3 core/validation_report.py --period 60min
 ```
 
-### What this path means
-
-- Data source: Gate.io OHLCV cache with Huobi fallback.
-- Target: binary next-candle direction.
-- Born rule: intentionally excluded.
-- Output: classical MAE and diagnostic validation statistics.
-
-Do not compare this MAE to live `buy_ratio` MAE. The target, data source, and difficulty are different.
+This path evaluates classical methods on binary next-candle direction. Born-rule
+market claims are deliberately out of scope, and its MAE is not comparable to live
+trade-flow MAE.
 
 ## 3. Synthetic Diagnostics
 
@@ -41,48 +35,80 @@ python3 core/experiment.py
 python3 core/visualize.py
 ```
 
-The simulator is useful for checking formulas and failure modes. It is not an out-of-sample market test and must not be used to support a trading or model-efficacy claim.
+Synthetic results can expose formula behavior and edge cases. They do not establish
+out-of-sample market performance, profitability, or superiority over a baseline.
 
-## 4. Start the Frozen Live Study
+## 4. Production Live Evaluation
 
-The only primary Born-rule path is the durable schema-v5 evaluator.
+In terminal 1:
 
 ```bash
 ./scripts/start_production_run.sh
 ```
 
-Equivalent explicit command:
+The script runs in the foreground. It starts the schema-v6r1 production configuration:
 
-```bash
-python3 core/pipeline_live_ensemble.py \
-  --symbol btcusdt \
-  --mode quantum \
-  --horizon-s 3600 \
-  --sample-interval-s 60 \
-  --window 15 \
-  --max-resolved 720
-```
+| Setting | Value |
+|---|---:|
+| Mode | `quantum` |
+| Horizon | 3600 seconds |
+| Capture interval | 60 seconds |
+| Accepted-observation window | 15 |
+| Completion target | 720 eligible resolutions |
 
-### Configuration semantics
-
-| Option | Production value | Meaning |
-|---|---:|---|
-| `--horizon-s` | `3600` | Future label interval in seconds |
-| `--sample-interval-s` | `60` | Feature/trade capture cadence |
-| `--window` | `15` | Accepted observation lookback |
-| `--max-resolved` | `720` | Eligible resolved forecasts required before successful completion |
-| `--mode` | `quantum` | Frozen Born-only model; `ensemble` is a separate configuration |
-
-Only one forecast is pending at a time. With a one-hour horizon, 720 eligible resolutions usually require about 30 days, plus any excluded data-quality intervals.
-
-## 5. Monitor, Resume, and Stop
+In terminal 2 or later:
 
 ```bash
 ./scripts/monitor_live.sh
-./scripts/stop_all_runs.sh
+tail -f live_quantum_v3.log
 ```
 
-To resume an interrupted run, use the `run_id` printed at startup:
+The log filename is historical. The result contract is schema v6. `Ctrl-C` in
+terminal 1 sends the intended graceful stop; use `./scripts/stop_all_runs.sh` only
+when the owning terminal cannot be used.
+
+## 5. Exploratory Infrastructure Run
+
+```bash
+./scripts/start_exploratory_run.sh
+```
+
+Then, from another terminal:
+
+```bash
+./scripts/monitor_exploratory.sh
+tail -f live_exploratory.log
+```
+
+This 60-second profile is useful for collection, lifecycle, and observability
+checks. It is exploratory and cannot replace the production primary corpus.
+
+## 6. Interpret Live State
+
+After warmup, the runner creates one pending forecast. It will then print:
+
+```text
+SKIP forecast — pending unresolved
+```
+
+until the forecast’s target is due and the future trade window can be resolved. This
+is expected protocol behavior. The monitor’s SQLite-backed state is the authority;
+JSON exports are inspectable snapshots.
+
+A resolved record is primary eligible only when:
+
+```text
+resolved_label == "forward_window"
+label_capture_complete == true
+score_eligible == true
+```
+
+`label_unavailable`, partial capture, timing/quality failures, and stale data are
+excluded from primary scoring but should be investigated as operational diagnostics.
+
+## 7. Resume or Analyze
+
+Resume only the same configuration and schema:
 
 ```bash
 python3 core/pipeline_live_ensemble.py \
@@ -93,45 +119,32 @@ python3 core/pipeline_live_ensemble.py \
   --max-resolved 720
 ```
 
-Resume succeeds only if the stored configuration hash matches the requested configuration.
-
-## 6. Analyze Results
+Analyze current v6r1 rows:
 
 ```bash
-python3 core/analyze_live_results.py --schema-version 5 --exclude-collector
-python3 core/analyze_live_results.py --schema-version 5 --run-id btcusdt-quantum-EPOCH
+python3 core/analyze_live_results.py --schema-version 6 --exclude-collector
+python3 core/analyze_live_results.py --schema-version 6 --run-id btcusdt-quantum-EPOCH
 ```
 
-The analyzer includes only v5 records that have:
-
-```text
-resolved_label == "forward_window"
-label_capture_complete == true
-score_eligible == true
-```
-
-Legacy v2–v4 files are historical artifacts. Move them out of the active corpus with:
+Archive legacy results separately:
 
 ```bash
 ./scripts/archive_legacy_results.sh
 ```
 
-## 7. Interpret Results Safely
+The archive command moves pre-hardening v6 and older formats to
+`_archive/pre_v6r1/`. Historical v6 inspection requires
+`--allow-pre-hardening-v6`.
 
-| Eligible sample size | Allowed conclusion |
+## 8. Report Conservatively
+
+| Eligible observations | Permitted conclusion |
 |---:|---|
-| `< 30` | Pipeline/data-quality diagnostics only |
+| `< 30` | Pipeline and data-quality diagnostics only |
 | `30–719` | Exploratory descriptive comparison only |
-| `≥ 720` | Run the frozen paired statistical analysis |
+| `≥ 720` | Frozen paired inference under `docs/STATISTICS.md` |
 
-Every report must state the run ID, configuration hash, model version, eligible sample count, excluded-label reasons, MAE comparison, and corrected p-value. See `docs/STATISTICS.md`.
-
-## 8. Common Mistakes
-
-| Mistake | Correct practice |
-|---|---|
-| Comparing kline and live MAE | Treat them as different tasks |
-| Using a snapshot label after a missing trade window | Keep as diagnostic; exclude from score |
-| Mixing old JSON with v5 data | Archive v2–v4 before aggregate analysis |
-| Restarting with changed parameters | Start a new run; do not resume |
-| Reading an exploratory win rate as evidence | Wait for the frozen threshold and paired inference |
+Always report the run identity, configuration hash, exclusions, model and classical
+MAE, `MAE(constant 0.5)`, paired inference, and execution-path/fallback rates.
+Win rate and price-return fields are secondary diagnostics; they do not demonstrate
+trading profitability.

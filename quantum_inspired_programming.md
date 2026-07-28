@@ -1,6 +1,13 @@
 # Technical Lesson: Quantum-Inspired Programming on Classical Hardware (2025-2026)
 
-This lesson addresses the fundamental question: **"Can we implement quantum logic without a quantum computer?"** The answer is a resounding **Yes**. While we cannot achieve "exponential speedup" for all problems, we can leverage quantum principles like **Superposition**, **Entanglement**, and **Interference** as algorithmic motifs to solve complex problems more efficiently than traditional classical approaches.
+> **Background educational material, not Exchange-Q documentation or evidence.**
+> Examples are conceptual and do not demonstrate an advantage, a current research
+> result, or applicability to this repository. Verify external claims independently.
+
+This lesson addresses the question: **"Can we implement mathematical
+quantum-inspired motifs without a quantum computer?"** Yes, classical software can
+model such mathematics, but it does not thereby obtain quantum hardware behavior or
+an inherent performance advantage over classical methods.
 
 ---
 
@@ -8,7 +15,9 @@ This lesson addresses the fundamental question: **"Can we implement quantum logi
 In **Quantum-Native** computing, you use physical qubits. In **Quantum-Inspired** computing, you use **Classical Bits** to simulate the *mathematical structure* of quantum mechanics. 
 
 ### Why do this?
-*   **Nature's Blueprint:** Nature (e.g., photosynthesis, bird navigation) uses quantum effects at scale. We can mimic these "Quantum Biological" patterns in software.
+*   **Biological inspiration is not a performance argument:** some biological
+    systems are studied for possible quantum effects, but relevance, scale, and
+    engineering transfer remain context-dependent.
 *   **Optimization:** Quantum-inspired algorithms (like QIEA - Quantum-Inspired Evolutionary Algorithms) often find global optima in high-dimensional spaces where classical SGD (Stochastic Gradient Descent) gets stuck.
 
 ---
@@ -41,7 +50,9 @@ def quantum_inspired_activation(x):
 # Usage in a Neural Network layer
 # layer_output = quantum_inspired_activation(dot_product(weights, inputs))
 ```
-*Interesting Case:* Research in 2025 showed that this simple change in "botnet detection" models increased accuracy by 15% because it naturally handles high-dimensional noise better than classical functions.
+*Caution:* A `tanh` substitution is an ordinary classical modeling choice. Any
+claimed accuracy change requires a named dataset, baseline, split protocol, and
+independent replication; no such result is established by this lesson.
 
 ---
 
@@ -56,7 +67,10 @@ How do you design a complex system (like a city traffic manager) using quantum p
 ---
 
 ## 5. Professional Mistakes to Avoid
-*   **Over-Simulating:** Don't try to be "too quantum." If a classical `if-else` works, use it. Only use quantum logic for the **High-Dimensional Optimization** or **Complex Pattern Recognition** parts.
+*   **Over-Simulating:** Do not add quantum terminology where a simpler classical
+    construction suffices. Evaluate each proposed method against appropriate
+    classical baselines rather than assuming a high-dimensional problem needs a
+    quantum-inspired formulation.
 *   **Ignoring Decoherence:** In your code, "Decoherence" is equivalent to **Numerical Noise** or **Rounding Errors**. If your "Quantum State" in the code isn't normalized regularly, the system will drift into nonsense.
 
 ### Practical Command (Python Environment)

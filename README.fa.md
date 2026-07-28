@@ -1,79 +1,60 @@
 # Exchange-Q — خلاصه فارسی
 
-**English:** [README.md](./README.md) | **فهرست مستندات:** [docs/fa/README.md](./docs/fa/README.md)
+**English:** [README.md](README.md) | **فهرست فارسی:** [docs/fa/README.md](docs/fa/README.md)
 
----
+Exchange-Q یک ارزیاب پژوهشی پایدار برای یک فرضیه پیش‌بینی الهام‌گرفته از کوانتوم
+است. این پروژه ربات معامله‌گر نیست: کلید صرافی، اجرای سفارش، مدیریت پورتفو یا ادعای
+سودآوری ندارد.
 
-## هدف پروژه
+## وضعیت فعلی — ۲۸ ژوئیهٔ ۲۰۲۶
 
-Exchange-Q مدل‌های **تداخل Born** (الهام‌گرفته از احتمال کوانتومی) را برای پیش‌بینی رفتار بازار اعمال می‌کند — بدون نیاز به سخت‌افزار کوانتومی.
+- قرارداد فعال: schema **v6r1**، مدل `born_constructive_v2`، data policy **v4**،
+  implementation revision برابر `v6r1` و acquisition policy برابر ۱ است.
+- خروجی ارزیابی‌شده یک سیاست ترکیبیِ دارای gate است؛ مقدار خام Born همیشه همان
+  مقدار امتیازدهی‌شده نیست و `fallback_reason` باید در گزارش دیده شود.
+- هنوز corpus معتبر v6 وجود ندارد که برتری نسبت به baseline کلاسیک یا سودآوری
+  معاملاتی را ثابت کند.
 
-**وضعیت (۱۴۰۵/۰۵/۰۴ — ۲۰۲۶-۰۷-۲۶):**
+پیش از نقل نتیجه، [وضعیت شواهد](docs/EVIDENCE_STATUS.md) را بخوانید.
 
-- قانون Born از ارزیابی **کندل تاریخی** حذف شده است (p=1.0 روی ۵۰۰۰ کندل).
-- مسیر معتبر کوانتومی: **pipeline زنده با order-book** (`pipeline_live_ensemble.py`).
-- تعمیرات مدل: δ زنده در بازه **[0, π/2]**؛ در تداخل مخرب → `destructive_interference`.
-- خروجی schema v3 با `run_id`؛ تحلیل فقط با `--schema-version 3`.
+## اجرای زنده
 
----
-
-## دستورات اصلی
+در ترمینال اول:
 
 ```bash
-# داده تاریخی + بک‌تست کلاسیک
-python3 core/data_historical.py
-python3 core/backtest.py
-
-# گزارش اعتبارسنجی (کلاسیک + وضعیت live)
-python3 core/validation_report.py --period 60min
-
-# آزمایش مصنوعی (کنترل‌شده)
-python3 core/experiment.py
-
-# اجرای تولید (تست‌ها + pipeline کوانتومی)
 ./scripts/start_production_run.sh
-
-# پایش
-./scripts/monitor_live.sh
-
-# تحلیل نتایج v3
-python3 core/analyze_live_results.py --schema-version 3 --exclude-collector
 ```
 
----
+این فرمان عمداً در foreground می‌ماند. در ترمینال دیگر:
 
-## مسیر معتبر Born
+```bash
+./scripts/monitor_live.sh
+tail -f live_quantum_v3.log
+```
+
+برای خروج تمیز، در همان ترمینال اول `Ctrl-C` بزنید. اگر آن ترمینال در دسترس نیست:
+
+```bash
+./scripts/stop_all_runs.sh
+```
+
+نام log قدیمی است؛ خروجی فعلی schema v6 است. تحلیل:
+
+```bash
+python3 core/analyze_live_results.py --schema-version 6 --exclude-collector
+```
+
+فایل‌های v6 پیش از hardening فقط تاریخی‌اند و تنها با
+`--allow-pre-hardening-v6` قابل بررسی هستند؛ با corpus فعلی مخلوط نمی‌شوند.
+
+## مسیرها را مخلوط نکنید
 
 | مسیر | هدف | وضعیت |
-|------|-----|--------|
-| `pipeline_live_ensemble.py` | `buy_ratio` پیوسته از Huobi | **فعال — تنها مسیر کوانتومی معتبر** |
-| `backtest.py` | جهت باینری کندل | کلاسیک فقط |
-| `experiment.py` | شبیه‌ساز مصنوعی | تشخیصی — کوانتوم معمولاً بدتر |
+|---|---|---|
+| kline تاریخی | جهت باینری کندل | بررسی کلاسیک؛ شواهد Born نیست |
+| order-book زنده | `buy_ratio` آینده | مسیر اصلی v6 |
+| دادهٔ مصنوعی | هدف شبیه‌ساز | فقط تشخیصی |
 
----
-
-## وضعیت تجربی
-
-- داده live قدیمی (v2): کوانتوم ~۲× بدتر از کلاسیک.
-- re-run تمیز schema v3 در جریان است؛ قبل از n≥۳۰ resolved eligible ادعای برد مطرح نکنید.
-- جزئیات: [verification_report.md](./verification_report.md)، [docs/STATISTICS.md](./docs/STATISTICS.md).
-
----
-
-## مستندات
-
-| سند | موضوع |
-|-----|--------|
-| [docs/fa/darsname/README.md](./docs/fa/darsname/README.md) | **درسنامه‌های فارسی** (نسخه‌بندی + Q&A) |
-| [docs/fa/QUICKSTART.md](./docs/fa/QUICKSTART.md) | راهنمای عملیاتی گام‌به‌گام |
-| [docs/fa/GLOSSARY.md](./docs/fa/GLOSSARY.md) | واژه‌نامه (δ، buy_ratio، fallback) |
-| [docs/RUNBOOK.md](./docs/RUNBOOK.md) | عملیات pipeline زنده (انگلیسی) |
-| [core/research_INDEX.md](./core/research_INDEX.md) | پل تحقیقات فارسی → کد |
-
----
-
-## تست‌ها
-
-```bash
-make test   # ۶۶ تست
-```
+برای امتیاز اصلی باید `resolved_label == "forward_window"`،
+`label_capture_complete == true` و `score_eligible == true` برقرار باشد. نرخ برد
+و return شبیه‌سازی‌شده فقط diagnostics هستند، نه دلیل سودآوری.

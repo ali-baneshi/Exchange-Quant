@@ -30,7 +30,7 @@ Do not commit generated live databases, live JSON, caches, logs, or local PID fi
 |---|---|
 | Live feature or trade capture | Unit tests for malformed/duplicate/out-of-order data and integration coverage for label eligibility |
 | Forecast lifecycle | Tests for pending, resolution timing, resume, and no look-ahead leakage |
-| Schema-v5 field | `docs/SCHEMA_V5.md`, analyzer tests, and English/Persian operational docs |
+| Schema-v6 field | `docs/SCHEMA_V6.md`, analyzer tests, and English/Persian operational docs |
 | Model/delta/gate behavior | `test_quantum_core.py`, frozen model version decision, and statistical-policy review |
 | Statistic/reporting behavior | `test_validation.py`, `docs/STATISTICS.md`, and explicit claim-policy review |
 | Script/CLI change | `--help`/shell syntax validation and `docs/RUNBOOK.md`/`WORKFLOW.md` updates |
@@ -42,7 +42,7 @@ Do not commit generated live databases, live JSON, caches, logs, or local PID fi
 - [ ] A primary score uses only a complete local future trade window.
 - [ ] `score_eligible` is false for incomplete labels or disqualifying data quality.
 - [ ] Resume rejects mismatched `config_hash` values.
-- [ ] Schema-v5 documents and analyzer behavior match.
+- [ ] Schema-v6 documents and analyzer behavior match.
 - [ ] Current English and Persian operational documentation are updated together.
 - [ ] Historical documentation is not silently rewritten as current evidence.
 - [ ] Tests cover the changed behavior and the complete suite passes.
@@ -51,11 +51,16 @@ Do not commit generated live databases, live JSON, caches, logs, or local PID fi
 
 | Document class | Rule |
 |---|---|
-| Current operational docs | Must describe schema v5 and current commands |
+| Current operational docs | Must describe values from `core/config.py`, current commands, and the v6 contract |
 | Persian operational docs | Must remain equivalent to English policy and commands |
 | Research theory | Must separate conceptual claims from implemented behavior |
 | Historical audit/lessons | Preserve original substance; add an archive banner and link to current docs |
 | PDFs | Treat as fixed reference artifacts unless a maintained source is available |
+
+Before merging documentation changes, verify internal links, command examples,
+English/Persian policy parity, and that current claims distinguish prediction loss
+from trading profitability. Preserve dated evidence with a historical-status banner
+rather than altering its recorded findings.
 
 ## Naming and Compatibility
 

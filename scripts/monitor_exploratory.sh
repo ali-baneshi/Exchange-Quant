@@ -1,146 +1,131 @@
 #!/bin/sh
-# Monitor parallel exploratory schema v5 run (horizon 60s profile).
-# Usage: ./scripts/monitor_exploratory.sh
+# Monitor the active schema-v6r1 exploratory live evaluation.
+set -eu
 
-set -e
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-LOG="live_exploratory.log"
-PIDFILE="live_exploratory.pid"
+LOG="$ROOT/live_exploratory.log"
+PIDFILE="$ROOT/live_exploratory.pid"
 
-echo "=== Exploratory log (last 8 lines) ==="
+echo "=== Exploratory log (last 12 lines) ==="
 if [ -f "$LOG" ]; then
-  tail -8 "$LOG"
+  tail -12 "$LOG"
 else
-  echo "  (no $LOG yet)"
-fi
-
-if [ -f "$PIDFILE" ]; then
-  PID=$(cat "$PIDFILE")
-  if kill -0 "$PID" 2>/dev/null; then
-    echo ""
-    echo "=== Exploratory run PID $PID (running) ==="
-  else
-    echo ""
-    echo "=== Exploratory run PID $PID (not running) ==="
-  fi
-else
-  echo ""
-  echo "=== No live_exploratory.pid ==="
+  echo "  No log file yet."
 fi
 
 echo ""
-echo "=== Schema v5 exploratory result ==="
-eval "$(python3 -c "
-import glob, json, os, re
-
-LOG = 'live_exploratory.log'
-TARGET_HORIZON = 60.0
-
-
-def is_v4_exploratory(path):
-    try:
-        with open(path) as f:
-            d = json.load(f)
-    except Exception:
-        return False
-    return (
-        d.get('schema_version') == 5
-        and float(d.get('horizon_s', 0)) == TARGET_HORIZON
-    )
-
-
-def from_log():
-    if not os.path.isfile(LOG):
-        return None, None
-    with open(LOG) as f:
-        lines = f.readlines()
-    json_path = db_path = None
-    for line in reversed(lines):
-        m = re.search(r'output=(.+\.json)', line)
-        if m:
-            candidate = m.group(1)
-            if os.path.isfile(candidate) and is_v4_exploratory(candidate):
-                json_path = candidate
-        m2 = re.search(r'database=(.+\.sqlite3)', line)
-        if m2 and os.path.isfile(m2.group(1)):
-            db_path = m2.group(1)
-        if json_path:
-            break
-    return json_path, db_path
-
-
-def exploratory_v4_files():
-    out = []
-    for p in glob.glob('core/_live_results/*.json'):
-        if '_archive' in p.replace(chr(92), '/'):
-            continue
-        if is_v4_exploratory(p):
-            out.append(p)
-    return out
-
-
-def by_mtime(files):
-    return max(files, key=os.path.getmtime) if files else None
-
-
-active_json, active_db = from_log()
-files = exploratory_v4_files()
-primary = active_json or by_mtime(files) or ''
-
-
-def sh_quote(s):
-    if not s:
-        return \"''\"
-    return \"'\" + s.replace(\"'\", \"'\\\\''\") + \"'\"
-
-print(f'PRIMARY_FILE={sh_quote(primary)}')
-print(f'ACTIVE_DB={sh_quote(active_db or \"\")}')
-")"
-
-if [ -n "$PRIMARY_FILE" ] && [ -f "$PRIMARY_FILE" ]; then
-  echo "  file (selected):       $PRIMARY_FILE"
-  if [ -n "$ACTIVE_DB" ] && [ -f "$ACTIVE_DB" ]; then
-    echo "  database:              $ACTIVE_DB"
+echo "=== Exploratory process ==="
+if [ -f "$PIDFILE" ]; then
+  pid="$(cat "$PIDFILE" 2>/dev/null || true)"
+  if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null &&
+    ps -p "$pid" -o args= 2>/dev/null | grep -q 'pipeline_live_ensemble\.py'; then
+    echo "  PID $pid is running."
+  else
+    echo "  PID file is stale or process is not the live pipeline."
   fi
-  python3 -c "
-import json, sys
-from collections import Counter
-with open(sys.argv[1]) as f:
-    d = json.load(f)
-if d.get('schema_version') != 5:
-    raise SystemExit('  ERROR: selected file is not schema v5')
-print('  schema:', d.get('schema_version'))
-print('  run_id:', d.get('run_id'))
-print('  horizon_s:', d.get('horizon_s'))
-print('  sample_interval_s:', d.get('sample_interval_s'))
-print('  status:', d.get('status'), 'stop_reason:', d.get('stop_reason'))
-print('  config_hash:', (d.get('config_hash') or '')[:16], '...')
-print('  model_version:', d.get('model_version'))
-print('  observations:', len(d.get('observations', [])))
-preds = d.get('predictions', [])
-resolved = [p for p in preds if p.get('status') == 'resolved' and p.get('score_eligible', True)]
-pending = [p for p in preds if p.get('status') == 'pending']
-born = sum(1 for p in resolved if p.get('fallback_reason') == 'none')
-print('  resolved eligible:', len(resolved), ' pending:', len(pending), ' target: 500')
-if resolved:
-    print('  born_active_rate:', f'{born}/{len(resolved)} ({100*born/len(resolved):.1f}%)')
-    print('  fallbacks:', dict(Counter(p.get('fallback_reason','?') for p in resolved)))
-    labels = Counter(p.get('resolved_label', '?') for p in resolved)
-    fw = labels.get('forward_window', 0)
-    print(f'  resolved_label: {dict(labels)}  forward_window={fw}/{len(resolved)} ({100*fw/len(resolved):.1f}%)')
-    if len(resolved) >= 5:
-        preds = [p.get('prediction', 0) for p in resolved]
-        acts = [p.get('resolved_actual', 0) for p in resolved]
-        bias = sum(p - a for p, a in zip(preds, acts)) / len(resolved)
-        sat = sum(1 for p in preds if p >= 0.99)
-        print(f'  bias pred-act:  {bias:+.4f}')
-        print(f'  saturation:     {sat}/{len(resolved)} at q>=0.99')
-" "$PRIMARY_FILE"
-  echo ""
-  python3 core/analyze_live_results.py --schema-version 5 "$PRIMARY_FILE" 2>/dev/null | head -32
 else
-  echo "  No schema v5 exploratory result (horizon 60s) found yet."
-  echo "  Start: ./scripts/start_exploratory_run.sh"
+  echo "  No PID file."
 fi
+
+echo ""
+echo "=== SQLite-authoritative status ==="
+python3 - "$ROOT" "$LOG" <<'PY'
+import json
+import os
+import re
+import sqlite3
+import sys
+from collections import Counter
+
+root, log_path = sys.argv[1:]
+results_dir = os.path.join(root, "core", "_live_results")
+schema_version = 6
+expected_horizon_s = 60
+
+def state_for(path):
+    try:
+        connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=2)
+        row = connection.execute(
+            "SELECT data_json, updated_at_ms FROM run_state WHERE singleton = 1"
+        ).fetchone()
+        if not row:
+            return None
+        state = json.loads(row[0])
+        if state.get("schema_version") != schema_version:
+            return None
+        if float(state.get("horizon_s", 0)) != expected_horizon_s:
+            return None
+        state["_db_path"] = path
+        state["_updated_at_ms"] = row[1]
+        return state
+    except (OSError, sqlite3.Error, json.JSONDecodeError):
+        return None
+    finally:
+        if "connection" in locals():
+            connection.close()
+
+def active_db_from_log():
+    try:
+        with open(log_path, encoding="utf-8") as handle:
+            for line in reversed(handle.readlines()):
+                match = re.search(r"database=(.+\.sqlite3)\s*$", line)
+                if match and os.path.isfile(match.group(1)):
+                    return match.group(1)
+    except OSError:
+        pass
+    return None
+
+database_path = active_db_from_log()
+candidate_paths = [database_path] if database_path else []
+candidate_paths.extend(
+    os.path.join(results_dir, name)
+    for name in os.listdir(results_dir)
+    if name.endswith(".sqlite3")
+)
+states = [state for state in (state_for(path) for path in dict.fromkeys(candidate_paths)) if state]
+if not states:
+    print("  No schema-v6 durable run state found.")
+    raise SystemExit(0)
+
+state = max(states, key=lambda item: item["_updated_at_ms"])
+connection = sqlite3.connect(
+    f"file:{state['_db_path']}?mode=ro", uri=True, timeout=2
+)
+try:
+    predictions = [
+        json.loads(row[0])
+        for row in connection.execute("SELECT data_json FROM forecasts ORDER BY sequence_no")
+    ]
+    observations = connection.execute("SELECT COUNT(*) FROM observations").fetchone()[0]
+finally:
+    connection.close()
+
+resolved = [item for item in predictions if item.get("status") == "resolved"]
+eligible = [item for item in resolved if item.get("score_eligible") is True]
+pending = [item for item in predictions if item.get("status") == "pending"]
+excluded = [item for item in resolved if item.get("score_eligible") is not True]
+reasons = Counter()
+for item in excluded:
+    reasons.update(item.get("entry_quality_flags", []))
+    reasons.update(item.get("exit_quality_flags", []))
+    reasons.update(item.get("label_capture", {}).get("capture_failure_reasons", []))
+    if item.get("resolved_label") != "forward_window":
+        reasons["non_forward_label"] += 1
+    if item.get("label_capture_complete") is not True:
+        reasons["incomplete_capture"] += 1
+
+print(f"  database:              {state['_db_path']}")
+print(f"  run_id:                {state.get('run_id')}")
+print(f"  schema/model/revision: v{state.get('schema_version')} / {state.get('model_version')} / {state.get('implementation_revision', 'pre-hardening')}")
+print(f"  status:                {state.get('status')} ({state.get('stop_reason')})")
+print(f"  observations:          {observations}")
+print(f"  forecasts:             {len(predictions)} total, {len(pending)} pending")
+print(f"  resolved:              {len(resolved)} total, {len(eligible)} eligible, {len(excluded)} excluded")
+print(f"  state updated_at_ms:   {state['_updated_at_ms']}")
+if pending:
+    print(f"  pending target_at_ms:  {pending[0].get('target_at_ms')}")
+if reasons:
+    print(f"  exclusion reasons:     {dict(reasons)}")
+PY

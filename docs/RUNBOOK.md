@@ -1,6 +1,6 @@
 # Exchange-Q Runbook
 
-This runbook is for operating the schema-v5 research evaluator. It is not a trading playbook.
+This runbook is for operating the schema-v6r1 research evaluator. It is not a trading playbook.
 
 ## Before You Start
 
@@ -16,24 +16,37 @@ Confirm no production run is already active:
 ./scripts/monitor_live.sh
 ```
 
+If a previous run must be stopped before a fresh production start:
+
+```bash
+./scripts/stop_all_runs.sh
+```
+
+Evidence gates: [../artifacts/production-gate-status-2026-07-27.md](../artifacts/production-gate-status-2026-07-27.md)
+
 ## Canonical Production Run
 
 ```bash
 ./scripts/start_production_run.sh
 ```
 
-The script runs tests, holds a production lock for the process lifetime, starts the v5 quantum study, writes a PID file, and appends output to `live_quantum_v3.log` (the filename is legacy; the result schema is v5).
+The script runs tests, starts the v6r1 quantum study in the foreground, writes a PID
+file for its lifetime, and appends output to `live_quantum_v3.log` (the filename is
+legacy). Press `Ctrl-C` in the launching terminal for graceful shutdown; the PID
+file is removed after the process exits.
 
 | Parameter | Value | Operational meaning |
 |---|---:|---|
 | Symbol | `btcusdt` | Exchange pair |
-| Mode | `quantum` | Frozen Born-only arm |
+| Mode | `quantum` | Frozen gated Born-policy arm |
 | Horizon | `3600s` | Future label interval |
 | Sample interval | `60s` | Feature and raw-trade capture cadence |
 | Window | `15` | Accepted-observation warmup size |
 | Completion | `720` eligible resolutions | Minimum primary-study target |
 
-Live `buy_ratio` features use only the most recent `max(60, horizon_s)` seconds of trades (`data_policy_version` 3). Raw trade pages are still captured in full for forward-window labels.
+Live `buy_ratio` features use only the most recent `max(60, horizon_s)` seconds of
+trades (`data_policy_version` 4). Raw trade pages are separately captured for
+forward-window labels.
 
 ## What the Runner Stores
 
@@ -41,7 +54,7 @@ For each run:
 
 ```text
 core/_live_results/<run_id>.sqlite3  authoritative durable data
-core/_live_results/<run_id>.json     atomic schema-v5 export
+core/_live_results/<run_id>.json     atomic schema-v6 export
 ```
 
 SQLite stores accepted observations, forecast records, raw trade batches, and deduplicated raw trades. Raw trade capture is retained locally for 30 days. Do not delete a database while a run may need resume or audit.
@@ -56,9 +69,9 @@ tail -f live_quantum_v3.log
 Inspect:
 
 - process/PID state;
-- current JSON schema and `run_id`;
+- SQLite-backed schema/model/policy and `run_id`;
 - number of observations, pending forecasts, and eligible resolutions;
-- `born_active_rate`, fallback reasons, and label status;
+- execution-path/fallback reasons and label status;
 - capture failures, `label_unavailable`, endpoint skew, or repeated `NO DATA`.
 
 ## Label-Coverage Health
@@ -99,15 +112,20 @@ The runner refuses resume when the requested configuration hash differs from the
 
 The fast 60-second profile validates collection and label coverage. It is **not** a replacement for the one-hour, 720-resolution primary study, because market regime and microstructure differ. Exploratory 60s runs may show high buy_ratio noise: compare models against `MAE(constant 0.5)` before interpreting paired MAE. Price-based long simulation (`net_return`, hit rate) is diagnostic only and must not be treated as the primary metric.
 
+The launcher remains in the foreground. Press `Ctrl-C` in the same terminal to stop
+it gracefully; use the monitor and log-tail commands from another terminal only for
+observation. `SKIP forecast — pending unresolved` is normal while the one permitted
+pending forecast awaits its target time.
+
 ## Stop and Recover
 
 ```bash
 ./scripts/stop_all_runs.sh
 ```
 
-The stop script sends `SIGTERM`, waits, then escalates if necessary. After stopping:
+The stop script sends `SIGTERM`, waits up to 15 seconds, then escalates only if necessary. It verifies process identities before signalling them. After stopping:
 
-1. inspect the final JSON `status` and `stop_reason`;
+1. inspect the SQLite-backed monitor state and final JSON `status`/`stop_reason`;
 2. keep the SQLite database;
 3. use resume only with the same configuration;
 4. archive a failed run separately rather than mixing it with a completed primary corpus.
@@ -115,11 +133,13 @@ The stop script sends `SIGTERM`, waits, then escalates if necessary. After stopp
 ## Analyze Results
 
 ```bash
-python3 core/analyze_live_results.py --schema-version 5 --exclude-collector
-python3 core/analyze_live_results.py --schema-version 5 --run-id btcusdt-quantum-EPOCH
+python3 core/analyze_live_results.py --schema-version 6 --exclude-collector
+python3 core/analyze_live_results.py --schema-version 6 --run-id btcusdt-quantum-EPOCH
 ```
 
-The analyzer filters out v2–v4 files by default and includes only v5 records with complete `forward_window` labels and `score_eligible: true`.
+The analyzer filters out historical files by default and includes only v6 records
+with complete `forward_window` labels and `score_eligible: true`. JSON is an
+inspectable export; SQLite remains authoritative for an active or recoverable run.
 
 ## Archive Legacy Results
 
@@ -127,7 +147,9 @@ The analyzer filters out v2–v4 files by default and includes only v5 records w
 ./scripts/archive_legacy_results.sh
 ```
 
-This moves non-v5 JSON from the active directory to `_archive/pre_v5/`. Archive files may be inspected explicitly, but they must not be aggregated with v5 primary data.
+This moves pre-hardening v6 and older JSON from the active directory to
+`_archive/pre_v6r1/`. Archive files may be inspected explicitly with
+`--allow-pre-hardening-v6`, but they must not be aggregated with v6r1 primary data.
 
 ## Go / No-Go Rules
 
@@ -149,4 +171,4 @@ This moves non-v5 JSON from the active directory to `_archive/pre_v5/`. Archive 
 | Eligible count does not increase | Labels/quality are being rejected | Inspect flags and capture diagnostics |
 | Many `saturation_gate` records | Constructive Born output is capped | Treat as model diagnostic, not a data error |
 | Many `destructive_interference` records | Negative interference reverts to classical part | Expected safeguard; inspect as exploratory segment |
-| Analyzer finds no files | Wrong schema/path or archived corpus | Use v5 command and verify result directory |
+| Analyzer finds no files | Wrong schema/path or archived corpus | Use v6 command and verify result directory |

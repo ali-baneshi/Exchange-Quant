@@ -1,7 +1,8 @@
-# Schema v3 Live Results Reference (Legacy)
+# Schema v3 Live Results Reference (Legacy — Historical Only)
 
-> Schema v3 is archived and is not eligible for primary analysis. Use
-> [SCHEMA_V5.md](./SCHEMA_V5.md) for current runs.
+> **Archived.** Schema v3 is not eligible for primary analysis. Use
+> [SCHEMA_V6.md](./SCHEMA_V6.md) for current runs. Active corpus is **v6 only**;
+> legacy JSON belongs in `_archive/pre_v6r1/`.
 
 Authoritative field reference for JSON written by [`pipeline_live_ensemble.py`](../core/pipeline_live_ensemble.py) and consumed by [`analyze_live_results.py`](../core/analyze_live_results.py).
 
@@ -13,8 +14,8 @@ See also: [RUNBOOK.md](./RUNBOOK.md), [STATISTICS.md](./STATISTICS.md).
 
 | Location | Policy |
 |----------|--------|
-| `core/_live_results/*.json` | **Active** schema v3 runs for new claims |
-| `core/_live_results/_archive/pre_v3/` | Legacy v2/v3 — do not mix in aggregates |
+| `core/_live_results/*.json` (v5) | **Active** — new claims |
+| `core/_live_results/_archive/pre_v5/` | Legacy v2–v4 — do not mix in aggregates |
 | `collected_*.json` | Raw feature lists — exclude with `--exclude-collector` |
 | `state.json` | `pipeline_one_shot.py` state v2 — not schema v3 |
 
@@ -160,15 +161,12 @@ Note: older runs may show δ > π/2 from before the 2026-07-26 live δ remap to 
 
 ---
 
-## Analysis commands
+## Analysis commands (historical v3 only)
+
+For new work use `--schema-version 6` and [SCHEMA_V6.md](./SCHEMA_V6.md).
 
 ```bash
-# Active v3 corpus only
-python3 core/analyze_live_results.py --schema-version 3 --exclude-collector
-
-# Single run
-python3 core/analyze_live_results.py --schema-version 3 --run-id btcusdt-quantum-XXXX
-
-# Archived file (explicit path)
-python3 core/analyze_live_results.py core/_live_results/_archive/pre_v3/btcusdt_quantum_1785028289.json
+# Legacy v3 corpus — explicit path only
+python3 core/analyze_live_results.py --schema-version 3 \
+  core/_live_results/_archive/pre_v6r1/LEGACY.json
 ```
