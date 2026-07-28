@@ -28,6 +28,7 @@ from baselines import classical_ensemble
 from validation import comprehensive_report, print_report
 from live_protocol import forecast_lookback, ready_for_forecast, pending_due
 from config import (
+    ACQUISITION_POLICY_VERSION,
     DATA_POLICY_VERSION,
     DISQUALIFYING_QUALITY_FLAGS,
     FEE_RATE,
@@ -36,6 +37,7 @@ from config import (
     MIN_SIGNIFICANCE_N,
     LIVE_SCHEMA_VERSION,
     LIVE_MODEL_VERSION,
+    LIVE_IMPLEMENTATION_REVISION,
     MAX_LOCAL_EXCHANGE_OFFSET_MS,
     MAX_CONSECUTIVE_NO_DATA,
     TRADE_CAPTURE_SIZE,
@@ -48,13 +50,17 @@ from live_store import LiveRunStore
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "_live_results")
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
-JSON_EXPORT_INTERVAL = 50
+JSON_EXPORT_INTERVAL = 500
+MAINTENANCE_INTERVAL = 1000
 
 _running = True
+_received_signal = None
+_active_run_context = {}
 
 
 def _handle_signal(sig, frame):
-    global _running
+    global _running, _received_signal
+    _received_signal = sig
     print(f"\n  Signal {sig} received, shutting down gracefully...")
     _running = False
 
@@ -107,6 +113,10 @@ def _observation(features, symbol, step, run_id=None, time_fn=None):
 
 
 def _exit_code_for_stop_reason(stop_reason):
+    if stop_reason == "signal_2":
+        return 130
+    if stop_reason == "signal_15":
+        return 143
     return 0 if stop_reason == "max_resolved" else 2
 
 
@@ -145,6 +155,36 @@ def _remove_pid_file(path):
         os.remove(path)
     except OSError:
         pass
+
+
+def _cleanup_failed_run(exc):
+    context = dict(_active_run_context)
+    if not context:
+        return
+    store = context.get("store")
+    lock_file = context.get("lock_file")
+    pid_file = context.get("pid_file")
+    output_path = context.get("output_path")
+    try:
+        if store is not None:
+            state = store.load_state() or {}
+            state.update({
+                "status": "failed",
+                "stop_reason": f"{type(exc).__name__}: {exc}",
+            })
+            store.save_state(state)
+            if output_path:
+                _atomic_write(output_path, store.export_document(state))
+    except Exception as persist_exc:
+        print(
+            f"  Failed to persist terminal error state: "
+            f"{type(persist_exc).__name__}: {persist_exc}",
+            file=sys.stderr,
+        )
+    finally:
+        _release_run_resources(store, lock_file)
+        _remove_pid_file(pid_file)
+        _active_run_context.clear()
 
 
 def _signal_from_prediction(pred):
@@ -297,8 +337,12 @@ def _write_run_state(output_path, store, symbol, mode, horizon_s, sample_interva
         "config_hash": config_hash,
         "model_version": LIVE_MODEL_VERSION,
         "data_policy_version": DATA_POLICY_VERSION,
+        "implementation_revision": LIVE_IMPLEMENTATION_REVISION,
+        "acquisition_policy_version": ACQUISITION_POLICY_VERSION,
         "experiment_manifest": {
             "model_version": LIVE_MODEL_VERSION,
+            "implementation_revision": LIVE_IMPLEMENTATION_REVISION,
+            "acquisition_policy_version": ACQUISITION_POLICY_VERSION,
             "label_policy": "captured_trade_window_v1",
             "primary_metric": "paired_mae_difference",
             "primary_horizon_s": horizon_s,
@@ -326,7 +370,10 @@ def _has_pending(predictions):
 
 
 def _summarize_resolved(predictions):
-    resolved = [p for p in predictions if p.get("status") == "resolved" and p.get("score_eligible", True)]
+    resolved = [
+        pred for pred in predictions
+        if pred.get("status") == "resolved" and pred.get("score_eligible") is True
+    ]
     if not resolved:
         return None
     c_errs = [p["classical_error"] for p in resolved]
@@ -354,7 +401,7 @@ def _summarize_resolved(predictions):
 def _stop_reason(predictions, fetch_count, elapsed_s, max_resolved, max_fetches, max_runtime_s):
     eligible_resolved = sum(
         1 for pred in predictions
-        if pred.get("status") == "resolved" and pred.get("score_eligible", True)
+        if pred.get("status") == "resolved" and pred.get("score_eligible") is True
     )
     if max_resolved is not None and eligible_resolved >= max_resolved:
         return "max_resolved"
@@ -375,6 +422,8 @@ def _config_hash(symbol, mode, horizon_s, sample_interval, window):
             "window": int(window),
             "model_version": LIVE_MODEL_VERSION,
             "data_policy_version": DATA_POLICY_VERSION,
+            "implementation_revision": LIVE_IMPLEMENTATION_REVISION,
+            "acquisition_policy_version": ACQUISITION_POLICY_VERSION,
             "label_policy": "captured_trade_window_v1",
             "schema_version": LIVE_SCHEMA_VERSION,
         },
@@ -395,13 +444,14 @@ def _resume_paths(run_id):
     raise FileNotFoundError(f"No durable run found for {run_id!r}")
 
 
-def run(symbol="btcusdt", n_steps=None, delay=3600.0, window=15, mode="ensemble",
-        sample_interval=60.0, max_resolved=None, max_fetches=None,
-        max_runtime_s=0.0, resume_run_id=None,
-        _time_fn=None, _monotonic_fn=None, _sleep_fn=None, _data_provider=None,
-        pid_file=None):
-    global _running
+def _run_impl(symbol="btcusdt", n_steps=None, delay=3600.0, window=15, mode="ensemble",
+              sample_interval=60.0, max_resolved=None, max_fetches=None,
+              max_runtime_s=0.0, resume_run_id=None,
+              _time_fn=None, _monotonic_fn=None, _sleep_fn=None, _data_provider=None,
+              pid_file=None):
+    global _running, _received_signal
     _running = True
+    _received_signal = None
     signal.signal(signal.SIGTERM, _handle_signal)
     signal.signal(signal.SIGINT, _handle_signal)
 
@@ -467,14 +517,16 @@ def run(symbol="btcusdt", n_steps=None, delay=3600.0, window=15, mode="ensemble"
     _write_pid_file(pid_file)
     atexit.register(_remove_pid_file, pid_file)
     atexit.register(_release_run_resources, store, lock_file)
+    _active_run_context.update({
+        "store": store,
+        "lock_file": lock_file,
+        "pid_file": pid_file,
+        "output_path": output_path,
+    })
     if restored:
         if restored.get("schema_version") != LIVE_SCHEMA_VERSION:
-            _release_run_resources(store, lock_file)
-            _remove_pid_file(pid_file)
             raise ValueError("Stored run is not compatible with the current live schema")
         if restored.get("config_hash") != config_hash:
-            _release_run_resources(store, lock_file)
-            _remove_pid_file(pid_file)
             raise ValueError("Resume configuration does not match stored run")
         document = store.export_document(restored)
         observations = document.get("observations", [])
@@ -530,7 +582,17 @@ def run(symbol="btcusdt", n_steps=None, delay=3600.0, window=15, mode="ensemble"
         if not _running:
             break
 
-        if hasattr(hd, "fetch_features_with_trades"):
+        acquisition = None
+        if hasattr(hd, "fetch_cycle_with_retries"):
+            acquisition = hd.fetch_cycle_with_retries(
+                symbol,
+                trade_size=TRADE_CAPTURE_SIZE,
+                feature_lookback_s=feature_lookback_s(horizon_s),
+                max_trade_age_s=max(2.0 * sample_interval, 5.0),
+            )
+            features = acquisition.features
+            captured_trades = acquisition.trades
+        elif hasattr(hd, "fetch_features_with_trades"):
             try:
                 features, captured_trades = hd.fetch_features_with_trades(
                     symbol,
@@ -553,9 +615,20 @@ def run(symbol="btcusdt", n_steps=None, delay=3600.0, window=15, mode="ensemble"
                 max_trade_age_s=max(2.0 * sample_interval, 5.0),
             )
             captured_trades = hd.fetch_trades(symbol, size=TRADE_CAPTURE_SIZE) if features else []
+        capture_time_ms = _wall_ms(time_fn)
+        store.save_trade_batch(
+            symbol,
+            captured_trades,
+            capture_time_ms,
+            TRADE_CAPTURE_SIZE,
+        )
         if features is None:
             no_data_streak += 1
-            print(f"  [{i:5d}] {time.strftime('%H:%M:%S')} NO DATA — retrying in {sample_interval:.0f}s")
+            detail = ""
+            if acquisition is not None and acquisition.endpoint_errors:
+                detail = f" endpoints={acquisition.endpoint_errors}"
+            print(f"  [{i:5d}] {time.strftime('%H:%M:%S')} NO DATA — "
+                  f"retrying in {sample_interval:.0f}s{detail}")
             if no_data_streak >= MAX_CONSECUTIVE_NO_DATA:
                 stop_reason = "no_data"
                 break
@@ -564,12 +637,13 @@ def run(symbol="btcusdt", n_steps=None, delay=3600.0, window=15, mode="ensemble"
         no_data_streak = 0
 
         obs = _observation(features, symbol, i, run_id=run_id, time_fn=time_fn)
-        store.save_trade_batch(
-            symbol,
-            captured_trades,
-            obs["wall_time_ms"],
-            TRADE_CAPTURE_SIZE,
-        )
+        if acquisition is not None:
+            obs["acquisition"] = {
+                "endpoint_ok": dict(acquisition.endpoint_ok),
+                "endpoint_errors": dict(acquisition.endpoint_errors),
+                "endpoint_latency_ms": dict(acquisition.endpoint_latency_ms),
+                "attempts": acquisition.attempts,
+            }
         ts = features.get("timestamp") or features.get("collected_at_ms")
         duplicate_ts = ts == last_ts
         if duplicate_ts:
@@ -710,7 +784,21 @@ def run(symbol="btcusdt", n_steps=None, delay=3600.0, window=15, mode="ensemble"
                 run_id=run_id, config_hash=config_hash,
             )
 
+        if i > 0 and i % MAINTENANCE_INTERVAL == 0:
+            pending_starts = [
+                pred.get("created_at_ms")
+                for pred in predictions
+                if pred.get("status") == "pending" and pred.get("created_at_ms")
+            ]
+            retention_cutoff = _wall_ms(time_fn) - TRADE_RETENTION_DAYS * 24 * 3600 * 1000
+            safe_cutoff = min(pending_starts) if pending_starts else retention_cutoff
+            store.prune_trades_before(min(retention_cutoff, safe_cutoff))
+            store.checkpoint()
+
         sleep_fn(sample_interval)
+
+    if stop_reason == "user_stop" and _received_signal is not None:
+        stop_reason = f"signal_{_received_signal}"
 
     print(f"\n  Stopped at {time.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"  Collected {len(observations)} observations, {len(predictions)} predictions")
@@ -739,7 +827,11 @@ def run(symbol="btcusdt", n_steps=None, delay=3600.0, window=15, mode="ensemble"
 
         if summary and summary["n"] >= MIN_SIGNIFICANCE_N:
             print(f"\n  --- Honest live evaluation (block bootstrap, Bonferroni corrected, n>={MIN_SIGNIFICANCE_N}) ---")
-            resolved = [p for p in predictions if p.get("status") == "resolved" and p.get("score_eligible", True)]
+            resolved = [
+                pred for pred in predictions
+                if pred.get("status") == "resolved"
+                and pred.get("score_eligible") is True
+            ]
             c_errs = [p["classical_error"] for p in resolved]
             q_errs = [p["prediction_error"] for p in resolved]
             report = comprehensive_report(
@@ -756,7 +848,16 @@ def run(symbol="btcusdt", n_steps=None, delay=3600.0, window=15, mode="ensemble"
         print(f"  Saved terminal state to {output_path}")
     _release_run_resources(store, lock_file)
     _remove_pid_file(pid_file)
+    _active_run_context.clear()
     return _exit_code_for_stop_reason(stop_reason)
+
+
+def run(*args, **kwargs):
+    try:
+        return _run_impl(*args, **kwargs)
+    except Exception as exc:
+        _cleanup_failed_run(exc)
+        raise
 
 
 if __name__ == "__main__":

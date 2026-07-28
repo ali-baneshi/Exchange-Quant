@@ -239,6 +239,7 @@ class LiveRunStore:
             default=0,
         )
         saturated_hole = False
+        failure_reasons = []
         for index, row in enumerate(batches):
             saturated = row[1]
             oldest_trade_ms = row[2]
@@ -250,18 +251,34 @@ class LiveRunStore:
                 and int(oldest_trade_ms) > int(previous_newest_ms)
             ):
                 saturated_hole = True
+                failure_reasons.append("saturated_page_gap")
                 break
         complete = bool(trades and batches) and not saturated_hole
+        if not trades:
+            failure_reasons.append("no_window_trades")
+        if not batches:
+            failure_reasons.append("no_capture_batches")
         if capture_times:
-            complete = complete and capture_times[0] <= start_ms + expected_gap_ms
-            complete = complete and capture_times[-1] >= end_ms - expected_gap_ms
-            complete = complete and max_gap <= expected_gap_ms * 2
+            if capture_times[0] > start_ms + expected_gap_ms:
+                complete = False
+                failure_reasons.append("missing_start_boundary")
+            if capture_times[-1] < end_ms - expected_gap_ms:
+                complete = False
+                failure_reasons.append("missing_end_boundary")
+            if max_gap > expected_gap_ms * 2:
+                complete = False
+                failure_reasons.append("capture_gap")
+            first_saturated, first_oldest = batches[0][1], batches[0][2]
+            if first_saturated and first_oldest is not None and first_oldest > start_ms:
+                complete = False
+                failure_reasons.append("saturated_start_not_covered")
         return {
             "trades": trades,
             "capture_complete": complete,
             "capture_batch_count": len(batches),
             "capture_max_gap_ms": max_gap,
             "capture_saturated": any(row[1] for row in batches),
+            "capture_failure_reasons": sorted(set(failure_reasons)),
         }
 
     def prune_trades_before(self, cutoff_ms):
@@ -274,6 +291,19 @@ class LiveRunStore:
                 "DELETE FROM trade_capture_batches WHERE captured_at_ms < ?",
                 (int(cutoff_ms),),
             )
+
+    def checkpoint(self, truncate=False):
+        mode = "TRUNCATE" if truncate else "PASSIVE"
+        return self.conn.execute(f"PRAGMA wal_checkpoint({mode})").fetchone()
+
+    def database_size_bytes(self):
+        total = 0
+        for suffix in ("", "-wal", "-shm"):
+            try:
+                total += os.path.getsize(self.path + suffix)
+            except OSError:
+                pass
+        return total
 
     def export_document(self, state):
         observations = [

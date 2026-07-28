@@ -6,12 +6,12 @@ import os
 import sys
 import tempfile
 import unittest
+import signal
 from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(__file__))
 
 from pipeline_live_ensemble import RESULTS_DIR, run, _resume_paths
-from live_store import LiveRunStore
 
 
 def _feature_step(step, base_ms=1_000_000, buy_ratio=0.5):
@@ -71,6 +71,13 @@ class EmptyProvider:
                                    max_trade_age_s=None):
         self.calls += 1
         return None, []
+
+
+class FailingProvider:
+    def fetch_features_with_trades(self, symbol, trade_size=50,
+                                   feature_lookback_s=None,
+                                   max_trade_age_s=None):
+        raise RuntimeError("synthetic acquisition failure")
 
 
 class LiveRunnerIntegrationTests(unittest.TestCase):
@@ -285,6 +292,66 @@ class LiveRunnerIntegrationTests(unittest.TestCase):
                     pid_file=pidfile,
                 )
                 self.assertEqual(code, 2)
+                self.assertFalse(os.path.exists(pidfile))
+            finally:
+                ple.RESULTS_DIR = original_results
+
+    def test_exception_persists_failed_state_and_removes_pid(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            import json
+            import pipeline_live_ensemble as ple
+            original_results = ple.RESULTS_DIR
+            ple.RESULTS_DIR = tmp
+            try:
+                pidfile = os.path.join(tmp, "live.pid")
+                with self.assertRaisesRegex(RuntimeError, "synthetic acquisition"):
+                    run(
+                        symbol="btcusdt",
+                        mode="quantum",
+                        delay=10.0,
+                        window=3,
+                        sample_interval=1.0,
+                        max_fetches=2,
+                        _data_provider=FailingProvider(),
+                        pid_file=pidfile,
+                    )
+                self.assertFalse(os.path.exists(pidfile))
+                json_files = [name for name in os.listdir(tmp) if name.endswith(".json")]
+                self.assertEqual(len(json_files), 1)
+                with open(os.path.join(tmp, json_files[0])) as handle:
+                    state = json.load(handle)
+                self.assertEqual(state["status"], "failed")
+                self.assertIn("RuntimeError", state["stop_reason"])
+            finally:
+                ple.RESULTS_DIR = original_results
+
+    def test_sigint_returns_130_and_removes_pid(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            import pipeline_live_ensemble as ple
+            original_results = ple.RESULTS_DIR
+            ple.RESULTS_DIR = tmp
+            try:
+                pidfile = os.path.join(tmp, "live.pid")
+                wall = [1_000.0]
+
+                def interrupting_sleep(seconds):
+                    wall[0] += seconds
+                    ple._handle_signal(signal.SIGINT, None)
+
+                code = run(
+                    symbol="btcusdt",
+                    mode="quantum",
+                    delay=10.0,
+                    window=3,
+                    sample_interval=1.0,
+                    max_resolved=1,
+                    _time_fn=lambda: wall[0],
+                    _monotonic_fn=lambda: wall[0],
+                    _sleep_fn=interrupting_sleep,
+                    _data_provider=FakeProvider([_feature_step(0)]),
+                    pid_file=pidfile,
+                )
+                self.assertEqual(code, 130)
                 self.assertFalse(os.path.exists(pidfile))
             finally:
                 ple.RESULTS_DIR = original_results

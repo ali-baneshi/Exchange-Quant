@@ -134,6 +134,30 @@ class LiveRunStoreTests(unittest.TestCase):
             finally:
                 store.close()
 
+    def test_saturated_first_page_must_cover_window_start(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = LiveRunStore(os.path.join(tmp, "run.sqlite3"))
+            try:
+                trades = [
+                    {
+                        "trade_id": f"late-{index}",
+                        "ts": 1_500 + index,
+                        "direction": "buy",
+                        "amount": 1.0,
+                        "price": 100.0,
+                    }
+                    for index in range(10)
+                ]
+                store.save_trade_batch("btcusdt", trades, 1_000, 10)
+                window = store.trade_window("btcusdt", 1_000, 2_000, 1.0)
+                self.assertFalse(window["capture_complete"])
+                self.assertIn(
+                    "saturated_start_not_covered",
+                    window["capture_failure_reasons"],
+                )
+            finally:
+                store.close()
+
     def test_capture_gap_overrun_is_incomplete(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = LiveRunStore(os.path.join(tmp, "run.sqlite3"))
@@ -172,6 +196,22 @@ class LiveRunStoreTests(unittest.TestCase):
                     store.save_forecast({"id": "f-2", "step": 2, "status": "pending"})
                 store.save_forecast({"id": "f-1", "step": 1, "status": "resolved"})
                 store.save_forecast({"id": "f-2", "step": 2, "status": "pending"})
+            finally:
+                store.close()
+
+    def test_checkpoint_and_database_size_are_observable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = LiveRunStore(os.path.join(tmp, "run.sqlite3"))
+            try:
+                for index in range(500):
+                    self.assertTrue(store.save_observation({
+                        "id": index,
+                        "timestamp": 1_000 + index,
+                        "buy_ratio": 0.5,
+                    }))
+                checkpoint = store.checkpoint()
+                self.assertEqual(len(checkpoint), 3)
+                self.assertGreater(store.database_size_bytes(), 0)
             finally:
                 store.close()
 

@@ -1,19 +1,16 @@
 #!/usr/bin/env python3
 
-"""
-White's Reality Check — now with block bootstrap and Bonferroni correction.
+"""Paired moving-block mean-loss inference with a legacy compatibility wrapper."""
 
-Delegates to validation.py for the heavy lifting.
-"""
+import warnings
 
 from validation import paired_moving_block_test, bonferroni_correct
 from config import N_HYPOTHESES_TOTAL, N_HYPOTHESES_LIVE
 
 
-def reality_check(errors_c, errors_q, n_bootstrap=10000, seed=42, live=False):
+def paired_loss_test(errors_c, errors_q, n_bootstrap=10000, seed=42, live=False):
     """
-    White's Reality Check with block bootstrap (handles autocorrelation).
-    Applies Bonferroni correction for multiple testing.
+    Paired moving-block bootstrap on model-minus-classical mean loss.
 
     H0: quantum_win_rate <= 0.5  (quantum does not outperform)
     HA: quantum_win_rate > 0.5   (quantum outperforms)
@@ -64,9 +61,22 @@ def reality_check(errors_c, errors_q, n_bootstrap=10000, seed=42, live=False):
     }
 
 
-def main():
-    import sys
+def reality_check(errors_c, errors_q, n_bootstrap=10000, seed=42, live=False):
+    warnings.warn(
+        "reality_check() is deprecated; use paired_loss_test()",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return paired_loss_test(
+        errors_c,
+        errors_q,
+        n_bootstrap=n_bootstrap,
+        seed=seed,
+        live=live,
+    )
 
+
+def main():
     c_errs = [
         0.093, 0.088, 0.084, 0.070, 0.069, 0.068, 0.068, 0.068,
         0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067, 0.067,
@@ -84,11 +94,11 @@ def main():
         0.184, 0.280, 0.293, 0.307, 0.020, 0.398, 0.064,
     ]
 
-    results = reality_check(c_errs, q_errs, n_bootstrap=10000)
+    results = paired_loss_test(c_errs, q_errs, n_bootstrap=10000)
 
     print()
     print("=" * 60)
-    print("  WHITE'S REALITY CHECK — Quantum vs Classical Ensemble")
+    print("  PAIRED MOVING-BLOCK LOSS TEST — Model vs Classical")
     print("=" * 60)
     print(f"  Observations:       {results['n_observations']}")
     print(f"  Quantum wins:       {results['wins']}  ({results['wins']/results['n_observations']*100:.1f}%)")
@@ -100,11 +110,11 @@ def main():
           f"(corrected for {results['n_tests_corrected']} tests)")
     print(f"  Interpretation:     {results['interpretation']}")
     if results['interpretation'] == 'HIGHLY_SIGNIFICANT':
-        print(f"  -> Quantum outperforms classical (Bonferroni-corrected p<0.01)")
+        print("  -> Model outperforms classical (Bonferroni-corrected p<0.01)")
     elif results['interpretation'] == 'SIGNIFICANT':
-        print(f"  -> Quantum outperforms classical (Bonferroni-corrected p<0.05)")
+        print("  -> Model outperforms classical (Bonferroni-corrected p<0.05)")
     else:
-        print(f"  -> Not enough evidence after correction")
+        print("  -> Not enough evidence after correction")
     print()
 
 

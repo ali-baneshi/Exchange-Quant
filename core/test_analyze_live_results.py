@@ -15,6 +15,12 @@ from analyze_live_results import (
     should_include_path,
 )
 from argparse import Namespace
+from config import (
+    ACQUISITION_POLICY_VERSION,
+    DATA_POLICY_VERSION,
+    LIVE_IMPLEMENTATION_REVISION,
+    LIVE_MODEL_VERSION,
+)
 
 
 V3_FIXTURE = {
@@ -153,10 +159,10 @@ class AnalyzeLiveResultsTests(unittest.TestCase):
         self.assertEqual(out[0]["status"], "resolved")
 
     def test_reality_check_uses_live_bonferroni(self):
-        from reality_check import reality_check
+        from reality_check import paired_loss_test
         c_errs = [0.1] * 720
         q_errs = [0.05] * 720
-        rc = reality_check(c_errs, q_errs, n_bootstrap=100, live=True)
+        rc = paired_loss_test(c_errs, q_errs, n_bootstrap=100, live=True)
         self.assertIn("raw_p_value", rc)
         self.assertIn("corrected_p_value", rc)
         self.assertEqual(rc["n_tests_corrected"], 1)
@@ -222,6 +228,58 @@ class AnalyzeLiveResultsTests(unittest.TestCase):
         args = Namespace(paths=[archive])
         paths = discover_paths(args)
         self.assertEqual(paths, [archive])
+
+    def test_pre_hardening_v6_is_rejected_by_default(self):
+        data = dict(V3_FIXTURE, schema_version=6)
+        args = Namespace(
+            schema_version=6,
+            run_id=None,
+            exclude_collector=False,
+            allow_pre_hardening_v6=False,
+        )
+        ok, reason = should_include_path("x.json", data, args)
+        self.assertFalse(ok)
+        self.assertIn("implementation_revision", reason)
+
+    def test_v6r1_row_with_forged_error_is_excluded(self):
+        pred = dict(
+            V3_FIXTURE["predictions"][0],
+            created_at_ms=1_000,
+            target_at_ms=61_000,
+            resolved_at_ms=62_000,
+            forward_window_start_ms=1_000,
+            forward_window_end_ms=61_000,
+            classical_error=0.999,
+            entry_quality_flags=[],
+            exit_quality_flags=[],
+        )
+        data = {
+            "schema_version": 6,
+            "run_id": "v6r1-test",
+            "config_hash": "abc",
+            "symbol": "btcusdt",
+            "mode": "quantum",
+            "horizon_s": 60,
+            "model_version": LIVE_MODEL_VERSION,
+            "data_policy_version": DATA_POLICY_VERSION,
+            "implementation_revision": LIVE_IMPLEMENTATION_REVISION,
+            "acquisition_policy_version": ACQUISITION_POLICY_VERSION,
+            "experiment_manifest": {
+                "model_version": LIVE_MODEL_VERSION,
+                "implementation_revision": LIVE_IMPLEMENTATION_REVISION,
+                "acquisition_policy_version": ACQUISITION_POLICY_VERSION,
+                "label_policy": "captured_trade_window_v1",
+                "primary_metric": "paired_mae_difference",
+            },
+            "predictions": [pred],
+            "observations": [],
+        }
+        resolved, meta = _normalize_results(data)
+        self.assertEqual(resolved, [])
+        self.assertEqual(
+            meta["_validation_exclusions"]["classical_error_mismatch"],
+            1,
+        )
 
 
 if __name__ == "__main__":

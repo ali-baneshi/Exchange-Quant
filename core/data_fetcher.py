@@ -19,6 +19,7 @@ import statistics
 import http.client
 import ssl
 import sys
+from dataclasses import dataclass, field
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import re
@@ -29,12 +30,28 @@ from config import (
     MAX_FUTURE_TIMESTAMP_MS,
     MAX_ENDPOINT_SKEW_MS,
     MIN_FORWARD_WINDOW_TRADES,
-    min_forward_trades,
 )
 
 HUOBI_BASE = "https://api.huobi.pro"
 _CTX = ssl.create_default_context()
 _SYMBOL_RE = re.compile(r"^[a-z0-9]+$")
+
+
+@dataclass
+class FetchCycleResult:
+    ticker: dict | None = None
+    depth: dict = field(default_factory=lambda: {"bids": [], "asks": []})
+    trades: list = field(default_factory=list)
+    klines: list = field(default_factory=list)
+    features: dict | None = None
+    endpoint_ok: dict = field(default_factory=dict)
+    endpoint_errors: dict = field(default_factory=dict)
+    endpoint_latency_ms: dict = field(default_factory=dict)
+    attempts: int = 1
+
+    @property
+    def complete(self):
+        return bool(self.features is not None and all(self.endpoint_ok.values()))
 
 
 def _validate_symbol(symbol):
@@ -177,6 +194,65 @@ class HuobiData:
             results.get("klines", []),
         )
 
+    def fetch_cycle(self, symbol="btcusdt", trade_size=30,
+                    feature_lookback_s=None, max_trade_age_s=None):
+        symbol = _validate_symbol(symbol)
+        calls = {
+            "ticker": (self.fetch_ticker, (symbol,)),
+            "depth": (self.fetch_depth, (symbol, 20)),
+            "trades": (self.fetch_trades, (symbol, trade_size)),
+            "klines": (self.fetch_klines, (symbol, "1min", 5)),
+        }
+        values = {}
+        errors = {}
+        latency = {}
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = {}
+            for name, (func, args) in calls.items():
+                started = time.monotonic()
+                future = executor.submit(func, *args)
+                futures[future] = (name, started)
+            for future in as_completed(futures):
+                name, started = futures[future]
+                latency[name] = round((time.monotonic() - started) * 1000, 3)
+                try:
+                    values[name] = future.result()
+                except Exception as exc:
+                    errors[name] = f"{type(exc).__name__}: {exc}"
+
+        ticker = values.get("ticker")
+        depth = values.get("depth") or {"bids": [], "asks": []}
+        trades = values.get("trades") or []
+        klines = values.get("klines") or []
+        endpoint_ok = {
+            "ticker": isinstance(ticker, dict) and bool(ticker),
+            "depth": isinstance(depth, dict) and bool(depth.get("ts")),
+            "trades": isinstance(trades, list),
+            "klines": isinstance(klines, list),
+        }
+        for name, ok in endpoint_ok.items():
+            if not ok and name not in errors:
+                errors[name] = "empty_or_invalid_response"
+
+        features = compute_live_features(
+            ticker,
+            depth,
+            trades,
+            klines,
+            feature_lookback_s=feature_lookback_s,
+            max_trade_age_s=max_trade_age_s,
+        )
+        return FetchCycleResult(
+            ticker=ticker,
+            depth=depth,
+            trades=trades,
+            klines=klines,
+            features=features,
+            endpoint_ok=endpoint_ok,
+            endpoint_errors=errors,
+            endpoint_latency_ms=latency,
+        )
+
     def fetch_features(self, symbol="btcusdt", max_attempts=3,
                        feature_lookback_s=None, max_trade_age_s=None):
         features, _ = self.fetch_features_with_trades(
@@ -187,21 +263,36 @@ class HuobiData:
         )
         return features
 
+    def fetch_cycle_with_retries(self, symbol="btcusdt", max_attempts=3,
+                                 trade_size=30, feature_lookback_s=None,
+                                 max_trade_age_s=None):
+        last_cycle = None
+        for attempt in range(max_attempts):
+            last_cycle = self.fetch_cycle(
+                symbol,
+                trade_size=trade_size,
+                feature_lookback_s=feature_lookback_s,
+                max_trade_age_s=max_trade_age_s,
+            )
+            last_cycle.attempts = attempt + 1
+            if last_cycle.features is not None:
+                return last_cycle
+            if attempt < max_attempts - 1:
+                time.sleep(min(2 ** attempt, 30))
+        return last_cycle or FetchCycleResult(attempts=max_attempts)
+
     def fetch_features_with_trades(self, symbol="btcusdt", max_attempts=3,
                                    trade_size=30, feature_lookback_s=None,
                                    max_trade_age_s=None):
         symbol = _validate_symbol(symbol)
-        for attempt in range(max_attempts):
-            t, d, tr, k = self.fetch_all(symbol, trade_size=trade_size)
-            f = compute_live_features(
-                t, d, tr, k, feature_lookback_s=feature_lookback_s,
-                max_trade_age_s=max_trade_age_s,
-            )
-            if f is not None:
-                return f, tr
-            if attempt < max_attempts - 1:
-                time.sleep(min(2 ** attempt, 30))
-        return None, []
+        cycle = self.fetch_cycle_with_retries(
+            symbol,
+            max_attempts=max_attempts,
+            trade_size=trade_size,
+            feature_lookback_s=feature_lookback_s,
+            max_trade_age_s=max_trade_age_s,
+        )
+        return cycle.features, list(cycle.trades)
 
 
 def _trades_in_lookback(trades, lookback_s):

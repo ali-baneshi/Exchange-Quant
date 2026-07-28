@@ -13,12 +13,20 @@ Usage:
 import argparse
 import glob
 import json
+import math
 import os
 import statistics
 import sys
 from collections import Counter
 
-from config import MIN_SIGNIFICANCE_N
+from config import (
+    ACQUISITION_POLICY_VERSION,
+    DATA_POLICY_VERSION,
+    DISQUALIFYING_QUALITY_FLAGS,
+    LIVE_IMPLEMENTATION_REVISION,
+    LIVE_MODEL_VERSION,
+    MIN_SIGNIFICANCE_N,
+)
 
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "_live_results")
 SCHEMA_VERSIONS = (2, 3, 4, 5, 6)
@@ -73,9 +81,115 @@ def should_include_path(path, data, args):
     if args.run_id is not None:
         rid = _document_run_id(data)
         if rid != args.run_id:
-            return False, f"run_id mismatch"
+            return False, "run_id mismatch"
+
+    if (
+        schema == 6
+        and not getattr(args, "allow_pre_hardening_v6", False)
+    ):
+        identity_errors = _v6_identity_errors(data)
+        if identity_errors:
+            return False, "invalid v6r1 identity: " + ", ".join(identity_errors)
 
     return True, None
+
+
+def _v6_identity_errors(data):
+    if not isinstance(data, dict):
+        return ["document_not_object"]
+    errors = []
+    expected = {
+        "model_version": LIVE_MODEL_VERSION,
+        "data_policy_version": DATA_POLICY_VERSION,
+        "implementation_revision": LIVE_IMPLEMENTATION_REVISION,
+        "acquisition_policy_version": ACQUISITION_POLICY_VERSION,
+    }
+    for field, value in expected.items():
+        if data.get(field) != value:
+            errors.append(f"{field}!={value}")
+    manifest = data.get("experiment_manifest")
+    if not isinstance(manifest, dict):
+        errors.append("missing_experiment_manifest")
+    else:
+        for field in (
+            "model_version",
+            "implementation_revision",
+            "acquisition_policy_version",
+        ):
+            if manifest.get(field) != expected[field]:
+                errors.append(f"manifest.{field}!={expected[field]}")
+        if manifest.get("label_policy") != "captured_trade_window_v1":
+            errors.append("manifest.label_policy")
+        if manifest.get("primary_metric") != "paired_mae_difference":
+            errors.append("manifest.primary_metric")
+    for field in ("run_id", "config_hash", "symbol", "mode", "horizon_s"):
+        if data.get(field) in (None, ""):
+            errors.append(f"missing_{field}")
+    return errors
+
+
+def _finite_unit(value):
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+        and 0.0 <= value <= 1.0
+    )
+
+
+def _v6_row_errors(pred, horizon_s):
+    errors = []
+    for field in ("classical", "prediction", "resolved_actual"):
+        if not _finite_unit(pred.get(field)):
+            errors.append(f"invalid_{field}")
+    classical_error = pred.get("classical_error")
+    prediction_error = pred.get("prediction_error")
+    if not isinstance(classical_error, (int, float)) or not math.isfinite(classical_error):
+        errors.append("invalid_classical_error")
+    if not isinstance(prediction_error, (int, float)) or not math.isfinite(prediction_error):
+        errors.append("invalid_prediction_error")
+    if not errors:
+        if not math.isclose(
+            classical_error,
+            abs(pred["classical"] - pred["resolved_actual"]),
+            rel_tol=0.0,
+            abs_tol=5e-7,
+        ):
+            errors.append("classical_error_mismatch")
+        if not math.isclose(
+            prediction_error,
+            abs(pred["prediction"] - pred["resolved_actual"]),
+            rel_tol=0.0,
+            abs_tol=5e-7,
+        ):
+            errors.append("prediction_error_mismatch")
+    created = pred.get("created_at_ms")
+    target = pred.get("target_at_ms")
+    resolved = pred.get("resolved_at_ms")
+    if not all(isinstance(value, (int, float)) for value in (created, target, resolved)):
+        errors.append("invalid_timestamps")
+    else:
+        if not created < target <= resolved:
+            errors.append("timestamp_order")
+        if isinstance(horizon_s, (int, float)) and not math.isclose(
+            target - created,
+            float(horizon_s) * 1000,
+            rel_tol=0.0,
+            abs_tol=1.0,
+        ):
+            errors.append("horizon_mismatch")
+    if pred.get("forward_window_start_ms") != created:
+        errors.append("forward_window_start_mismatch")
+    if pred.get("forward_window_end_ms") != target:
+        errors.append("forward_window_end_mismatch")
+    if pred.get("score_eligible") is not True:
+        errors.append("score_not_explicitly_true")
+    flags = list(pred.get("entry_quality_flags", [])) + list(
+        pred.get("exit_quality_flags", [])
+    )
+    if any(flag in DISQUALIFYING_QUALITY_FLAGS for flag in flags):
+        errors.append("disqualifying_quality_flag")
+    return sorted(set(errors))
 
 
 def _dedupe_predictions(predictions):
@@ -105,10 +219,23 @@ def _normalize_results(data):
                 if p.get("resolved_label") == "forward_window"
                 and p.get("label_capture_complete") is True
             ]
-        if any("score_eligible" in p for p in resolved):
+        if data.get("schema_version") == 6:
+            resolved = [p for p in resolved if p.get("score_eligible") is True]
+        elif any("score_eligible" in p for p in resolved):
             resolved = [p for p in resolved if p.get("score_eligible", True)]
         meta = dict(data)
         meta["predictions"] = predictions
+        if data.get("schema_version") == 6:
+            valid = []
+            validation_exclusions = Counter()
+            for pred in resolved:
+                row_errors = _v6_row_errors(pred, data.get("horizon_s"))
+                if row_errors:
+                    validation_exclusions.update(row_errors)
+                else:
+                    valid.append(pred)
+            resolved = valid
+            meta["_validation_exclusions"] = dict(validation_exclusions)
         return resolved, meta
     return data, None
 
@@ -212,6 +339,9 @@ def analyze(results, min_resolved=3, show_segments=True):
               f"{resolved_total} resolved, {len(results)} eligible, {excluded} excluded")
         if reasons:
             print(f"  Exclusions:     {dict(reasons)}")
+        validation_exclusions = meta_doc.get("_validation_exclusions", {})
+        if validation_exclusions:
+            print(f"  Invalid rows:   {validation_exclusions}")
         print(f"  Horizon:        {meta_doc.get('horizon_s')}s")
 
     n = len(results)
@@ -269,7 +399,7 @@ def analyze(results, min_resolved=3, show_segments=True):
               f"(classical {'<' if mean_c < null_mae else '>='} null, "
               f"{model_name.lower()} {'<' if mean_m < null_mae else '>='} null)")
     if tier == "diagnostics":
-        print(f"  Status:         diagnostics only (n<30)")
+        print("  Status:         diagnostics only (n<30)")
     elif tier == "exploratory":
         print(f"  Status:         exploratory (30<=n<{MIN_SIGNIFICANCE_N}) — no significance claim")
         print(f"  Improvement:    {improvement:+.2f}%")
@@ -371,9 +501,9 @@ def analyze(results, min_resolved=3, show_segments=True):
         print(f"  Last delta:     {last_delta:.2f}" if last_delta is not None else "  Last delta:     None")
 
     try:
-        from reality_check import reality_check
+        from reality_check import paired_loss_test
         if tier == "primary":
-            rc = reality_check(c_errs, m_errs, n_bootstrap=10000, live=True)
+            rc = paired_loss_test(c_errs, m_errs, n_bootstrap=10000, live=True)
             print(f"  Paired block test raw: {rc.get('raw_p_value', 'N/A')}  "
                   f"Bonferroni: {rc.get('corrected_p_value', 'N/A')}  "
                   f"→ {rc.get('interpretation', 'N/A')}")
@@ -383,11 +513,15 @@ def analyze(results, min_resolved=3, show_segments=True):
         pass
 
     summary = _metrics_for_results(results)
+    summary["errors_c"] = list(c_errs)
+    summary["errors_q"] = list(m_errs)
     if meta_doc:
         summary.update({
             "config_hash": meta_doc.get("config_hash"),
             "experiment_id": meta_doc.get("experiment_id"),
             "model_version": meta_doc.get("model_version"),
+            "implementation_revision": meta_doc.get("implementation_revision"),
+            "acquisition_policy_version": meta_doc.get("acquisition_policy_version"),
             "mode": meta_doc.get("mode"),
             "horizon_s": meta_doc.get("horizon_s"),
         })
@@ -416,6 +550,11 @@ def parse_args(argv=None):
     parser.add_argument("--run-id", default=None, help="Only analyze matching run_id")
     parser.add_argument("--exclude-collector", action="store_true",
                         help="Skip collected_* list-format JSON files")
+    parser.add_argument(
+        "--allow-pre-hardening-v6",
+        action="store_true",
+        help="Allow historical schema-v6 files without the current v6r1 identity",
+    )
     parser.add_argument("--min-resolved", type=int, default=3,
                         help="Minimum resolved eligible predictions per file (default: 3)")
     parser.add_argument("--aggregate-min-resolved", type=int, default=30,
@@ -445,6 +584,7 @@ def main(argv=None):
         ok, reason = should_include_path(path, data, args)
         if not ok:
             skipped_legacy += 1
+            print(f"\n  SKIP {os.path.basename(path)}: {reason}")
             continue
 
         if not _is_result_document(data):
@@ -470,12 +610,14 @@ def main(argv=None):
                 summary.get("mode"),
                 summary.get("horizon_s"),
                 summary.get("model_version"),
+                summary.get("implementation_revision"),
+                summary.get("acquisition_policy_version"),
             )
             groups.setdefault(key, []).append(summary)
 
         for key, summaries in groups.items():
             print(f"\n{'=' * 55}")
-            print(f"  AGGREGATE — compatible configuration")
+            print("  AGGREGATE — compatible configuration")
             print(f"{'=' * 55}")
             if key[0]:
                 print(f"  Config hash:        {key[0]}")
@@ -489,7 +631,7 @@ def main(argv=None):
             print(f"  Weighted classical: {weighted_c:.4f}")
             print(f"  Weighted quantum:   {weighted_q:.4f}")
             if tier == "diagnostics":
-                print(f"  Status: diagnostics only until n>=30")
+                print("  Status: diagnostics only until n>=30")
             elif tier == "exploratory":
                 imprv = (weighted_c - weighted_q) / weighted_c * 100 if weighted_c else 0
                 print(f"  Status: exploratory (no significance claim until n>={MIN_SIGNIFICANCE_N})")
@@ -497,9 +639,18 @@ def main(argv=None):
                 print(f"  Total wins:         {total_wins}/{total_n} ({total_wins/total_n*100:.1f}%)")
             else:
                 imprv = (weighted_c - weighted_q) / weighted_c * 100 if weighted_c else 0
-                print(f"  Status: primary analysis")
+                print("  Status: primary analysis")
                 print(f"  Improvement:        {imprv:+.2f}%")
                 print(f"  Total wins:         {total_wins}/{total_n} ({total_wins/total_n*100:.1f}%)")
+                from reality_check import paired_loss_test
+                errors_c = [
+                    value for summary in summaries for value in summary["errors_c"]
+                ]
+                errors_q = [
+                    value for summary in summaries for value in summary["errors_q"]
+                ]
+                result = paired_loss_test(errors_c, errors_q, live=True)
+                print(f"  Paired block p:     {result['corrected_p_value']}")
 
 
 if __name__ == "__main__":

@@ -6,7 +6,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from data_fetcher import _best_bid_ask, compute_features
+from data_fetcher import HuobiData, _best_bid_ask, compute_features
 
 
 class DataFetcherTests(unittest.TestCase):
@@ -78,6 +78,32 @@ class DataFetcherTests(unittest.TestCase):
         self.assertEqual(feature_lookback_s(None), 60.0)
         self.assertEqual(feature_lookback_s(60), 60.0)
         self.assertEqual(feature_lookback_s(3600), 3600.0)
+
+    def test_fetch_cycle_preserves_trades_when_ticker_fails(self):
+        provider = HuobiData()
+        provider.fetch_ticker = lambda symbol: None
+        provider.fetch_depth = lambda symbol, depth=20: {
+            "bids": [[99.0, 1.0]],
+            "asks": [[101.0, 1.0]],
+            "ts": 1000,
+        }
+        provider.fetch_trades = lambda symbol, size=50: [
+            {
+                "trade_id": "t1",
+                "direction": "buy",
+                "amount": 1.0,
+                "price": 100.0,
+                "ts": 1000,
+            }
+        ]
+        provider.fetch_klines = lambda symbol, period="1min", limit=5: []
+
+        cycle = provider.fetch_cycle("btcusdt")
+
+        self.assertIsNone(cycle.features)
+        self.assertEqual(len(cycle.trades), 1)
+        self.assertFalse(cycle.endpoint_ok["ticker"])
+        self.assertIn("ticker", cycle.endpoint_errors)
 
 
 if __name__ == "__main__":

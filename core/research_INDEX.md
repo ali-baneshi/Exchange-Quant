@@ -32,7 +32,7 @@ policy is accurate, quantum-native, statistically superior, or profitable.
 | Synthetic diagnostics | `experiment.py`, `market_sim.py` |
 
 The canonical live path is `pipeline_live_ensemble.py` → SQLite durable state →
-schema-v6 JSON export → `analyze_live_results.py --schema-version 6`.
+schema-v6r1 JSON export → `analyze_live_results.py --schema-version 6`.
 
 ## Important Differences from Vision Documents
 
@@ -42,8 +42,8 @@ schema-v6 JSON export → `analyze_live_results.py --schema-version 6`.
   direction.
 - HMM/GARCH regimes, sentiment signals, and broad ICDS architecture concepts are
   not current implemented live dependencies unless explicitly present in code.
-- `reality_check.py` is historical naming; current primary documentation describes
-  paired moving-block mean-loss inference, not White’s Reality Check.
+- `reality_check.py` retains a deprecated historical wrapper; current analysis uses
+  paired moving-block mean-loss inference.
 
 ## Evidence Boundary
 
