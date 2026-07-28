@@ -1,74 +1,52 @@
 # Exchange-Q Research Index
 
-Maps Persian research documents (`research_01`–`05`) to code modules and notes on staleness.
+> **Theory and history index, not an operational contract.** Current system behavior
+> is defined by `docs/SCHEMA_V6.md`, `docs/RUNBOOK.md`, and
+> `docs/EVIDENCE_STATUS.md`.
 
-**English ops:** [../docs/README.md](../docs/README.md) | **Persian:** [../docs/fa/README.md](../docs/fa/README.md)
+**English operations:** [../docs/README.md](../docs/README.md) |
+**Persian operations:** [../docs/fa/README.md](../docs/fa/README.md)
 
----
+## Research Documents
 
-## Document map
+| Document | Role | Relationship to implementation |
+|---|---|---|
+| `research_01_problem.md` | Market-motivation thought experiment | Theory only; no direct code contract |
+| `research_02_nature.md` | Nature/quantum inspiration | Background only; does not validate a market model |
+| `research_03_paradoxes.md` | Quantum-cognition examples | Conceptual/demo relation; not live-market evidence |
+| `research_04_architecture.md` | ICDS vision | Explicitly differs from implemented code |
+| `research_05_results.md` | Historical results archive | Kline-era material; not current live evidence |
 
-| Research doc | Language | Maps to | Stale? |
-|--------------|----------|---------|--------|
-| [research_01_problem.md](./research_01_problem.md) | FA | Motivation — Intent Trilemma | Theory only — no code mapping |
-| [research_02_nature.md](./research_02_nature.md) | FA | Quantum-inspired mechanisms (conceptual) | Theory only |
-| [research_03_paradoxes.md](./research_03_paradoxes.md) | FA | [disjunction_demo.py](./disjunction_demo.py), [market_sim.py](./market_sim.py) | OK |
-| [research_04_architecture.md](./research_04_architecture.md) | FA | [quantum_core.py](./quantum_core.py), [delta_adaptive.py](./delta_adaptive.py), live pipelines | **Vision doc** — δ grid search not implemented |
-| [research_05_results.md](./research_05_results.md) | EN+FA | [verification_report.md](../verification_report.md), archived kline numbers | Partially stale — see banner |
+These documents may motivate experiments but cannot establish that the v6 evaluated
+policy is accurate, quantum-native, statistically superior, or profitable.
 
----
+## Code Map
 
-## Code modules by topic
+| Topic | Current modules |
+|---|---|
+| Born construction and phase | `quantum_core.py`, `delta_adaptive.py` |
+| Classical comparator and ensemble | `baselines.py`, `ensemble.py` |
+| Live evaluation | `pipeline_live_ensemble.py`, `live_protocol.py`, `live_store.py`, `data_fetcher.py` |
+| Result analysis and statistics | `analyze_live_results.py`, `validation.py` |
+| Historical kline checks | `data_historical.py`, `backtest.py` |
+| Synthetic diagnostics | `experiment.py`, `market_sim.py` |
 
-### Born rule and interference
+The canonical live path is `pipeline_live_ensemble.py` → SQLite durable state →
+schema-v6 JSON export → `analyze_live_results.py --schema-version 6`.
 
-| Module | Role |
-|--------|------|
-| `quantum_core.py` | `born_rule_predict()` — single source of Born predictions |
-| `delta_adaptive.py` | `compute_delta()` — live δ ∈ [0, π/2] from order-book |
-| `ensemble.py` | Quantum + vol_regime fusion for live ensemble mode |
+## Important Differences from Vision Documents
 
-### Live evaluation (valid Born path)
+- The live phase is computed continuously and bounded to `[0, π/2]`; it is not a
+  grid search over a full phase range.
+- The production evaluator uses future captured-trade `buy_ratio`, not kline
+  direction.
+- HMM/GARCH regimes, sentiment signals, and broad ICDS architecture concepts are
+  not current implemented live dependencies unless explicitly present in code.
+- `reality_check.py` is historical naming; current primary documentation describes
+  paired moving-block mean-loss inference, not White’s Reality Check.
 
-| Module | Role |
-|--------|------|
-| `pipeline_live_ensemble.py` | Canonical long-running pipeline → schema v5 JSON |
-| `live_protocol.py` | `forecast_lookback`, `pending_due`, resolve-later |
-| `data_fetcher.py` | Huobi order book, trades, ticker |
-| `analyze_live_results.py` | Parse v3 JSON, segmented fallback stats |
+## Evidence Boundary
 
-### Classical / deprecated paths
-
-| Module | Role |
-|--------|------|
-| `backtest.py` | Classical kline backtest (binary direction) — no Born |
-| `backtest_ensemble.py` | DEPRECATED stub (exit 1) |
-| `experiment.py` | Synthetic Born vs classical — diagnostic |
-
-### Statistics
-
-| Module | Role |
-|--------|------|
-| `validation.py` | Block bootstrap, Bonferroni, comprehensive_report |
-| `reality_check.py` | White's Reality Check wrapper |
-
-See [docs/STATISTICS.md](../docs/STATISTICS.md) for claim thresholds.
-
----
-
-## Implementation vs research_04 (ICDS)
-
-| research_04 vision | Current code |
-|--------------------|--------------|
-| δ grid search `[0, π/4, …, π]` | `compute_delta()` continuous mapping to [0, π/2] |
-| δ → π means regime change | Live: π/2 = neutral interference; destructive path gated |
-| HMM/GARCH regime detection | vol_regime baseline + rolling stats only |
-| Sentiment signals | Not implemented |
-
----
-
-## Related evidence
-
-- [verification_report.md](../verification_report.md) — empirical verdict
-- [docs/SCHEMA_V5.md](../docs/SCHEMA_V5.md) — JSON field reference
-- [docs/STATISTICS.md](../docs/STATISTICS.md) — p-values and n thresholds
+Read `../docs/EVIDENCE_STATUS.md` before interpreting any research result. Dated
+artifacts, schema-v5 records, and background theory are retained for traceability,
+not promoted to v6 evidence.
