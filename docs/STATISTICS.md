@@ -1,4 +1,4 @@
-# Schema-v7 Statistical Protocol
+# Schema-v8 Statistical Protocol
 
 ## Estimand
 
@@ -45,6 +45,7 @@ covariance. Reports must include:
 - effect estimate and confidence interval;
 - one-sided preregistered p-value;
 - HAC lag choice and sensitivity analysis;
+- circular moving-block bootstrap sensitivity with fixed seed and block length;
 - proper scores and calibration diagnostics.
 
 Multiple symbols, horizons, models, or post-hoc segments require explicit

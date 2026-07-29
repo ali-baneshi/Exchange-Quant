@@ -45,11 +45,11 @@ proper scoring and optional HAC inference
 | `exchange_q/domain.py` | Events, windows, v8 lifecycle states, evidence helpers |
 | `exchange_q/capture.py` | Provider-to-store capture hook contract |
 | `exchange_q/providers/` | HTX diagnostic adapter, Binance sequenced adapter, replay |
-| `exchange_q/store.py` | Schema v8 SQLite, capture ledger, v7 read-only compatibility |
+| `exchange_q/store.py` | Single-run schema v8 SQLite, capture ledger, v7 read-only compatibility |
 | `exchange_q/runner.py` | Lifecycle orchestration, settlement, shutdown cleanup |
 | `exchange_q/monitor.py` | Outcome and detail operator console |
 | `exchange_q/cli.py` | Doctor, certify, dataset, run, analyze, export |
-| `exchange_q/analysis.py` | Proper scores, calibration diagnostics, HAC paired tests |
+| `exchange_q/analysis.py` | Proper scores, calibration diagnostics, HAC and block sensitivity |
 
 ## State and Recovery
 

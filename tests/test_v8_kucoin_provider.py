@@ -76,7 +76,7 @@ def test_monotonic_trade_sequence_is_accepted_without_gap_recovery():
     events = asyncio.run(
         provider._trade_events(
             {
-                "sequence": "100",
+                "sequence": "6",
                 "tradeId": "100",
                 "side": "buy",
                 "price": "100",
@@ -90,6 +90,81 @@ def test_monotonic_trade_sequence_is_accepted_without_gap_recovery():
     )
     assert len(events) == 1
     assert provider._unresolved_gaps == 0
+
+
+def test_trade_sequence_gap_requires_complete_recovery():
+    provider = KucoinSequencedProvider(
+        rest_get=lambda path, params: (
+            [
+                {
+                    "sequence": str(sequence),
+                    "tradeId": str(sequence),
+                    "side": "buy",
+                    "price": "100",
+                    "size": "1",
+                    "time": 100 + sequence,
+                }
+                for sequence in (6, 7)
+            ]
+            if path == "/api/v1/market/histories"
+            else 1
+        )
+    )
+    provider._last_trade_sequence = 5
+    events = asyncio.run(
+        provider._trade_events(
+            {
+                "sequence": "8",
+                "tradeId": "8",
+                "side": "sell",
+                "price": "100",
+                "size": "1",
+                "time": 108,
+            },
+            "btcusdt",
+            109,
+            "sess",
+        )
+    )
+    assert [event.sequence for event in events] == [6, 7, 8]
+    assert provider._unresolved_gaps == 0
+
+
+def test_trade_sequence_gap_fails_closed_when_recovery_is_incomplete():
+    provider = KucoinSequencedProvider(
+        rest_get=lambda path, params: (
+            [
+                {
+                    "sequence": "6",
+                    "tradeId": "6",
+                    "side": "buy",
+                    "price": "100",
+                    "size": "1",
+                    "time": 106,
+                }
+            ]
+            if path == "/api/v1/market/histories"
+            else 1
+        )
+    )
+    provider._last_trade_sequence = 5
+    events = asyncio.run(
+        provider._trade_events(
+            {
+                "sequence": "8",
+                "tradeId": "8",
+                "side": "sell",
+                "price": "100",
+                "size": "1",
+                "time": 108,
+            },
+            "btcusdt",
+            109,
+            "sess",
+        )
+    )
+    assert events == []
+    assert provider._unresolved_gaps == 1
 
 
 def test_normalize_symbol():
@@ -118,7 +193,7 @@ def test_events_reconnects_after_connection_closed(monkeypatch):
         async def __aenter__(self):
             attempts["count"] += 1
             if attempts["count"] == 1:
-                raise ConnectionClosed(None, None)
+                raise OSError("connection reset")
             provider._closed = True
             raise RuntimeError("stop after reconnect attempt")
 
@@ -126,6 +201,7 @@ def test_events_reconnects_after_connection_closed(monkeypatch):
             return None
 
     provider = KucoinSequencedProvider(
+        reconnect_backoff_cap_s=0,
         rest_post=lambda *_args, **_kwargs: {
             "token": "token",
             "instanceServers": [{"endpoint": "wss://example.test", "pingInterval": 18000}],

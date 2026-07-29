@@ -248,6 +248,14 @@ class V7Store:
         self._require_writable()
         now = int(time.time() * 1000)
         with self.transaction() as connection:
+            existing_run = connection.execute(
+                "SELECT run_id FROM runs WHERE run_id != ? LIMIT 1",
+                (manifest.run_id,),
+            ).fetchone()
+            if existing_run:
+                raise RuntimeError(
+                    "a database is single-run; use a new database for another run"
+                )
             connection.execute(
                 """
                 INSERT INTO runs(run_id, manifest_json, status, created_at_ms, updated_at_ms)
@@ -1051,6 +1059,22 @@ class V7Store:
             (provider, symbol),
         ).fetchone()
         return int(row[0]) if row else 0
+
+    def interval_has_unresolved_gap(
+        self, provider: str, symbol: str, start_ms: int, end_ms: int
+    ) -> bool:
+        if self.schema_version < 8:
+            return False
+        row = self.connection.execute(
+            """
+            SELECT 1 FROM continuity_intervals
+            WHERE provider = ? AND symbol = ? AND complete = 0
+              AND start_ms < ? AND end_ms > ?
+            LIMIT 1
+            """,
+            (provider, symbol, end_ms, start_ms),
+        ).fetchone()
+        return row is not None
 
     def save_provider_certification(
         self,

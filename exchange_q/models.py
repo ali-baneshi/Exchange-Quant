@@ -46,6 +46,25 @@ class ModelArtifact:
     calibration_rows: int = 0
     calibration_status: str = "uncalibrated"
 
+    def __post_init__(self) -> None:
+        if not self.model_id or self.development_rows <= 0:
+            raise ValueError("artifact identity and development rows are required")
+        if self.purpose not in {"diagnostic_fixture", "primary"}:
+            raise ValueError("unsupported artifact purpose")
+        numeric_values = (
+            *self.parameters,
+            self.calibration_intercept,
+            self.calibration_slope,
+        )
+        if not all(math.isfinite(float(value)) for value in numeric_values):
+            raise ValueError("artifact parameters must be finite")
+        if self.calibration_slope <= 0:
+            raise ValueError("calibration slope must be positive")
+        if self.calibration_rows < 0:
+            raise ValueError("calibration rows must be non-negative")
+        if self.calibration_status not in {"uncalibrated", "fitted"}:
+            raise ValueError("unsupported calibration status")
+
     @property
     def artifact_hash(self) -> str:
         payload = json.dumps(
@@ -189,6 +208,7 @@ class NormalizedBornModel:
         )
         diagnostics = dict(diagnostics)
         diagnostics["artifact_hash"] = artifact.artifact_hash
+        diagnostics["calibration_status"] = artifact.calibration_status
         baseline_map = artifact.baseline_map
         prior_parameters = baseline_map.get("development_prior_v1")
         logistic_parameters = baseline_map.get("regularized_logistic_v1")

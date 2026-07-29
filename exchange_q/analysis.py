@@ -142,6 +142,53 @@ def paired_hac_test(losses_baseline, losses_model, max_lags: int | None = None):
     }
 
 
+def paired_block_bootstrap_test(
+    losses_baseline,
+    losses_model,
+    *,
+    block_length: int | None = None,
+    iterations: int = 4000,
+    seed: int = 42,
+):
+    if len(losses_baseline) != len(losses_model) or len(losses_model) < 3:
+        raise ValueError("at least three aligned paired losses are required")
+    if iterations <= 0:
+        raise ValueError("iterations must be positive")
+    differences = np.asarray(losses_model, dtype=float) - np.asarray(
+        losses_baseline, dtype=float
+    )
+    if not np.all(np.isfinite(differences)):
+        raise ValueError("losses must be finite")
+    n = len(differences)
+    block_length = block_length or max(1, int(round(n ** (1 / 3))))
+    if not 1 <= block_length <= n:
+        raise ValueError("block length must be within the sample size")
+    rng = np.random.default_rng(seed)
+    starts = np.arange(n)
+    observed = float(np.mean(differences))
+    centered = differences - observed
+    bootstrap_means = np.empty(iterations, dtype=float)
+    for index in range(iterations):
+        sampled: list[float] = []
+        while len(sampled) < n:
+            start = int(rng.choice(starts))
+            sampled.extend(
+                float(centered[(start + offset) % n])
+                for offset in range(block_length)
+            )
+        bootstrap_means[index] = float(np.mean(sampled[:n]))
+    p_value = float(np.mean(bootstrap_means <= observed))
+    return {
+        "n": n,
+        "mean_loss_difference": observed,
+        "one_sided_p_value": p_value,
+        "block_length": block_length,
+        "iterations": iterations,
+        "seed": seed,
+        "method": "centered circular moving-block bootstrap",
+    }
+
+
 def required_sample_size(
     expected_mean_difference: float,
     standard_deviation: float,
@@ -151,7 +198,12 @@ def required_sample_size(
 ) -> int:
     if expected_mean_difference >= 0:
         raise ValueError("expected improvement must be a negative loss difference")
-    if standard_deviation <= 0 or not -0.99 < autocorrelation < 0.99:
+    if (
+        standard_deviation <= 0
+        or not -0.99 < autocorrelation < 0.99
+        or not 0 < alpha < 1
+        or not 0 < power < 1
+    ):
         raise ValueError("invalid variance or autocorrelation")
     from scipy.stats import norm
 

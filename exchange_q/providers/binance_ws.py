@@ -45,6 +45,7 @@ class BinanceSequencedProvider:
         self._max_clock_uncertainty_ms = max_clock_uncertainty_ms
         self._depth_resync_limit = depth_resync_limit
         self._rest_get = rest_get or self._http_get_json
+        self._custom_rest_get = rest_get is not None
         self._capture_hooks = capture_hooks or CaptureHooks()
         self._last_trade_id: int | None = None
         self._last_depth_id: int | None = None
@@ -57,6 +58,11 @@ class BinanceSequencedProvider:
 
     def set_capture_hooks(self, hooks: CaptureHooks) -> None:
         self._capture_hooks = hooks
+
+    async def _get(self, path: str, parameters: dict[str, Any]):
+        if self._custom_rest_get:
+            return self._rest_get(path, parameters)
+        return await asyncio.to_thread(self._rest_get, path, parameters)
 
     async def events(self, symbol: str):
         symbol = symbol.lower()
@@ -173,8 +179,7 @@ class BinanceSequencedProvider:
             return
 
     async def _load_depth_snapshot(self, symbol: str) -> None:
-        snapshot = await asyncio.to_thread(
-            self._rest_get,
+        snapshot = await self._get(
             "/api/v3/depth",
             {"symbol": symbol.upper(), "limit": self.book_depth_levels},
         )
@@ -250,8 +255,7 @@ class BinanceSequencedProvider:
         recovered: list[TradeEvent] = []
         cursor = missing_from
         while cursor <= missing_to:
-            rows = await asyncio.to_thread(
-                self._rest_get,
+            rows = await self._get(
                 "/api/v3/aggTrades",
                 {
                     "symbol": symbol.upper(),
@@ -381,7 +385,7 @@ class BinanceSequencedProvider:
 
     async def _sample_clock(self) -> None:
         sent = int(time.time() * 1000)
-        payload = await asyncio.to_thread(self._rest_get, "/api/v3/time", {})
+        payload = await self._get("/api/v3/time", {})
         received = int(time.time() * 1000)
         exchange = int(payload["serverTime"])
         midpoint = (sent + received) / 2

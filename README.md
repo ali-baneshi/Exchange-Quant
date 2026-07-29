@@ -6,7 +6,7 @@ trading profitability.
 
 ## Current Contract
 
-The canonical implementation is **schema v7 / revision v7r3**:
+The canonical implementation is **schema v8 / revision v8r1**:
 
 - raw trades and book observations are persisted before feature construction;
 - features use the causal half-open window `[t-lookback, t)`;
@@ -19,6 +19,8 @@ The canonical implementation is **schema v7 / revision v7r3**:
 The bundled HTX WebSocket adapter is intentionally **diagnostic-only** because its
 consumed messages do not provide enough continuity information to prove that no
 trade was missed. It cannot produce eligible primary labels.
+
+Each SQLite database is single-run. Start a new run with a new database path.
 
 ## Install
 
@@ -51,7 +53,7 @@ Advanced commands:
 ./scripts/exchange-q export \
   --database runs/example.sqlite3 \
   --run-id RUN_ID \
-  --output artifacts/v7/RUN_ID.json
+  --output artifacts/v8/RUN_ID.json
 ```
 
 The run dashboard always identifies the generated database and run ID.
@@ -61,7 +63,7 @@ The feature object follows `exchange_q.domain.FeatureWindow`.
 
 ## Evidence Boundary
 
-There is currently no schema-v7 corpus proving model superiority. All schema-v6
+There is currently no schema-v8 corpus proving model superiority. All schema-v7
 and earlier runs, dated guides, audits, and result files are historical evidence
 only. See `docs/EVIDENCE_STATUS.md`.
 

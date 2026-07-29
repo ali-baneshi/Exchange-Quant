@@ -12,7 +12,13 @@ import time
 import uuid
 from dataclasses import dataclass, replace
 
-from exchange_q.analysis import paired_hac_test, required_sample_size, score_baselines, score_rows
+from exchange_q.analysis import (
+    paired_block_bootstrap_test,
+    paired_hac_test,
+    required_sample_size,
+    score_baselines,
+    score_rows,
+)
 from exchange_q.artifacts import load_artifact, save_artifact
 from exchange_q.certification import run_fault_certification, run_replay_certification
 from exchange_q.domain import FeatureWindow, ForecastStatus, RunManifest, SCOREABLE_STATUSES
@@ -295,6 +301,8 @@ def _run_command(parser: argparse.ArgumentParser, args) -> None:
         feature_policy="causal_trade_book_v1",
         label_policy="half_open_streamed_trades_v1",
         primary_metric="per_trade_negative_log_likelihood",
+        primary_comparator="regularized_logistic_v1",
+        inference_policy="hac_plus_block_sensitivity_v1",
         horizon_ms=_value_or_default(args.horizon_s, profile.horizon_s) * 1000,
         lookback_ms=_value_or_default(args.lookback_s, profile.lookback_s) * 1000,
         cadence_ms=_value_or_default(args.cadence_s, profile.cadence_s) * 1000,
@@ -404,20 +412,26 @@ def _fit_artifact(
             dataset_hash = hashlib.sha256(handle.read()).hexdigest()
     if purpose == "primary" and len(rows) < 10:
         raise ValueError("primary artifacts require a larger certified development dataset")
-    features = [FeatureWindow(**row["feature"]) for row in rows]
     model = NormalizedBornModel()
+    fit_rows = rows
+    calibration_rows = 0
+    if purpose == "primary":
+        split_index = max(1, int(len(rows) * 0.8))
+        if split_index >= len(rows):
+            raise ValueError("primary artifacts require an independent calibration split")
+        fit_rows = rows[:split_index]
+        calibration_rows = len(rows) - split_index
     artifact = model.fit(
-        features,
-        [int(row["buy_count"]) for row in rows],
-        [int(row["total_count"]) for row in rows],
+        [FeatureWindow(**row["feature"]) for row in fit_rows],
+        [int(row["buy_count"]) for row in fit_rows],
+        [int(row["total_count"]) for row in fit_rows],
         purpose=purpose,
         dataset_hash=dataset_hash,
     )
     if purpose == "primary":
-        split_index = max(1, int(len(rows) * 0.8))
         artifact = replace(
             artifact,
-            calibration_rows=len(rows) - split_index,
+            calibration_rows=calibration_rows,
             calibration_status="uncalibrated",
         )
     save_artifact(output, artifact)
@@ -468,9 +482,24 @@ def _validate_certification(parser, study, profile):
     expected_provider = study.get("provider") or profile.provider
     if certification.get("provider") != expected_provider:
         parser.error("provider certification does not match the primary provider")
+    expected_symbol = (study.get("symbol") or profile.symbol).lower()
+    if certification.get("symbol", "").lower() != expected_symbol:
+        parser.error("provider certification does not match the primary symbol")
+    if not certification.get("adapter_revision"):
+        parser.error("provider certification is missing adapter revision")
+    issued_at_ms = certification.get("issued_at_ms")
+    if not isinstance(issued_at_ms, int) or issued_at_ms <= 0:
+        parser.error("provider certification has invalid issue time")
+    if int(time.time() * 1000) - issued_at_ms > 24 * 60 * 60 * 1000:
+        parser.error("provider certification is older than 24 hours")
     for section in ("replay_results", "fault_results", "live_soak"):
         if section not in certification:
             parser.error(f"provider certification missing section: {section}")
+        if certification[section].get("passed") is not True:
+            parser.error(f"provider certification section failed: {section}")
+    soak = certification["live_soak"]
+    if float(soak.get("duration_s", 0)) < 60:
+        parser.error("provider certification live soak is shorter than 60 seconds")
 
 
 async def _doctor(parser, args) -> int:
@@ -585,6 +614,7 @@ async def _certify_provider(parser, args) -> int:
     task = asyncio.create_task(_collect_provider_events(provider, args.symbol, counts))
     try:
         await asyncio.sleep(args.duration_s)
+        health = provider.health()
     finally:
         await provider.close()
         task.cancel()
@@ -592,7 +622,6 @@ async def _certify_provider(parser, args) -> int:
             await task
         except asyncio.CancelledError:
             pass
-    health = provider.health()
     live_soak = {
         "duration_s": args.duration_s,
         "counts": counts,
@@ -600,6 +629,8 @@ async def _certify_provider(parser, args) -> int:
         "passed": (
             counts["trades"] > 0
             and counts["books"] > 0
+            and health.connected
+            and health.coverage_certifiable
             and health.unresolved_gaps == 0
             and health.clock_uncertainty_ms is not None
             and health.clock_uncertainty_ms <= 500
@@ -763,14 +794,13 @@ def _analysis_document(store: V7Store, run_id: str) -> dict:
     if not rows:
         document["reason"] = "no scoreable labels"
         return document
-    calibration_status = "unknown"
-    try:
-        for path in ("artifacts/v8/diagnostic-born.json",):
-            if os.path.isfile(path):
-                calibration_status = load_artifact(path).calibration_status
-                break
-    except (OSError, ValueError, TypeError, json.JSONDecodeError):
-        pass
+    calibration_statuses = {
+        row["forecast"].get("diagnostics", {}).get("calibration_status", "unknown")
+        for row in rows
+    }
+    calibration_status = (
+        next(iter(calibration_statuses)) if len(calibration_statuses) == 1 else "mixed"
+    )
     report = score_rows(rows)
     baselines = score_baselines(rows)
     document.update(
@@ -785,7 +815,12 @@ def _analysis_document(store: V7Store, run_id: str) -> dict:
         }
     )
     if len(rows) >= 3 and baselines:
-        baseline_name = sorted(baselines)[0]
+        baseline_name = status["manifest"].get(
+            "primary_comparator", "regularized_logistic_v1"
+        )
+        if baseline_name not in baselines:
+            document["reason"] = f"primary comparator is unavailable: {baseline_name}"
+            return document
         import numpy as np
         from scipy.special import xlogy
 
@@ -812,6 +847,10 @@ def _analysis_document(store: V7Store, run_id: str) -> dict:
         document["paired_inference"] = {
             "baseline": baseline_name,
             "hac": paired_hac_test(
+                _losses(baseline_probs).tolist(),
+                _losses(model_probs).tolist(),
+            ),
+            "block_bootstrap": paired_block_bootstrap_test(
                 _losses(baseline_probs).tolist(),
                 _losses(model_probs).tolist(),
             ),

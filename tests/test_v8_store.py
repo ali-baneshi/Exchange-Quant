@@ -1,6 +1,7 @@
 
 
 from exchange_q.domain import FeatureWindow, ForecastStatus, RunManifest
+import pytest
 from exchange_q.store import V7Store
 
 
@@ -80,6 +81,16 @@ def test_terminal_run_rejects_open_slots(tmp_path):
         integrity = store.status("v8-run")["integrity"]
         assert integrity["valid"] is False
         assert integrity["error_codes"]["terminal_run_has_open_slots"] == 1
+    finally:
+        store.close()
+
+
+def test_database_is_single_run(tmp_path):
+    store = V7Store(str(tmp_path / "run.sqlite3"))
+    try:
+        store.create_run(_manifest("first"))
+        with pytest.raises(RuntimeError, match="single-run"):
+            store.create_run(_manifest("second"))
     finally:
         store.close()
 

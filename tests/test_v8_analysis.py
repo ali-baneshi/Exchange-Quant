@@ -1,5 +1,6 @@
 
 
+from exchange_q.analysis import paired_block_bootstrap_test
 from exchange_q.cli import _analysis_document
 from exchange_q.domain import FeatureWindow, Forecast, RunManifest
 from exchange_q.store import V7Store
@@ -64,3 +65,13 @@ def test_analysis_blocks_on_quarantine(tmp_path):
         assert "timing integrity" in document["reason"]
     finally:
         store.close()
+
+
+def test_block_bootstrap_is_reproducible():
+    result = paired_block_bootstrap_test(
+        [0.3] * 30,
+        [0.2] * 30,
+        iterations=100,
+    )
+    assert result["one_sided_p_value"] == 0.0
+    assert result["seed"] == 42

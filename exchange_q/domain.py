@@ -292,6 +292,8 @@ class RunManifest:
     cadence_ms: int
     minimum_label_trades: int
     target_eligible: int
+    primary_comparator: str = "regularized_logistic_v1"
+    inference_policy: str = "hac_plus_block_sensitivity_v1"
     terminal_slot_limit: int | None = None
     mode: Literal["diagnostic", "primary"] = "diagnostic"
     capture_policy: str = "uncertified_stream_v1"
@@ -312,6 +314,8 @@ class RunManifest:
             or not self.feature_policy
             or not self.label_policy
             or not self.primary_metric
+            or not self.primary_comparator
+            or not self.inference_policy
         ):
             raise ValueError("manifest policy and artifact identities are required")
         if self.horizon_ms <= 0 or self.lookback_ms <= 0 or self.cadence_ms <= 0:

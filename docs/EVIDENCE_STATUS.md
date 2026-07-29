@@ -1,8 +1,8 @@
 # Evidence Status — July 28, 2026
 
-Exchange-Q currently has **no valid schema-v7 primary corpus**.
+Exchange-Q currently has **no valid schema-v8 primary corpus**.
 
-The repository now contains a schema-v7 implementation with:
+The repository now contains a schema-v8 implementation with:
 
 - normalized signed-imbalance Born-inspired probabilities;
 - frozen model artifacts;
@@ -22,4 +22,6 @@ All schema-v6r1 and earlier results are historical diagnostics. They cannot be
 combined with schema-v7 data or used to validate the new model.
 
 No project result proves trading profitability, quantum advantage, or superiority
-over strong frozen conventional baselines.
+over strong frozen conventional baselines. A primary run also requires a fresh,
+symbol-matched provider certification whose replay, fault, and live-soak sections
+all pass.

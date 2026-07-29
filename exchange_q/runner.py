@@ -353,6 +353,12 @@ class LiveRunner:
             and health.unresolved_gaps == 0
             and self._stream_start_ms is not None
             and self._stream_start_ms <= slot_start_ms
+            and not self.store.interval_has_unresolved_gap(
+                self.manifest.provider,
+                self.manifest.symbol,
+                slot_start_ms,
+                slot_end_ms,
+            )
         )
         reasons = () if complete else ("provider_coverage_not_certifiable",)
         self.store.mark_coverage(
@@ -432,16 +438,11 @@ class LiveRunner:
         if self.manifest.mode != "primary":
             return True
         health = self.provider.health()
-        watermarks = [
-            value
-            for value in (health.trade_watermark_ms, health.book_watermark_ms)
-            if value is not None
-        ]
         return (
             health.connected
             and health.coverage_certifiable
-            and bool(watermarks)
-            and max(watermarks) >= slot_end_ms
+            and health.trade_watermark_ms is not None
+            and health.trade_watermark_ms >= slot_end_ms + self.manifest.settlement_delay_ms
         )
 
     def _is_late_event(self, event: TradeEvent) -> bool:

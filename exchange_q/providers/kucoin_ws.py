@@ -26,6 +26,7 @@ class KucoinSequencedProvider:
         self,
         *,
         reconnect_limit: int = 20,
+        reconnect_backoff_cap_s: float = 30.0,
         max_clock_uncertainty_ms: float = 500.0,
         depth_resync_limit: int = 3,
         rest_get=None,
@@ -41,10 +42,13 @@ class KucoinSequencedProvider:
         self._unresolved_gaps = 0
         self._detail = ""
         self._reconnect_limit = reconnect_limit
+        self._reconnect_backoff_cap_s = reconnect_backoff_cap_s
         self._max_clock_uncertainty_ms = max_clock_uncertainty_ms
         self._depth_resync_limit = depth_resync_limit
         self._rest_get = rest_get or self._http_get_json
         self._rest_post = rest_post or self._http_post_json
+        self._custom_rest_get = rest_get is not None
+        self._custom_rest_post = rest_post is not None
         self._capture_hooks = capture_hooks or CaptureHooks()
         self._last_trade_sequence: int | None = None
         self._last_depth_sequence: int | None = None
@@ -57,6 +61,16 @@ class KucoinSequencedProvider:
 
     def set_capture_hooks(self, hooks: CaptureHooks) -> None:
         self._capture_hooks = hooks
+
+    async def _get(self, path: str, parameters: dict[str, Any]):
+        if self._custom_rest_get:
+            return self._rest_get(path, parameters)
+        return await asyncio.to_thread(self._rest_get, path, parameters)
+
+    async def _post(self, path: str, body: dict[str, Any] | None = None):
+        if self._custom_rest_post:
+            return self._rest_post(path, body or {})
+        return await asyncio.to_thread(self._rest_post, path, body or {})
 
     @staticmethod
     def normalize_symbol(symbol: str) -> str:
@@ -142,7 +156,9 @@ class KucoinSequencedProvider:
                 self._connected = False
                 self._reconnects += 1
                 if not self._closed:
-                    await asyncio.sleep(min(30.0, 2.0 ** min(self._reconnects, 5)))
+                    await asyncio.sleep(
+                        min(self._reconnect_backoff_cap_s, 2.0 ** min(self._reconnects, 5))
+                    )
             finally:
                 self._socket = None
         self._connected = False
@@ -181,11 +197,7 @@ class KucoinSequencedProvider:
         )
 
     async def _bullet_endpoint(self) -> tuple[str, float]:
-        payload = await asyncio.to_thread(
-            self._rest_post,
-            "/api/v1/bullet-public",
-            {},
-        )
+        payload = await self._post("/api/v1/bullet-public", {})
         token = payload["token"]
         server = payload["instanceServers"][0]
         endpoint = server["endpoint"].rstrip("/")
@@ -251,8 +263,7 @@ class KucoinSequencedProvider:
                 return
 
     async def _load_depth_snapshot(self, market_symbol: str) -> None:
-        snapshot = await asyncio.to_thread(
-            self._rest_get,
+        snapshot = await self._get(
             "/api/v1/market/orderbook/level2_100",
             {"symbol": market_symbol},
         )
@@ -265,13 +276,58 @@ class KucoinSequencedProvider:
         received_ms: int,
         session_id: str,
     ) -> list[TradeEvent]:
-        sequence = int(payload.get("tradeId") or payload["sequence"])
+        sequence = int(payload["sequence"])
+        events: list[TradeEvent] = []
         if self._last_trade_sequence is not None and sequence <= self._last_trade_sequence:
             return []
+        if self._last_trade_sequence is not None and sequence > self._last_trade_sequence + 1:
+            self._sequence_gaps += 1
+            missing_from = self._last_trade_sequence + 1
+            missing_to = sequence - 1
+            recovered = await self._recover_trades(
+                symbol, missing_from, missing_to, received_ms, session_id
+            )
+            recovered_sequences = [int(event.sequence or -1) for event in recovered]
+            expected_sequences = list(range(missing_from, missing_to + 1))
+            if recovered_sequences != expected_sequences:
+                self._unresolved_gaps += 1
+                self._detail = (
+                    f"unrecovered KuCoin trade sequence "
+                    f"{missing_from}-{missing_to}"
+                )
+                self._record_gap(
+                    symbol,
+                    "trades",
+                    missing_from,
+                    missing_to,
+                    complete=False,
+                    reasons=("unrecovered_trade_gap",),
+                )
+                if self._capture_hooks.record_recovery:
+                    self._capture_hooks.record_recovery(
+                        "trades",
+                        missing_from,
+                        missing_to,
+                        "failed",
+                        len(recovered),
+                        self._detail,
+                    )
+                return []
+            events.extend(recovered)
+            if self._capture_hooks.record_recovery:
+                self._capture_hooks.record_recovery(
+                    "trades",
+                    missing_from,
+                    missing_to,
+                    "success",
+                    len(recovered),
+                    "",
+                )
         event = self._parse_trade(payload, symbol, received_ms, session_id)
+        events.append(event)
         self._last_trade_sequence = sequence
         self._trade_watermark_ms = event.exchange_time_ms
-        return [event]
+        return events
 
     async def _recover_trades(
         self,
@@ -282,14 +338,13 @@ class KucoinSequencedProvider:
         session_id: str,
     ) -> list[TradeEvent]:
         market_symbol = self.normalize_symbol(symbol)
-        rows = await asyncio.to_thread(
-            self._rest_get,
+        rows = await self._get(
             "/api/v1/market/histories",
             {"symbol": market_symbol},
         )
         recovered: list[TradeEvent] = []
         for row in rows or []:
-            sequence = int(row.get("tradeId") or row["sequence"])
+            sequence = int(row["sequence"])
             if sequence < missing_from:
                 continue
             if sequence > missing_to:
@@ -311,6 +366,8 @@ class KucoinSequencedProvider:
                     session_id=session_id,
                 )
             )
+            if sequence >= missing_to:
+                break
         recovered.sort(key=lambda event: int(event.sequence or 0))
         return recovered
 
@@ -321,7 +378,7 @@ class KucoinSequencedProvider:
         received_ms: int,
         session_id: str,
     ) -> TradeEvent:
-        sequence = int(payload.get("tradeId") or payload["sequence"])
+        sequence = int(payload["sequence"])
         exchange_time_ms = int(payload.get("time", received_ms))
         if exchange_time_ms > 1_000_000_000_000:
             exchange_time_ms //= 1_000_000
@@ -414,7 +471,7 @@ class KucoinSequencedProvider:
 
     async def _sample_clock(self) -> None:
         sent = int(time.time() * 1000)
-        exchange = int(await asyncio.to_thread(self._rest_get, "/api/v1/timestamp", {}))
+        exchange = int(await self._get("/api/v1/timestamp", {}))
         received = int(time.time() * 1000)
         midpoint = (sent + received) / 2
         self._clock_offset_ms = exchange - midpoint
