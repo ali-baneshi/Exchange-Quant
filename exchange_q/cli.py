@@ -20,6 +20,7 @@ from exchange_q.models import NormalizedBornModel
 from exchange_q.monitor import RunConsole
 from exchange_q.providers.binance_ws import BinanceSequencedProvider
 from exchange_q.providers.htx_ws import HtxWebSocketProvider
+from exchange_q.providers.kucoin_ws import KucoinSequencedProvider
 from exchange_q.runner import LiveRunner
 from exchange_q.store import V7Store
 
@@ -55,7 +56,7 @@ DIAGNOSTIC_PROFILE = RunProfile(
 PRIMARY_PROFILE = RunProfile(
     artifact="",
     symbol="btcusdt",
-    provider="binance-sequenced",
+    provider="kucoin-sequenced",
     horizon_s=60,
     lookback_s=300,
     cadence_s=60,
@@ -63,11 +64,13 @@ PRIMARY_PROFILE = RunProfile(
     target_eligible=0,
     max_terminal_slots=0,
     mode="primary",
-    capture_policy="binance_trade_depth_sequenced_v1",
+    capture_policy="kucoin_trade_depth_sequenced_v1",
     decision_lead_s=5,
     settlement_delay_s=5,
 )
 DIAGNOSTIC_DATASET = "tests/fixtures/development-minimal.json"
+SEQUENCED_PROVIDERS = ("binance-sequenced", "kucoin-sequenced")
+PROVIDER_CHOICES = ("htx-ws", "binance-sequenced", "kucoin-sequenced")
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -95,7 +98,7 @@ def _parser() -> argparse.ArgumentParser:
         help="resume an existing run ID; otherwise existing IDs are rejected",
     )
     run.add_argument("--symbol")
-    run.add_argument("--provider", choices=("htx-ws", "binance-sequenced"))
+    run.add_argument("--provider", choices=PROVIDER_CHOICES)
     run.add_argument("--horizon-s", type=int)
     run.add_argument("--lookback-s", type=int)
     run.add_argument("--cadence-s", type=int)
@@ -143,6 +146,19 @@ def _parser() -> argparse.ArgumentParser:
     doctor = subparsers.add_parser("doctor", help="validate a run profile preflight")
     doctor.add_argument("--profile", choices=("diagnostic", "primary"), required=True)
     doctor.add_argument("--study")
+    doctor.add_argument("--provider", choices=PROVIDER_CHOICES)
+    doctor.add_argument(
+        "--connectivity-test",
+        action="store_true",
+        help="verify provider REST and websocket reachability",
+    )
+    doctor.add_argument("--symbol", default="btcusdt")
+    doctor.add_argument(
+        "--connectivity-timeout-s",
+        type=float,
+        default=15.0,
+        help="websocket soak duration for --connectivity-test",
+    )
 
     certification = subparsers.add_parser(
         "provider-certify",
@@ -150,7 +166,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     certification.add_argument(
         "--provider",
-        choices=("binance-sequenced",),
+        choices=SEQUENCED_PROVIDERS,
         required=True,
     )
     certification.add_argument("--symbol", default="btcusdt")
@@ -163,7 +179,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     dataset.add_argument("action", choices=("build",))
     dataset.add_argument("--capture-database", required=True)
-    dataset.add_argument("--provider", default="binance-sequenced")
+    dataset.add_argument("--provider", default="kucoin-sequenced")
     dataset.add_argument("--symbol", default="btcusdt")
     dataset.add_argument("--lookback-s", type=int, default=300)
     dataset.add_argument("--horizon-s", type=int, default=60)
@@ -200,7 +216,7 @@ def main(argv=None) -> int:
         )
         return 0
     if args.command == "doctor":
-        return _doctor(parser, args)
+        return asyncio.run(_doctor(parser, args))
     if args.command == "provider-certify":
         return asyncio.run(_certify_provider(parser, args))
     if args.command == "dataset":
@@ -300,7 +316,10 @@ def _run_command(parser: argparse.ArgumentParser, args) -> None:
             )
         ),
         mode=profile.mode,
-        capture_policy=profile.capture_policy,
+        capture_policy=(
+            study.get("capture_policy")
+            or profile.capture_policy
+        ),
         clock_policy="exchange_clock_watermark_v1",
         eligibility_policy="certified_continuity_v1",
         decision_lead_ms=profile.decision_lead_s * 1000,
@@ -325,11 +344,8 @@ def _run_command(parser: argparse.ArgumentParser, args) -> None:
                     f"run ID already exists: {run_id}\n"
                     "Use a new --run-id or add --resume intentionally."
                 )
-        provider = (
-            BinanceSequencedProvider()
-            if (args.provider or study.get("provider") or profile.provider)
-            == "binance-sequenced"
-            else HtxWebSocketProvider()
+        provider = _make_provider(
+            args.provider or study.get("provider") or profile.provider
         )
         runner = LiveRunner(store, provider, manifest, artifact)
         console = RunConsole(
@@ -359,8 +375,14 @@ async def _run_foreground(runner: LiveRunner, console: RunConsole) -> None:
         await runner_task
     if runner_task in done:
         await console_task
-    runner_task.result()
-    console_task.result()
+    for task in (runner_task, console_task):
+        try:
+            task.result()
+        except Exception as exc:
+            if task is runner_task:
+                print(f"[exchange-q] run ended with error: {exc}", flush=True)
+            else:
+                raise
 
 
 def _fit_artifact(
@@ -425,6 +447,16 @@ def _load_study(parser, path):
     return document
 
 
+def _make_provider(provider_name: str):
+    if provider_name == "binance-sequenced":
+        return BinanceSequencedProvider()
+    if provider_name == "kucoin-sequenced":
+        return KucoinSequencedProvider()
+    if provider_name == "htx-ws":
+        return HtxWebSocketProvider()
+    raise ValueError(f"unsupported provider: {provider_name}")
+
+
 def _validate_certification(parser, study, profile):
     path = study["provider_certification"]
     if not os.path.isfile(path):
@@ -433,20 +465,22 @@ def _validate_certification(parser, study, profile):
         certification = json.load(handle)
     if not certification.get("valid"):
         parser.error("provider certification is not valid")
-    if certification.get("provider") != profile.provider:
+    expected_provider = study.get("provider") or profile.provider
+    if certification.get("provider") != expected_provider:
         parser.error("provider certification does not match the primary provider")
     for section in ("replay_results", "fault_results", "live_soak"):
         if section not in certification:
             parser.error(f"provider certification missing section: {section}")
 
 
-def _doctor(parser, args) -> int:
+async def _doctor(parser, args) -> int:
     if args.profile == "diagnostic":
+        provider_name = args.provider or DIAGNOSTIC_PROFILE.provider
         checks = {
             "profile": "diagnostic",
             "artifact": DIAGNOSTIC_PROFILE.artifact,
             "artifact_exists": os.path.isfile(DIAGNOSTIC_PROFILE.artifact),
-            "provider": DIAGNOSTIC_PROFILE.provider,
+            "provider": provider_name,
             "primary_evidence": False,
             "ready": True,
         }
@@ -454,6 +488,7 @@ def _doctor(parser, args) -> int:
         study = _load_study(parser, args.study)
         artifact_path = study["artifact"]
         certification_path = study["provider_certification"]
+        provider_name = args.provider or study.get("provider") or PRIMARY_PROFILE.provider
         checks = {
             "profile": "primary",
             "artifact": artifact_path,
@@ -461,6 +496,7 @@ def _doctor(parser, args) -> int:
             "certification": certification_path,
             "certification_exists": os.path.isfile(certification_path),
             "target_eligible": study["target_eligible"],
+            "provider": provider_name,
         }
         checks["ready"] = all(
             (
@@ -472,8 +508,71 @@ def _doctor(parser, args) -> int:
         if checks["artifact_exists"]:
             checks["artifact_purpose"] = load_artifact(artifact_path).purpose
             checks["ready"] = checks["ready"] and checks["artifact_purpose"] == "primary"
+    if args.connectivity_test:
+        if provider_name == "htx-ws":
+            checks["connectivity"] = {
+                "reachable": False,
+                "detail": "connectivity-test requires a sequenced provider",
+            }
+            checks["ready"] = False
+        else:
+            checks["connectivity"] = await _connectivity_test(
+                provider_name,
+                args.symbol,
+                args.connectivity_timeout_s,
+            )
+            if not checks["connectivity"]["reachable"]:
+                checks["ready"] = False
     print(json.dumps(checks, indent=2, sort_keys=True))
     return 0 if checks["ready"] else 2
+
+
+async def _connectivity_test(
+    provider_name: str,
+    symbol: str,
+    timeout_s: float,
+) -> dict:
+    started_ms = int(time.time() * 1000)
+    counts = {"trades": 0, "books": 0}
+    detail = ""
+    reachable = False
+    provider = _make_provider(provider_name)
+    try:
+        if provider_name == "kucoin-sequenced":
+            await asyncio.to_thread(provider._rest_get, "/api/v1/timestamp", {})  # noqa: SLF001
+        elif provider_name == "binance-sequenced":
+            await asyncio.to_thread(provider._rest_get, "/api/v3/time", {})  # noqa: SLF001
+        task = asyncio.create_task(_collect_provider_events(provider, symbol, counts))
+        try:
+            await asyncio.sleep(timeout_s)
+        finally:
+            await provider.close()
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+        health = provider.health()
+        reachable = counts["trades"] > 0 and counts["books"] > 0
+        detail = health.detail or ""
+    except (OSError, TimeoutError, ValueError, RuntimeError) as exc:
+        detail = f"{type(exc).__name__}: {exc}"
+    latency_ms = int(time.time() * 1000) - started_ms
+    return {
+        "reachable": reachable,
+        "trades": counts["trades"],
+        "books": counts["books"],
+        "latency_ms": latency_ms,
+        "detail": detail,
+    }
+
+
+async def _collect_provider_events(provider, symbol: str, counts: dict) -> None:
+    async for event in provider.events(symbol):
+        if event.__class__.__name__ == "TradeEvent":
+            counts["trades"] += 1
+        else:
+            counts["books"] += 1
 
 
 async def _certify_provider(parser, args) -> int:
@@ -481,17 +580,9 @@ async def _certify_provider(parser, args) -> int:
         parser.error("--duration-s must be positive")
     replay_results = await run_replay_certification()
     fault_results = await run_fault_certification()
-    provider = BinanceSequencedProvider()
+    provider = _make_provider(args.provider)
     counts = {"trades": 0, "books": 0}
-
-    async def collect():
-        async for event in provider.events(args.symbol):
-            if event.__class__.__name__ == "TradeEvent":
-                counts["trades"] += 1
-            else:
-                counts["books"] += 1
-
-    task = asyncio.create_task(collect())
+    task = asyncio.create_task(_collect_provider_events(provider, args.symbol, counts))
     try:
         await asyncio.sleep(args.duration_s)
     finally:

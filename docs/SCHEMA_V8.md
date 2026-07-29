@@ -78,11 +78,15 @@ The bundled four-row artifact is `diagnostic_fixture` only.
 
 ```bash
 ./scripts/exchange-q doctor --profile diagnostic
+./scripts/exchange-q doctor --profile diagnostic --provider kucoin-sequenced --connectivity-test
 ./scripts/exchange-q run --profile diagnostic --view outcome
-./scripts/exchange-q provider-certify --provider binance-sequenced --symbol btcusdt --output certifications/binance-btcusdt.json
-./scripts/exchange-q dataset build --capture-database runs/capture.sqlite3 --output datasets/development.json
+./scripts/exchange-q provider-certify --provider kucoin-sequenced --symbol btcusdt --output certifications/kucoin-btcusdt.json
+./scripts/exchange-q dataset build --capture-database runs/capture.sqlite3 --provider kucoin-sequenced --output datasets/development.json
 ./scripts/exchange-q fit datasets/development.json --purpose primary --output artifacts/v8/btcusdt-born.json
 ./scripts/exchange-q run --profile primary --study studies/btcusdt-primary.example.json
 ./scripts/exchange-q status --database runs/RUN.sqlite3 --run-id RUN --json
 ./scripts/exchange-q analyze --database runs/RUN.sqlite3 --run-id RUN
 ```
+
+Primary provider default is `kucoin-sequenced`. `binance-sequenced` remains
+available where Binance endpoints are reachable.

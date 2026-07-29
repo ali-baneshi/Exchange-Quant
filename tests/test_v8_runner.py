@@ -125,3 +125,59 @@ def test_completed_run_cancels_open_slots(tmp_path):
         assert store.status(manifest.run_id)["status"] == "completed"
     finally:
         store.close()
+
+
+def test_retroactive_label_trade_preserves_integrity(tmp_path):
+    model = NormalizedBornModel()
+    artifact = ModelArtifact(model.model_id, (0.0, 0.5, 1.0, 0.0, 1.0), 10)
+    manifest = RunManifest(
+        run_id="retro-run",
+        symbol="btcusdt",
+        provider="replay",
+        model_artifact_hash=artifact.artifact_hash,
+        feature_policy="causal_trade_book_v1",
+        label_policy="half_open_streamed_trades_v1",
+        primary_metric="per_trade_negative_log_likelihood",
+        horizon_ms=1000,
+        lookback_ms=1000,
+        cadence_ms=1000,
+        minimum_label_trades=2,
+        target_eligible=1,
+        terminal_slot_limit=5,
+    )
+    events = [
+        _book(100),
+        _trade("history-1", 200, "buy"),
+        _trade("history-2", 800, "sell"),
+        _trade("label-1", 1100, "buy"),
+        _trade("label-2", 1500, "sell"),
+        _trade("advance", 2500, "buy"),
+        TradeEvent(
+            provider="replay",
+            symbol="btcusdt",
+            exchange_trade_id="retro-1",
+            exchange_time_ms=1600,
+            received_time_ms=2600,
+            aggressor_side="sell",
+            price=Decimal(100),
+            quantity=Decimal(1),
+            sequence=99,
+            session_id="sess",
+        ),
+    ]
+    store = V7Store(str(tmp_path / "retro.sqlite3"))
+    store.create_run(manifest)
+    try:
+        asyncio.run(LiveRunner(store, ReplayProvider(events), manifest, artifact).run())
+        integrity = store.status(manifest.run_id)["integrity"]
+        assert integrity["valid"] is True
+        assert "label_trade_count_mismatch" not in integrity.get("error_codes", {})
+        retro_count = store.connection.execute(
+            """
+            SELECT COUNT(*) FROM trades
+            WHERE exchange_trade_id = 'retro-1'
+            """
+        ).fetchone()[0]
+        assert retro_count == 0
+    finally:
+        store.close()

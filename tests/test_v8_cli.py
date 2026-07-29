@@ -10,7 +10,7 @@ from exchange_q.store import V7Store
 def test_doctor_diagnostic_ready():
     parser = _parser()
     args = parser.parse_args(["doctor", "--profile", "diagnostic"])
-    assert _doctor(parser, args) == 0
+    assert asyncio.run(_doctor(parser, args)) == 0
 
 
 def test_doctor_primary_not_ready_without_study(tmp_path):
@@ -29,7 +29,7 @@ def test_doctor_primary_not_ready_without_study(tmp_path):
     args = parser.parse_args(
         ["doctor", "--profile", "primary", "--study", str(study)]
     )
-    assert _doctor(parser, args) == 2
+    assert asyncio.run(_doctor(parser, args)) == 2
 
 
 def test_analysis_zero_scoreable_report(tmp_path):

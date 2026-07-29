@@ -32,6 +32,7 @@ def test_outcome_view_hides_detail_sections(tmp_path):
         outcome = format_monitor_report(snapshot, width=100, view="outcome")
         detail = format_monitor_report(snapshot, width=100, view="detail")
         assert "FEATURES " not in outcome
+        assert "GOALS    " in outcome
         assert "SLOTS    " in outcome
         assert "EXCLUSIONS " in outcome
         assert "FEATURES " in detail or "waiting for first feature window" in detail

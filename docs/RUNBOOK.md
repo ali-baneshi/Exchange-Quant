@@ -80,23 +80,37 @@ HTX diagnostic runs typically report `analysis_available: false` with
 
 ## Primary bootstrap pipeline
 
-Primary/scoreable evidence requires Binance capture, a primary artifact, live
-certification, and a study manifest.
+Primary/scoreable evidence requires KuCoin sequenced capture (default primary
+provider), a primary artifact, live certification, and a study manifest. Binance
+remains available where reachable but is blocked in some regions (e.g. Iran).
+
+### Preflight connectivity
+
+Before a long capture run, verify the provider from your network:
+
+```bash
+./scripts/exchange-q doctor --profile diagnostic \
+  --provider kucoin-sequenced --connectivity-test
+```
+
+Expect `connectivity.reachable: true` with at least one trade and one book event
+within the soak window.
 
 ```mermaid
 flowchart LR
-    capture[Binance capture run] --> dataset[dataset build]
+    preflight[doctor connectivity-test] --> capture[KuCoin capture run]
+    capture --> dataset[dataset build]
     dataset --> fit[fit primary artifact]
     certify[provider-certify] --> study[study manifest]
     fit --> study
     study --> primary[primary run]
 ```
 
-### Step 1 — Binance capture (diagnostic profile, provider override)
+### Step 1 — KuCoin capture (diagnostic profile, provider override)
 
 ```bash
 ./scripts/exchange-q run --profile diagnostic --view detail \
-  --provider binance-sequenced \
+  --provider kucoin-sequenced \
   --max-terminal-slots 120 \
   --refresh-s 1 \
   --database runs/btcusdt-capture-dev.sqlite3 \
@@ -105,12 +119,15 @@ flowchart LR
 
 About 120 minutes for 120 slots. Increase `--max-terminal-slots` for more history.
 
+The dashboard shows **GOALS** (run targets), **PROGRESS**, and **BLOCKER** when
+no market events arrive (provider blocked or unreachable).
+
 ### Step 2 — Development dataset
 
 ```bash
 ./scripts/exchange-q dataset build \
   --capture-database runs/btcusdt-capture-dev.sqlite3 \
-  --provider binance-sequenced \
+  --provider kucoin-sequenced \
   --symbol btcusdt \
   --output datasets/btcusdt-development.json
 ```
@@ -127,10 +144,10 @@ About 120 minutes for 120 slots. Increase `--max-terminal-slots` for more histor
 
 ```bash
 ./scripts/exchange-q provider-certify \
-  --provider binance-sequenced \
+  --provider kucoin-sequenced \
   --symbol btcusdt \
   --duration-s 300 \
-  --output certifications/binance-btcusdt.json
+  --output certifications/kucoin-btcusdt.json
 ```
 
 Use longer `--duration-s` (e.g. 3600) for production soak. Output must have
@@ -163,6 +180,35 @@ diagnostic slot cap).
   --database runs/<run-id>.sqlite3 \
   --run-id <run-id>
 ```
+
+## Iran / blocked exchanges
+
+- **HTX** (`htx-ws`) works for extended diagnostic pipeline tests but cannot
+  certify continuity for scoreable primary evidence.
+- **Binance** (`binance-sequenced`) is blocked from some networks; use
+  `kucoin-sequenced` instead.
+- If capture shows `BLOCKER | NO MARKET EVENTS`, run the connectivity preflight
+  above before retrying.
+
+### WebSocket resilience and failed captures
+
+`kucoin-sequenced` reconnects automatically when KuCoin closes the websocket.
+Diagnostic capture runs may still end with `unscoreable` slots and exclusions
+such as `provider_coverage_not_certifiable` — that is expected for capture-dev.
+
+If a run ends with `status: failed` or `integrity: quarantined`, delete the
+database and start a fresh capture. Do not `--resume` a quarantined run:
+
+```bash
+rm -f runs/btcusdt-capture-dev.sqlite3
+
+./scripts/exchange-q run --profile diagnostic --view detail \
+  --provider kucoin-sequenced --max-terminal-slots 120 --refresh-s 1 \
+  --database runs/btcusdt-capture-dev.sqlite3 --run-id btcusdt-capture-dev
+```
+
+If you change `--max-terminal-slots` or other manifest fields for an existing
+run ID, use a new database path or remove the old file first.
 
 ## Primary profile (fail-closed)
 

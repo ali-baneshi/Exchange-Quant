@@ -3,10 +3,17 @@ from __future__ import annotations
 import asyncio
 import os
 import signal
+import time
 import uuid
 
 from exchange_q.capture import CaptureHooks
-from exchange_q.domain import BookEvent, ForecastStatus, RunManifest, TradeEvent
+from exchange_q.domain import (
+    BookEvent,
+    ForecastStatus,
+    RunManifest,
+    TERMINAL_FORECAST_STATUSES,
+    TradeEvent,
+)
 from exchange_q.models import ModelArtifact, NormalizedBornModel
 from exchange_q.scheduler import FixedSlotScheduler
 from exchange_q.store import V7Store
@@ -15,6 +22,8 @@ from exchange_q.store import V7Store
 class LiveRunner:
     LEASE_TTL_MS = 30_000
     HEARTBEAT_INTERVAL_S = 5.0
+    FIRST_EVENT_TIMEOUT_MS = 60_000
+    EVENT_POLL_TIMEOUT_S = 5.0
 
     def __init__(
         self,
@@ -117,14 +126,38 @@ class LiveRunner:
         terminal_status = "stopped"
         detail = ""
         heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+        run_started_ms = int(time.time() * 1000)
         try:
-            async for event in self.provider.events(self.manifest.symbol):
-                if self._stopping.is_set():
+            events = self.provider.events(self.manifest.symbol)
+            while not self._stopping.is_set():
+                try:
+                    event = await asyncio.wait_for(
+                        events.__anext__(),
+                        timeout=self.EVENT_POLL_TIMEOUT_S,
+                    )
+                except StopAsyncIteration:
                     break
+                except asyncio.TimeoutError:
+                    if self._stream_start_ms is None:
+                        elapsed_ms = int(time.time() * 1000) - run_started_ms
+                        if elapsed_ms >= self.FIRST_EVENT_TIMEOUT_MS:
+                            health = self.provider.health()
+                            if (
+                                health.last_event_received_ms is None
+                                or not health.connected
+                            ):
+                                raise RuntimeError(
+                                    "provider_no_events_timeout: no market events "
+                                    f"after {elapsed_ms}ms; "
+                                    f"detail={health.detail or 'none'}"
+                                )
+                    continue
                 if self._stream_start_ms is None:
                     self._stream_start_ms = event.exchange_time_ms
                 if isinstance(event, TradeEvent):
-                    if self._is_late_event(event):
+                    if self._is_late_event(event) or self._is_retroactive_label_trade(
+                        event
+                    ):
                         continue
                     self.store.save_trade(event)
                     self._checkpoint_event(event, "trades")
@@ -443,6 +476,42 @@ class LiveRunner:
             first_sequence=event.sequence,
             last_sequence=event.sequence,
             reasons=("late_event_crossed_boundary",),
+        )
+        return True
+
+    def _is_retroactive_label_trade(self, event: TradeEvent) -> bool:
+        terminal_statuses = tuple(
+            status.value for status in TERMINAL_FORECAST_STATUSES
+        )
+        placeholders = ", ".join("?" for _ in terminal_statuses)
+        row = self.store.connection.execute(
+            f"""
+            SELECT slot_start_ms, slot_end_ms FROM forecast_slots
+            WHERE run_id = ?
+              AND status IN ({placeholders})
+              AND slot_start_ms <= ?
+              AND slot_end_ms > ?
+            LIMIT 1
+            """,
+            (
+                self.manifest.run_id,
+                *terminal_statuses,
+                event.exchange_time_ms,
+                event.exchange_time_ms,
+            ),
+        ).fetchone()
+        if row is None:
+            return False
+        self.store.record_continuity_gap(
+            self.manifest.provider,
+            self.manifest.symbol,
+            "trades",
+            event.exchange_time_ms,
+            int(row["slot_end_ms"]),
+            complete=False,
+            first_sequence=event.sequence,
+            last_sequence=event.sequence,
+            reasons=("retroactive_label_trade",),
         )
         return True
 

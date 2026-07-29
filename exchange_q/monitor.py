@@ -365,6 +365,9 @@ def format_monitor_report(
         f" | elapsed {_format_duration(elapsed_s)}"
     )
 
+    goals_line = _format_goals_line(snapshot, mode=manifest.get("mode", "diagnostic"))
+    blocker_line = _format_blocker_line(snapshot, color)
+
     provider = snapshot.get("provider_health") or {}
     connected = bool(provider.get("connected"))
     data_state = (
@@ -577,9 +580,15 @@ def format_monitor_report(
     lines = [
         header,
         _rule(width),
+        goals_line,
         run_line,
         slots_line,
         exclusions_line,
+    ]
+    if blocker_line:
+        lines.append(blocker_line)
+    lines.extend(
+        [
         now_line,
         window_line,
         forecast_line,
@@ -589,7 +598,8 @@ def format_monitor_report(
         data_line,
         integrity_line,
         warning,
-    ]
+        ]
+    )
     if view == "detail":
         detail_lines = [
             _rule(width),
@@ -935,6 +945,7 @@ def _progress_bar(value: int, limit: int | None, width: int) -> str:
 def _warning_line(snapshot: dict[str, Any], color: bool) -> str:
     integrity = snapshot["integrity"]
     provider = snapshot.get("provider_health") or {}
+    manifest = snapshot.get("manifest") or {}
     if not integrity["valid"]:
         codes = ", ".join(
             f"{_integrity_label(name)}={count}"
@@ -945,10 +956,12 @@ def _warning_line(snapshot: dict[str, Any], color: bool) -> str:
         return f"WARN  {_style('PROVIDER GAPS DETECTED', 'red', color)}"
     if snapshot["stream_state"] == "stale":
         return f"WARN  {_style('MARKET DATA IS STALE', 'red', color)}"
-    return (
-        f"NOTE  {_style('DIAGNOSTIC ONLY', 'yellow', color)}"
-        " | HTX continuity cannot be certified"
-    )
+    if manifest.get("provider") == "htx-ws":
+        return (
+            f"NOTE  {_style('DIAGNOSTIC ONLY', 'yellow', color)}"
+            " | HTX continuity cannot be certified"
+        )
+    return ""
 
 
 def _supports_color() -> bool:
@@ -969,6 +982,52 @@ def _style(text: str, color_name: str, enabled: bool) -> str:
         "cyan": "36",
     }
     return f"\033[{codes[color_name]}m{text}\033[0m"
+
+
+def _format_goals_line(snapshot: dict[str, Any], *, mode: str) -> str:
+    manifest = snapshot["manifest"]
+    terminal = snapshot["terminal_slots"]
+    limit = snapshot["terminal_slot_limit"]
+    scoreable = snapshot["eligible_progress"]["eligible"]
+    target = snapshot["eligible_progress"]["target"]
+    horizon_s = manifest["horizon_ms"] / 1000
+    lookback_s = manifest["lookback_ms"] / 1000
+    minimum_trades = manifest["minimum_label_trades"]
+    objective = "PRIMARY SCOREABLE" if mode == "primary" else "DIAGNOSTIC CAPTURE"
+    if mode == "primary":
+        scoreable_text = f"scoreable {scoreable}/{target}"
+    else:
+        scoreable_text = "scoreable n/a (diagnostic)"
+    limit_text = _format_progress(terminal, limit) if limit is not None else "-"
+    return (
+        f"GOALS    {objective}"
+        f" | terminal slots {limit_text}"
+        f" | {scoreable_text}"
+        f" | horizon {horizon_s:g}s | lookback {lookback_s:g}s"
+        f" | min label trades {minimum_trades}"
+    )
+
+
+def _format_blocker_line(snapshot: dict[str, Any], color: bool) -> str:
+    if snapshot["status"] != "running":
+        return ""
+    if snapshot["stream_state"] != "no_data":
+        return ""
+    elapsed_s = max(
+        0,
+        (snapshot["observed_at_ms"] - snapshot["created_at_ms"]) / 1000,
+    )
+    if elapsed_s <= 30:
+        return ""
+    provider = snapshot.get("provider_health") or {}
+    detail = provider.get("detail") or "none"
+    connected = "connected" if provider.get("connected") else "disconnected"
+    return (
+        f"BLOCKER  {_style('NO MARKET EVENTS', 'red', color)}"
+        f" | provider {connected}"
+        f" | check connectivity"
+        f" | detail: {detail}"
+    )
 
 
 def _integrity_label(code: str) -> str:
