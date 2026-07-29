@@ -1,4 +1,4 @@
-# Exchange-Q v8 Architecture
+# Exchange-Q Schema v8 Architecture
 
 ## Trust Boundary
 
@@ -21,7 +21,7 @@ fixed non-overlapping scheduler
             └── awaiting label window [t, t+horizon)
                         │
                         ▼
-             continuity and watermark settled?
+             trade watermark and continuity settled?
                  │               │
                 yes              no
                  │               │
@@ -36,7 +36,7 @@ proper scoring and optional HAC inference
 | Mode | Provider | Evidence |
 |------|----------|----------|
 | Diagnostic | HTX WebSocket | pipeline validation only |
-| Primary | Binance sequenced | scoreable when certified |
+| Primary | KuCoin sequenced | scoreable only when certified |
 
 ## Components
 
@@ -44,7 +44,7 @@ proper scoring and optional HAC inference
 |---|---|
 | `exchange_q/domain.py` | Events, windows, v8 lifecycle states, evidence helpers |
 | `exchange_q/capture.py` | Provider-to-store capture hook contract |
-| `exchange_q/providers/` | HTX diagnostic adapter, Binance sequenced adapter, replay |
+| `exchange_q/providers/` | KuCoin primary adapter, Binance optional adapter, HTX diagnostic adapter, replay |
 | `exchange_q/store.py` | Single-run schema v8 SQLite, capture ledger, v7 read-only compatibility |
 | `exchange_q/runner.py` | Lifecycle orchestration, settlement, shutdown cleanup |
 | `exchange_q/monitor.py` | Outcome and detail operator console |
@@ -55,11 +55,24 @@ proper scoring and optional HAC inference
 
 ```text
 scheduled → forecasted → awaiting_label
-pending_label → resolved_*        (legacy v7 read-only)
+                              ├── resolved_scoreable
+                              └── resolved_unscoreable
 ```
+
+Legacy v7 states are readable from old databases but are never written by v8.
+Each SQLite database is single-run; use a new database for every independent run.
 
 Terminal runs must not retain open slots. Stopped, failed, completed, and
 diagnostic-limit exits cancel open work with structured reasons.
+
+## Timing Contract
+
+- Features use `[slot_start - decision_lead - lookback, slot_start - decision_lead)`.
+- Labels use `[slot_start, slot_start + horizon)`.
+- Slot cadence is never shorter than the horizon.
+- Primary resolution requires the trade watermark to reach
+  `slot_end + settlement_delay`.
+- Late or retroactive events create interval-specific continuity failures.
 
 ## Evidence semantics
 

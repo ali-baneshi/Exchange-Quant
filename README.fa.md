@@ -7,7 +7,7 @@ Use the current English references:
 
 - `README.md`
 - `ARCHITECTURE.md`
-- `docs/SCHEMA_V7.md`
+- `docs/SCHEMA_V8.md`
 - `docs/RUNBOOK.md`
 - `docs/STATISTICS.md`
 - `docs/EVIDENCE_STATUS.md`

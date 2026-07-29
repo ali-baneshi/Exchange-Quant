@@ -1,6 +1,16 @@
-# Retired Quickstart
+# راهنمای سریع فعلی
 
-The commands previously documented here launched deleted schema-v6 scripts.
-Do not use copied versions of those commands.
+دستورهای قدیمی این فایل به اسکریپت‌های حذف‌شدهٔ schema-v6 مربوط بودند و نباید
+استفاده شوند.
 
-Use `../../README.md` and `../RUNBOOK.md` for the schema-v7 CLI.
+برای اجرای فعلی از این مراجع استفاده کنید:
+
+- `../../README.md`
+- `../../ARCHITECTURE.md`
+- `../SCHEMA_V8.md`
+- `../RUNBOOK.md`
+- `../STATISTICS.md`
+- `../EVIDENCE_STATUS.md`
+
+مسیر primary فعلی فقط با `kucoin-sequenced` مستند شده است. HTX فقط diagnostic
+است و خروجی آن primary محسوب نمی‌شود.

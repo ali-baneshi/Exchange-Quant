@@ -1,14 +1,13 @@
-# Historical Persian Documentation
+# Persian Documentation
 
-This directory contains dated translations and lessons for superseded schema-v3 to
-schema-v6 implementations. They are retained for traceability, not current
-operation.
+This directory contains current Persian entry points plus dated translations and
+lessons for superseded schema-v3 through schema-v7 implementations.
 
-Current schema-v7 references are:
+Current schema-v8 references are:
 
 - `../../README.md`
 - `../../ARCHITECTURE.md`
-- `../SCHEMA_V7.md`
+- `../SCHEMA_V8.md`
 - `../RUNBOOK.md`
 - `../STATISTICS.md`
 - `../EVIDENCE_STATUS.md`

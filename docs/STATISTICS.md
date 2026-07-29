@@ -54,5 +54,5 @@ multiplicity handling.
 ## Claim Boundary
 
 Forecast accuracy does not establish execution quality or profitability. The
-schema-v7 primary record intentionally excludes trading signals, fees, returns,
+schema-v8 primary record intentionally excludes trading signals, fees, returns,
 Sharpe-like ratios, drawdown, and profit factor.

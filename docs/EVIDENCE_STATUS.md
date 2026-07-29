@@ -18,8 +18,8 @@ The bundled HTX adapter is diagnostic-only because it cannot prove uninterrupted
 trade capture from the consumed stream. A primary run requires a provider adapter
 with certifiable continuity and replay fixtures validating its semantics.
 
-All schema-v6r1 and earlier results are historical diagnostics. They cannot be
-combined with schema-v7 data or used to validate the new model.
+All schema-v7 and earlier results are historical diagnostics. They cannot be
+combined with schema-v8 data or used to validate the new model.
 
 No project result proves trading profitability, quantum advantage, or superiority
 over strong frozen conventional baselines. A primary run also requires a fresh,

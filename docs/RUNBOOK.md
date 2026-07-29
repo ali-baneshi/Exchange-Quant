@@ -233,7 +233,8 @@ See the bootstrap pipeline above. Example study template:
   --resume
 ```
 
-Schema v7 databases are read-only under v8 and cannot be resumed.
+Schema v7 databases are read-only under v8 and cannot be resumed. New schema-v8
+databases are single-run; use a new database for every independent run.
 
 ## References
 

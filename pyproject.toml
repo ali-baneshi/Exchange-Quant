@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "exchange-q"
-version = "7.0.0"
+version = "8.0.0"
 description = "Fail-closed live trade-flow forecasting research infrastructure"
 requires-python = ">=3.10"
 dependencies = [
@@ -32,4 +32,3 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py310"
-
