@@ -33,9 +33,7 @@ class ModelArtifact:
     development_rows: int
     calibration_intercept: float = 0.0
     calibration_slope: float = 1.0
-    baseline_parameters: tuple[tuple[str, tuple[float, ...]], ...] = field(
-        default_factory=tuple
-    )
+    baseline_parameters: tuple[tuple[str, tuple[float, ...]], ...] = field(default_factory=tuple)
     purpose: str = "diagnostic_fixture"
     dataset_hash: str = ""
     fitting_revision: str = "v8r1"
@@ -117,25 +115,19 @@ class NormalizedBornModel:
         flow = 2.0 * context.buy_ratio - 1.0
         imbalance = context.signed_imbalance
         path_weight = _sigmoid(2.0 * imbalance)
-        trend_probability = _sigmoid(
-            prior_logit + flow_scale * flow + imbalance_scale * imbalance
-        )
+        trend_probability = _sigmoid(prior_logit + flow_scale * flow + imbalance_scale * imbalance)
         conservative_probability = _sigmoid(
             prior_logit + flow_scale * flow + 0.25 * imbalance_scale * imbalance
         )
         phase = math.pi * _sigmoid(phase_bias - phase_scale * abs(imbalance))
         signed_phase = phase if imbalance >= 0 else math.pi - phase
 
-        buy_amplitude = (
-            math.sqrt(path_weight * trend_probability)
-            + cmath.exp(1j * signed_phase)
-            * math.sqrt((1.0 - path_weight) * conservative_probability)
-        )
-        sell_amplitude = (
-            math.sqrt(path_weight * (1.0 - trend_probability))
-            - cmath.exp(1j * signed_phase)
-            * math.sqrt((1.0 - path_weight) * (1.0 - conservative_probability))
-        )
+        buy_amplitude = math.sqrt(path_weight * trend_probability) + cmath.exp(
+            1j * signed_phase
+        ) * math.sqrt((1.0 - path_weight) * conservative_probability)
+        sell_amplitude = math.sqrt(path_weight * (1.0 - trend_probability)) - cmath.exp(
+            1j * signed_phase
+        ) * math.sqrt((1.0 - path_weight) * (1.0 - conservative_probability))
         buy_mass = abs(buy_amplitude) ** 2
         sell_mass = abs(sell_amplitude) ** 2
         normalization = buy_mass + sell_mass
@@ -162,7 +154,9 @@ class NormalizedBornModel:
     ) -> ModelArtifact:
         if not features or len(features) != len(buy_counts) or len(features) != len(total_counts):
             raise ValueError("aligned development rows are required")
-        if any(total <= 0 or buy < 0 or buy > total for buy, total in zip(buy_counts, total_counts)):
+        if any(
+            total <= 0 or buy < 0 or buy > total for buy, total in zip(buy_counts, total_counts)
+        ):
             raise ValueError("invalid binomial counts")
         prior = sum(buy_counts) / sum(total_counts)
         initial = np.array([_logit(prior), 0.5, 0.5, 0.0, 1.0], dtype=float)
@@ -203,8 +197,7 @@ class NormalizedBornModel:
             raise ValueError("artifact does not belong to this model")
         raw_probability, diagnostics = self._raw_probability(context, artifact.parameters)
         calibrated = _sigmoid(
-            artifact.calibration_intercept
-            + artifact.calibration_slope * _logit(raw_probability)
+            artifact.calibration_intercept + artifact.calibration_slope * _logit(raw_probability)
         )
         diagnostics = dict(diagnostics)
         diagnostics["artifact_hash"] = artifact.artifact_hash
@@ -267,7 +260,9 @@ class PriorBaseline:
 
     def predict(self, context: FeatureWindow, artifact: ModelArtifact) -> Forecast:
         probability = float(artifact.parameters[0])
-        return Forecast(self.model_id, probability, probability, {"artifact_hash": artifact.artifact_hash})
+        return Forecast(
+            self.model_id, probability, probability, {"artifact_hash": artifact.artifact_hash}
+        )
 
 
 class PersistenceBaseline:

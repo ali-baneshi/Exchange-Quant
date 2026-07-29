@@ -61,6 +61,19 @@ The run dashboard always identifies the generated database and run ID.
 `fit` expects a JSON list containing `feature`, `buy_count`, and `total_count`.
 The feature object follows `exchange_q.domain.FeatureWindow`.
 
+Do not type placeholders such as `<run-id>` in `zsh` or `bash`; angle brackets
+are shell redirection syntax. Use the actual run ID printed by the dashboard, or
+derive it safely:
+
+```bash
+RUN_DATABASE="$(ls -t runs/*.sqlite3 | head -n 1)"
+RUN_ID="$(basename "$RUN_DATABASE" .sqlite3)"
+```
+
+The full primary study template is available at
+`studies/btcusdt-primary-live.json`. It still requires a real primary artifact
+and a fresh valid certification before it can run.
+
 ## Evidence Boundary
 
 There is currently no schema-v8 corpus proving model superiority. All schema-v7

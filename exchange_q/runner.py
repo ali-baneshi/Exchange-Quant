@@ -8,10 +8,10 @@ import uuid
 
 from exchange_q.capture import CaptureHooks
 from exchange_q.domain import (
+    TERMINAL_FORECAST_STATUSES,
     BookEvent,
     ForecastStatus,
     RunManifest,
-    TERMINAL_FORECAST_STATUSES,
     TradeEvent,
 )
 from exchange_q.models import ModelArtifact, NormalizedBornModel
@@ -39,9 +39,7 @@ class LiveRunner:
         self.manifest = manifest
         self.artifact = artifact
         self.model = NormalizedBornModel()
-        self.scheduler = FixedSlotScheduler(
-            manifest.horizon_ms, manifest.cadence_ms
-        )
+        self.scheduler = FixedSlotScheduler(manifest.horizon_ms, manifest.cadence_ms)
         self.owner_id = uuid.uuid4().hex
         self._stopping = asyncio.Event()
         self._last_slot_start: int | None = None
@@ -142,10 +140,7 @@ class LiveRunner:
                         elapsed_ms = int(time.time() * 1000) - run_started_ms
                         if elapsed_ms >= self.FIRST_EVENT_TIMEOUT_MS:
                             health = self.provider.health()
-                            if (
-                                health.last_event_received_ms is None
-                                or not health.connected
-                            ):
+                            if health.last_event_received_ms is None or not health.connected:
                                 raise RuntimeError(
                                     "provider_no_events_timeout: no market events "
                                     f"after {elapsed_ms}ms; "
@@ -155,9 +150,7 @@ class LiveRunner:
                 if self._stream_start_ms is None:
                     self._stream_start_ms = event.exchange_time_ms
                 if isinstance(event, TradeEvent):
-                    if self._is_late_event(event) or self._is_retroactive_label_trade(
-                        event
-                    ):
+                    if self._is_late_event(event) or self._is_retroactive_label_trade(event):
                         continue
                     self.store.save_trade(event)
                     self._checkpoint_event(event, "trades")
@@ -172,9 +165,7 @@ class LiveRunner:
                 await self._advance(scheduling_time_ms)
                 self.store.heartbeat(self.manifest.run_id, self.owner_id)
                 status = self.store.status(self.manifest.run_id)
-                eligible = status["forecast_counts"].get(
-                    ForecastStatus.RESOLVED_SCOREABLE.value, 0
-                )
+                eligible = status["forecast_counts"].get(ForecastStatus.RESOLVED_SCOREABLE.value, 0)
                 if eligible >= self.manifest.target_eligible:
                     terminal_status = "completed"
                     break
@@ -232,15 +223,10 @@ class LiveRunner:
         if self._last_slot_start is None:
             next_slot = self.scheduler.next_after(current_slot.start_ms)
             self._last_slot_start = next_slot.start_ms
-            self.store.schedule_slot(
-                self.manifest.run_id, next_slot.start_ms, next_slot.end_ms
-            )
+            self.store.schedule_slot(self.manifest.run_id, next_slot.start_ms, next_slot.end_ms)
             return
 
-        while (
-            self._last_slot_start - self.manifest.decision_lead_ms
-            <= observed_time_ms
-        ):
+        while self._last_slot_start - self.manifest.decision_lead_ms <= observed_time_ms:
             if self._terminal_limit_reached():
                 return
             active_start = self._last_slot_start
@@ -305,9 +291,7 @@ class LiveRunner:
             ):
                 return
             next_slot = self.scheduler.next_after(active_start)
-            self.store.schedule_slot(
-                self.manifest.run_id, next_slot.start_ms, next_slot.end_ms
-            )
+            self.store.schedule_slot(self.manifest.run_id, next_slot.start_ms, next_slot.end_ms)
             self._last_slot_start = next_slot.start_ms
 
     def _create_or_skip(self, slot_start_ms: int, slot_end_ms: int) -> None:
@@ -320,9 +304,7 @@ class LiveRunner:
             feature_end,
         )
         if features is None:
-            self.store.skip_slot(
-                self.manifest.run_id, slot_start_ms, ["insufficient_feature_data"]
-            )
+            self.store.skip_slot(self.manifest.run_id, slot_start_ms, ["insufficient_feature_data"])
             return
         forecast = self.model.predict(features, self.artifact)
         self.store.create_forecast(
@@ -404,9 +386,7 @@ class LiveRunner:
             self._last_slot_start = latest_start
             return
         next_slot = self.scheduler.next_after(latest_start)
-        self.store.schedule_slot(
-            self.manifest.run_id, next_slot.start_ms, next_slot.end_ms
-        )
+        self.store.schedule_slot(self.manifest.run_id, next_slot.start_ms, next_slot.end_ms)
         self._last_slot_start = next_slot.start_ms
 
     def _terminal_limit_reached(self) -> bool:
@@ -481,9 +461,7 @@ class LiveRunner:
         return True
 
     def _is_retroactive_label_trade(self, event: TradeEvent) -> bool:
-        terminal_statuses = tuple(
-            status.value for status in TERMINAL_FORECAST_STATUSES
-        )
+        terminal_statuses = tuple(status.value for status in TERMINAL_FORECAST_STATUSES)
         placeholders = ", ".join("?" for _ in terminal_statuses)
         row = self.store.connection.execute(
             f"""

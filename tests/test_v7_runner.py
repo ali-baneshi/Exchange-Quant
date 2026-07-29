@@ -106,9 +106,7 @@ def test_resume_continues_after_terminal_slot_without_duplicate(tmp_path):
         _trade("l2", 1500, "sell"),
         _trade("edge", 2000, "buy"),
     ]
-    asyncio.run(
-        LiveRunner(store, ReplayProvider(first_events), manifest, artifact).run()
-    )
+    asyncio.run(LiveRunner(store, ReplayProvider(first_events), manifest, artifact).run())
     second_events = [
         _book(2100),
         _trade("h3", 2200, "buy"),
@@ -216,9 +214,7 @@ def test_live_scheduling_uses_receipt_time_to_avoid_stale_slot_catch_up(tmp_path
             """,
             (manifest.run_id,),
         ).fetchall()
-        assert [(row["slot_start_ms"], row["status"]) for row in slots] == [
-            (11_000, "skipped")
-        ]
+        assert [(row["slot_start_ms"], row["status"]) for row in slots] == [(11_000, "skipped")]
     finally:
         store.close()
 

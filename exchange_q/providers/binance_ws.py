@@ -154,10 +154,7 @@ class BinanceSequencedProvider:
             reconnects=self._reconnects,
             sequence_gaps=self._sequence_gaps,
             coverage_certifiable=(
-                self._connected
-                and self._unresolved_gaps == 0
-                and depth_ready
-                and clock_ready
+                self._connected and self._unresolved_gaps == 0 and depth_ready and clock_ready
             ),
             detail=self._detail,
             last_trade_sequence=self._last_trade_id,
@@ -456,8 +453,7 @@ class BinanceDepthBook:
         if not (first_update <= expected <= final_update):
             self.synchronized = False
             raise ValueError(
-                f"depth sequence gap: expected {expected}, "
-                f"received {first_update}-{final_update}"
+                f"depth sequence gap: expected {expected}, received {first_update}-{final_update}"
             )
         self._apply_side(self.bids, payload.get("b", []))
         self._apply_side(self.asks, payload.get("a", []))

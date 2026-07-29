@@ -24,9 +24,7 @@ class ScoreReport:
 def score_rows(rows: list[dict]) -> ScoreReport:
     if not rows:
         raise ValueError("eligible rows are required")
-    probabilities = np.array(
-        [row["forecast"]["probability_buy"] for row in rows], dtype=float
-    )
+    probabilities = np.array([row["forecast"]["probability_buy"] for row in rows], dtype=float)
     return _score_probabilities(rows, probabilities)
 
 
@@ -35,21 +33,14 @@ def score_baselines(rows: list[dict]) -> dict[str, ScoreReport]:
         raise ValueError("eligible rows are required")
     baseline_names = set.intersection(
         *(
-            set(
-                row["forecast"]
-                .get("diagnostics", {})
-                .get("baseline_probabilities", {})
-            )
+            set(row["forecast"].get("diagnostics", {}).get("baseline_probabilities", {}))
             for row in rows
         )
     )
     reports = {}
     for name in sorted(baseline_names):
         probabilities = np.array(
-            [
-                row["forecast"]["diagnostics"]["baseline_probabilities"][name]
-                for row in rows
-            ],
+            [row["forecast"]["diagnostics"]["baseline_probabilities"][name] for row in rows],
             dtype=float,
         )
         reports[name] = _score_probabilities(rows, probabilities)
@@ -69,8 +60,7 @@ def _score_probabilities(rows, probabilities) -> ScoreReport:
         raise ValueError("forecast probabilities must be finite and within [0, 1]")
     ratios = buy_counts / total_counts
     nll = -np.sum(
-        xlogy(buy_counts, probabilities)
-        + xlogy(total_counts - buy_counts, 1.0 - probabilities)
+        xlogy(buy_counts, probabilities) + xlogy(total_counts - buy_counts, 1.0 - probabilities)
     ) / np.sum(total_counts)
     brier = float(np.mean((probabilities - ratios) ** 2))
     mae = float(np.mean(np.abs(probabilities - ratios)))
@@ -114,9 +104,7 @@ def calibration_parameters(probabilities, buy_counts, total_counts):
 def paired_hac_test(losses_baseline, losses_model, max_lags: int | None = None):
     if len(losses_baseline) != len(losses_model) or len(losses_model) < 3:
         raise ValueError("at least three aligned paired losses are required")
-    differences = np.asarray(losses_model, dtype=float) - np.asarray(
-        losses_baseline, dtype=float
-    )
+    differences = np.asarray(losses_model, dtype=float) - np.asarray(losses_baseline, dtype=float)
     if not np.all(np.isfinite(differences)):
         raise ValueError("losses must be finite")
     lags = max_lags if max_lags is not None else max(1, int(len(differences) ** (1 / 3)))
@@ -126,7 +114,9 @@ def paired_hac_test(losses_baseline, losses_model, max_lags: int | None = None):
     estimate = float(result.params[0])
     standard_error = float(result.bse[0])
     statistic = estimate / standard_error if standard_error > 0 else 0.0
-    one_sided_p = float(result.pvalues[0] / 2) if statistic < 0 else float(1 - result.pvalues[0] / 2)
+    one_sided_p = (
+        float(result.pvalues[0] / 2) if statistic < 0 else float(1 - result.pvalues[0] / 2)
+    )
     critical = 1.959963984540054
     return {
         "n": len(differences),
@@ -154,13 +144,11 @@ def paired_block_bootstrap_test(
         raise ValueError("at least three aligned paired losses are required")
     if iterations <= 0:
         raise ValueError("iterations must be positive")
-    differences = np.asarray(losses_model, dtype=float) - np.asarray(
-        losses_baseline, dtype=float
-    )
+    differences = np.asarray(losses_model, dtype=float) - np.asarray(losses_baseline, dtype=float)
     if not np.all(np.isfinite(differences)):
         raise ValueError("losses must be finite")
     n = len(differences)
-    block_length = block_length or max(1, int(round(n ** (1 / 3))))
+    block_length = block_length or max(1, round(n ** (1 / 3)))
     if not 1 <= block_length <= n:
         raise ValueError("block length must be within the sample size")
     rng = np.random.default_rng(seed)
@@ -172,10 +160,7 @@ def paired_block_bootstrap_test(
         sampled: list[float] = []
         while len(sampled) < n:
             start = int(rng.choice(starts))
-            sampled.extend(
-                float(centered[(start + offset) % n])
-                for offset in range(block_length)
-            )
+            sampled.extend(float(centered[(start + offset) % n]) for offset in range(block_length))
         bootstrap_means[index] = float(np.mean(sampled[:n]))
     p_value = float(np.mean(bootstrap_means <= observed))
     return {

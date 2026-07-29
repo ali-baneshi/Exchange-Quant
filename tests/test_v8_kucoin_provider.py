@@ -30,21 +30,21 @@ def test_depth_book_resync_after_gap():
 
 def test_trade_recovery_uses_rest():
     provider = KucoinSequencedProvider(
-        rest_get=lambda path, params: [
-            {
-                "sequence": "3",
-                "side": "buy",
-                "price": "100",
-                "size": "1",
-                "time": 200,
-            }
-        ]
-        if path == "/api/v1/market/histories"
-        else 1
+        rest_get=lambda path, params: (
+            [
+                {
+                    "sequence": "3",
+                    "side": "buy",
+                    "price": "100",
+                    "size": "1",
+                    "time": 200,
+                }
+            ]
+            if path == "/api/v1/market/histories"
+            else 1
+        )
     )
-    recovered = asyncio.run(
-        provider._recover_trades("btcusdt", 3, 3, 100, "sess")
-    )
+    recovered = asyncio.run(provider._recover_trades("btcusdt", 3, 3, 100, "sess"))
     assert len(recovered) == 1
     assert recovered[0].sequence == 3
 

@@ -14,7 +14,6 @@ from typing import Any
 
 from exchange_q import IMPLEMENTATION_REVISION, SCHEMA_VERSION
 from exchange_q.domain import (
-    TERMINAL_FORECAST_STATUSES,
     BookEvent,
     EvidenceSummary,
     FeatureWindow,
@@ -24,6 +23,7 @@ from exchange_q.domain import (
     OPEN_SLOT_STATUSES,
     RunManifest,
     SCOREABLE_STATUSES,
+    TERMINAL_FORECAST_STATUSES,
     TradeEvent,
     compute_capture_quality,
     compute_evidence_status,
@@ -253,9 +253,7 @@ class V7Store:
                 (manifest.run_id,),
             ).fetchone()
             if existing_run:
-                raise RuntimeError(
-                    "a database is single-run; use a new database for another run"
-                )
+                raise RuntimeError("a database is single-run; use a new database for another run")
             connection.execute(
                 """
                 INSERT INTO runs(run_id, manifest_json, status, created_at_ms, updated_at_ms)
@@ -263,7 +261,9 @@ class V7Store:
                 """,
                 (manifest.run_id, json.dumps(manifest.to_record(), sort_keys=True), now, now),
             )
-            self._append_event(connection, manifest.run_id, None, "run_created", manifest.to_record(), now)
+            self._append_event(
+                connection, manifest.run_id, None, "run_created", manifest.to_record(), now
+            )
 
     def set_run_status(self, run_id: str, status: str, detail: str = "") -> None:
         now = int(time.time() * 1000)
@@ -289,7 +289,11 @@ class V7Store:
             existing = connection.execute(
                 "SELECT owner_id, heartbeat_ms FROM leases WHERE run_id = ?", (run_id,)
             ).fetchone()
-            if existing and existing["owner_id"] != owner_id and existing["heartbeat_ms"] >= now - ttl_ms:
+            if (
+                existing
+                and existing["owner_id"] != owner_id
+                and existing["heartbeat_ms"] >= now - ttl_ms
+            ):
                 raise RuntimeError(f"run {run_id} already has an active writer")
             connection.execute(
                 """
@@ -389,7 +393,9 @@ class V7Store:
                 """,
                 (run_id, start_ms, end_ms, ForecastStatus.SCHEDULED, now),
             )
-            self._append_event(connection, run_id, start_ms, "slot_scheduled", {"end_ms": end_ms}, now)
+            self._append_event(
+                connection, run_id, start_ms, "slot_scheduled", {"end_ms": end_ms}, now
+            )
 
     def create_forecast(
         self,
@@ -402,9 +408,7 @@ class V7Store:
         now = int(time.time() * 1000)
         with self.transaction() as connection:
             created_status = (
-                ForecastStatus.FORECASTED
-                if self.schema_version >= 8
-                else ForecastStatus.CREATED
+                ForecastStatus.FORECASTED if self.schema_version >= 8 else ForecastStatus.CREATED
             )
             awaiting_status = (
                 ForecastStatus.AWAITING_LABEL
@@ -539,7 +543,9 @@ class V7Store:
             buy_quantity=sum((Decimal(row["quantity"]) for row in buy_rows), Decimal(0)),
             sell_quantity=sum((Decimal(row["quantity"]) for row in sell_rows), Decimal(0)),
             coverage_complete=bool(coverage and coverage["complete"]),
-            exclusion_reasons=tuple(json.loads(coverage["reasons_json"])) if coverage else ("missing_coverage",),
+            exclusion_reasons=tuple(json.loads(coverage["reasons_json"]))
+            if coverage
+            else ("missing_coverage",),
         )
 
     def build_features(
@@ -581,9 +587,7 @@ class V7Store:
         ask_quantity = Decimal(book["ask_quantity"])
         total_quantity = bid_quantity + ask_quantity
         imbalance = (
-            float((bid_quantity - ask_quantity) / total_quantity)
-            if total_quantity > 0
-            else 0.0
+            float((bid_quantity - ask_quantity) / total_quantity) if total_quantity > 0 else 0.0
         )
         best_bid = Decimal(book["best_bid"])
         best_ask = Decimal(book["best_ask"])
@@ -601,9 +605,7 @@ class V7Store:
         )
 
     def status(self, run_id: str) -> dict[str, Any]:
-        run = self.connection.execute(
-            "SELECT * FROM runs WHERE run_id = ?", (run_id,)
-        ).fetchone()
+        run = self.connection.execute("SELECT * FROM runs WHERE run_id = ?", (run_id,)).fetchone()
         if not run:
             raise KeyError(run_id)
         counts = {
@@ -621,19 +623,14 @@ class V7Store:
         ).fetchone()
         integrity = self.run_integrity(run_id)
         manifest = json.loads(run["manifest_json"])
-        scoreable = sum(
-            counts.get(status.value, 0) for status in SCOREABLE_STATUSES
-        )
-        unresolved_gaps = self.unresolved_gap_count(
-            manifest["provider"], manifest["symbol"]
-        )
+        scoreable = sum(counts.get(status.value, 0) for status in SCOREABLE_STATUSES)
+        unresolved_gaps = self.unresolved_gap_count(manifest["provider"], manifest["symbol"])
         evidence = EvidenceSummary(
             integrity_state=integrity["state"],
             capture_quality=compute_capture_quality(
                 mode=manifest.get("mode", "diagnostic"),
                 unresolved_gaps=unresolved_gaps,
-                coverage_certifiable=unresolved_gaps == 0
-                and manifest.get("mode") == "primary",
+                coverage_certifiable=unresolved_gaps == 0 and manifest.get("mode") == "primary",
             ),
             evidence_status=compute_evidence_status(
                 mode=manifest.get("mode", "diagnostic"),
@@ -706,9 +703,7 @@ class V7Store:
                 raise ValueError("eligible row artifact does not match the run manifest")
             if label.get("coverage_complete") is not True:
                 raise ValueError("eligible row does not have complete coverage")
-            if label.get("trade_count") != label.get("buy_count", 0) + label.get(
-                "sell_count", 0
-            ):
+            if label.get("trade_count") != label.get("buy_count", 0) + label.get("sell_count", 0):
                 raise ValueError("eligible row label counts do not add up")
             if label["trade_count"] < manifest["minimum_label_trades"]:
                 raise ValueError("eligible row does not meet the minimum trade count")
@@ -768,9 +763,7 @@ class V7Store:
                 ForecastStatus.RESOLVED_UNSCOREABLE,
                 ForecastStatus.RESOLVED_INELIGIBLE,
             }:
-                resolved_at = transition_timestamp(
-                    transitions, slot_start, resolution_statuses()
-                )
+                resolved_at = transition_timestamp(transitions, slot_start, resolution_statuses())
                 if resolved_at is None:
                     errors.append(
                         {"code": "missing_resolution_transition", "slot_start_ms": slot_start}
@@ -785,9 +778,7 @@ class V7Store:
                         }
                     )
                 if not slot["label_json"]:
-                    errors.append(
-                        {"code": "missing_resolved_label", "slot_start_ms": slot_start}
-                    )
+                    errors.append({"code": "missing_resolved_label", "slot_start_ms": slot_start})
                 else:
                     persisted_count = json.loads(slot["label_json"])["trade_count"]
                     raw_count = self.connection.execute(
@@ -840,11 +831,7 @@ class V7Store:
         return {
             "valid": valid,
             "state": (
-                "valid"
-                if valid and terminal
-                else "valid_so_far"
-                if valid
-                else "quarantined"
+                "valid" if valid and terminal else "valid_so_far" if valid else "quarantined"
             ),
             "checked_slots": checked_slots,
             "error_count": len(errors),

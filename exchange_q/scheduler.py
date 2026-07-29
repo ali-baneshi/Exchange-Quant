@@ -29,4 +29,3 @@ class FixedSlotScheduler:
     def next_after(self, start_ms: int) -> ForecastSlot:
         next_start = start_ms + self.cadence_ms
         return ForecastSlot(next_start, next_start + self.horizon_ms)
-

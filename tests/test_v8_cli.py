@@ -1,10 +1,57 @@
 import asyncio
 import json
-
+from argparse import Namespace
 
 from exchange_q.cli import _analysis_document, _doctor, _parser, _slot_summary
 from exchange_q.domain import ForecastStatus
+from exchange_q.providers.base import ProviderHealth
 from exchange_q.store import V7Store
+
+
+def test_provider_certification_fails_fast_on_collection_error(tmp_path, monkeypatch):
+    from exchange_q import cli
+
+    async def passing_certification():
+        return {"passed": True}
+
+    monkeypatch.setattr(cli, "run_replay_certification", passing_certification)
+    monkeypatch.setattr(cli, "run_fault_certification", passing_certification)
+
+    class FailingProvider:
+        name = "kucoin-sequenced"
+        adapter_revision = "test"
+
+        def health(self):
+            return ProviderHealth(
+                connected=False,
+                last_event_received_ms=None,
+                reconnects=0,
+                sequence_gaps=0,
+                coverage_certifiable=False,
+                unresolved_gaps=0,
+                clock_uncertainty_ms=None,
+            )
+
+        async def close(self):
+            return None
+
+        async def events(self, symbol):
+            raise RuntimeError("websocket rejected")
+            yield
+
+    monkeypatch.setattr(cli, "_make_provider", lambda _: FailingProvider())
+    output = tmp_path / "certification.json"
+    args = Namespace(
+        duration_s=300,
+        provider="kucoin-sequenced",
+        symbol="btcusdt",
+        output=str(output),
+    )
+    parser = cli._parser()
+    assert asyncio.run(cli._certify_provider(parser, args)) == 2
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["valid"] is False
+    assert "websocket rejected" in payload["collection_error"]
 
 
 def test_doctor_diagnostic_ready():
@@ -26,9 +73,7 @@ def test_doctor_primary_not_ready_without_study(tmp_path):
         ),
         encoding="utf-8",
     )
-    args = parser.parse_args(
-        ["doctor", "--profile", "primary", "--study", str(study)]
-    )
+    args = parser.parse_args(["doctor", "--profile", "primary", "--study", str(study)])
     assert asyncio.run(_doctor(parser, args)) == 2
 
 

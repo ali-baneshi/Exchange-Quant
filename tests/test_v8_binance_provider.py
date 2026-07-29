@@ -22,21 +22,21 @@ def test_depth_book_resync_after_gap():
 
 def test_agg_trades_recovery_uses_rest():
     provider = BinanceSequencedProvider(
-        rest_get=lambda path, params: [
-            {
-                "a": 2,
-                "T": 200,
-                "m": False,
-                "p": "100",
-                "q": "1",
-            }
-        ]
-        if path == "/api/v3/aggTrades"
-        else {"serverTime": 1}
+        rest_get=lambda path, params: (
+            [
+                {
+                    "a": 2,
+                    "T": 200,
+                    "m": False,
+                    "p": "100",
+                    "q": "1",
+                }
+            ]
+            if path == "/api/v3/aggTrades"
+            else {"serverTime": 1}
+        )
     )
-    recovered = asyncio.run(
-        provider._recover_trades("btcusdt", 2, 2, 100, "sess")
-    )
+    recovered = asyncio.run(provider._recover_trades("btcusdt", 2, 2, 100, "sess"))
     assert len(recovered) == 1
     assert recovered[0].exchange_trade_id == "2"
 

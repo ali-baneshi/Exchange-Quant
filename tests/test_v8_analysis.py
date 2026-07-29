@@ -1,16 +1,13 @@
-
+from decimal import Decimal
 
 from exchange_q.analysis import paired_block_bootstrap_test
 from exchange_q.cli import _analysis_document
-from exchange_q.domain import FeatureWindow, Forecast, RunManifest
+from exchange_q.domain import FeatureWindow, Forecast, RunManifest, TradeEvent
 from exchange_q.store import V7Store
 
 
 def test_analysis_blocks_on_quarantine(tmp_path):
     store = V7Store(str(tmp_path / "run.sqlite3"))
-    from exchange_q.domain import TradeEvent
-    from decimal import Decimal
-
     manifest = RunManifest(
         run_id="quarantine-run",
         symbol="btcusdt",

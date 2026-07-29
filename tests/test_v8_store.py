@@ -1,7 +1,6 @@
-
+import pytest
 
 from exchange_q.domain import FeatureWindow, ForecastStatus, RunManifest
-import pytest
 from exchange_q.store import V7Store
 
 
@@ -40,9 +39,7 @@ def test_capture_ledger_writes(tmp_path):
     store = V7Store(str(tmp_path / "run.sqlite3"))
     try:
         store.start_capture_session("sess-trades", "replay", "btcusdt", "trades")
-        assert store.checkpoint_capture(
-            "replay", "btcusdt", "trades", 1, 100, 101, "sess-trades"
-        )
+        assert store.checkpoint_capture("replay", "btcusdt", "trades", 1, 100, 101, "sess-trades")
         store.record_recovery("replay", "btcusdt", "trades", 2, 3, "success", 2)
         store.record_clock_sample("replay", 100, 120, 110)
         store.record_continuity_gap(

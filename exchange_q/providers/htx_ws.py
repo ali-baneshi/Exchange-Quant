@@ -52,7 +52,9 @@ class HtxWebSocketProvider:
                 ) as socket:
                     self._socket = socket
                     self._connected = True
-                    await socket.send(json.dumps({"sub": trade_channel, "id": session_id + "-trades"}))
+                    await socket.send(
+                        json.dumps({"sub": trade_channel, "id": session_id + "-trades"})
+                    )
                     await socket.send(json.dumps({"sub": book_channel, "id": session_id + "-book"}))
                     async for raw_message in socket:
                         received_ms = int(time.time() * 1000)
@@ -67,9 +69,7 @@ class HtxWebSocketProvider:
                         self._last_event_received_ms = received_ms
                         if channel == trade_channel:
                             for trade in tick.get("data", []):
-                                event = self._parse_trade(
-                                    trade, symbol, received_ms, session_id
-                                )
+                                event = self._parse_trade(trade, symbol, received_ms, session_id)
                                 if event is not None:
                                     yield event
                         elif channel == book_channel:

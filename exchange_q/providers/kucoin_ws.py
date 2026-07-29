@@ -10,7 +10,7 @@ from decimal import Decimal
 from typing import Any
 
 import websockets
-from websockets.exceptions import ConnectionClosed
+from websockets.exceptions import ConnectionClosed, InvalidStatus
 
 from exchange_q.capture import CaptureHooks
 from exchange_q.domain import BookEvent, TradeEvent
@@ -101,9 +101,7 @@ class KucoinSequencedProvider:
                     self._connected = True
                     queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
                     pump = asyncio.create_task(self._pump(socket, queue))
-                    ping = asyncio.create_task(
-                        self._ping_loop(socket, ping_interval_s)
-                    )
+                    ping = asyncio.create_task(self._ping_loop(socket, ping_interval_s))
                     try:
                         await self._wait_for_welcome(queue)
                         await self._subscribe(
@@ -145,6 +143,13 @@ class KucoinSequencedProvider:
                         await self._drain_background_tasks(ping, pump)
             except asyncio.CancelledError:
                 raise
+            except InvalidStatus as exc:
+                self._detail = f"websocket rejected: {exc}"
+                self._connected = False
+                raise RuntimeError(
+                    "KuCoin websocket rejected the connection; "
+                    "check network access or use a permitted endpoint"
+                ) from exc
             except (
                 ConnectionClosed,
                 OSError,
@@ -181,10 +186,7 @@ class KucoinSequencedProvider:
             reconnects=self._reconnects,
             sequence_gaps=self._sequence_gaps,
             coverage_certifiable=(
-                self._connected
-                and self._unresolved_gaps == 0
-                and depth_ready
-                and clock_ready
+                self._connected and self._unresolved_gaps == 0 and depth_ready and clock_ready
             ),
             detail=self._detail,
             last_trade_sequence=self._last_trade_sequence,
@@ -242,9 +244,7 @@ class KucoinSequencedProvider:
                 message = json.loads(raw_message)
                 if message.get("type") == "ping":
                     try:
-                        await socket.send(
-                            json.dumps({"id": message.get("id"), "type": "pong"})
-                        )
+                        await socket.send(json.dumps({"id": message.get("id"), "type": "pong"}))
                     except (ConnectionClosed, OSError):
                         return
                     continue
@@ -256,9 +256,7 @@ class KucoinSequencedProvider:
         while True:
             await asyncio.sleep(max(1.0, interval_s * 0.8))
             try:
-                await socket.send(
-                    json.dumps({"id": uuid.uuid4().hex, "type": "ping"})
-                )
+                await socket.send(json.dumps({"id": uuid.uuid4().hex, "type": "ping"}))
             except (ConnectionClosed, OSError):
                 return
 
@@ -291,10 +289,7 @@ class KucoinSequencedProvider:
             expected_sequences = list(range(missing_from, missing_to + 1))
             if recovered_sequences != expected_sequences:
                 self._unresolved_gaps += 1
-                self._detail = (
-                    f"unrecovered KuCoin trade sequence "
-                    f"{missing_from}-{missing_to}"
-                )
+                self._detail = f"unrecovered KuCoin trade sequence {missing_from}-{missing_to}"
                 self._record_gap(
                     symbol,
                     "trades",
@@ -557,8 +552,7 @@ class KucoinDepthBook:
         if not (sequence_start <= expected <= sequence_end):
             self.synchronized = False
             raise ValueError(
-                f"depth sequence gap: expected {expected}, "
-                f"received {sequence_start}-{sequence_end}"
+                f"depth sequence gap: expected {expected}, received {sequence_start}-{sequence_end}"
             )
         changes = payload.get("changes") or {}
         self._apply_side(self.bids, changes.get("bids") or [])

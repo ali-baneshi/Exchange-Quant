@@ -21,7 +21,7 @@ from exchange_q.analysis import (
 )
 from exchange_q.artifacts import load_artifact, save_artifact
 from exchange_q.certification import run_fault_certification, run_replay_certification
-from exchange_q.domain import FeatureWindow, ForecastStatus, RunManifest, SCOREABLE_STATUSES
+from exchange_q.domain import SCOREABLE_STATUSES, FeatureWindow, ForecastStatus, RunManifest
 from exchange_q.models import NormalizedBornModel
 from exchange_q.monitor import RunConsole
 from exchange_q.providers.binance_ws import BinanceSequencedProvider
@@ -268,9 +268,13 @@ def _run_command(parser: argparse.ArgumentParser, args) -> None:
         parser.error("--resume requires explicit --database, --run-id, and --artifact")
     if args.profile == "primary" and not args.study:
         parser.error("--profile primary requires --study")
-    run_id = args.run_id or study.get("run_id") or (
-        f"{profile.symbol}-{profile.mode}-{time.strftime('%Y%m%d-%H%M%S')}-"
-        f"{uuid.uuid4().hex[:8]}"
+    run_id = (
+        args.run_id
+        or study.get("run_id")
+        or (
+            f"{profile.symbol}-{profile.mode}-{time.strftime('%Y%m%d-%H%M%S')}-"
+            f"{uuid.uuid4().hex[:8]}"
+        )
     )
     database = args.database or study.get("database") or f"runs/{run_id}.sqlite3"
     artifact_path = args.artifact or study.get("artifact") or profile.artifact
@@ -324,10 +328,7 @@ def _run_command(parser: argparse.ArgumentParser, args) -> None:
             )
         ),
         mode=profile.mode,
-        capture_policy=(
-            study.get("capture_policy")
-            or profile.capture_policy
-        ),
+        capture_policy=(study.get("capture_policy") or profile.capture_policy),
         clock_policy="exchange_clock_watermark_v1",
         eligibility_policy="certified_continuity_v1",
         decision_lead_ms=profile.decision_lead_s * 1000,
@@ -344,17 +345,13 @@ def _run_command(parser: argparse.ArgumentParser, args) -> None:
         except sqlite3.IntegrityError:
             existing = store.status(run_id)
             if existing["manifest"] != manifest.to_record():
-                parser.error(
-                    f"run ID exists with an incompatible manifest: {run_id}"
-                )
+                parser.error(f"run ID exists with an incompatible manifest: {run_id}")
             if not args.resume:
                 parser.error(
                     f"run ID already exists: {run_id}\n"
                     "Use a new --run-id or add --resume intentionally."
                 )
-        provider = _make_provider(
-            args.provider or study.get("provider") or profile.provider
-        )
+        provider = _make_provider(args.provider or study.get("provider") or profile.provider)
         runner = LiveRunner(store, provider, manifest, artifact)
         console = RunConsole(
             store,
@@ -403,9 +400,10 @@ def _fit_artifact(
         payload = json.load(handle)
     if isinstance(payload, dict) and "rows" in payload:
         rows = payload["rows"]
-        dataset_hash = payload.get("dataset_hash") or hashlib.sha256(
-            json.dumps(rows, sort_keys=True).encode()
-        ).hexdigest()
+        dataset_hash = (
+            payload.get("dataset_hash")
+            or hashlib.sha256(json.dumps(rows, sort_keys=True).encode()).hexdigest()
+        )
     else:
         rows = payload
         with open(dataset, "rb") as handle:
@@ -568,9 +566,9 @@ async def _connectivity_test(
     provider = _make_provider(provider_name)
     try:
         if provider_name == "kucoin-sequenced":
-            await asyncio.to_thread(provider._rest_get, "/api/v1/timestamp", {})  # noqa: SLF001
+            await asyncio.to_thread(provider._rest_get, "/api/v1/timestamp", {})
         elif provider_name == "binance-sequenced":
-            await asyncio.to_thread(provider._rest_get, "/api/v3/time", {})  # noqa: SLF001
+            await asyncio.to_thread(provider._rest_get, "/api/v3/time", {})
         task = asyncio.create_task(_collect_provider_events(provider, symbol, counts))
         try:
             await asyncio.sleep(timeout_s)
@@ -612,16 +610,25 @@ async def _certify_provider(parser, args) -> int:
     provider = _make_provider(args.provider)
     counts = {"trades": 0, "books": 0}
     task = asyncio.create_task(_collect_provider_events(provider, args.symbol, counts))
+    collection_error = None
+    health = provider.health()
     try:
-        await asyncio.sleep(args.duration_s)
+        await asyncio.wait_for(asyncio.shield(task), timeout=args.duration_s)
         health = provider.health()
+    except asyncio.TimeoutError:
+        pass
+    except Exception as exc:
+        collection_error = f"{type(exc).__name__}: {exc}"
     finally:
         await provider.close()
-        task.cancel()
+        if not task.done():
+            task.cancel()
         try:
             await task
         except asyncio.CancelledError:
             pass
+        except Exception as exc:
+            collection_error = f"{type(exc).__name__}: {exc}"
     live_soak = {
         "duration_s": args.duration_s,
         "counts": counts,
@@ -629,6 +636,7 @@ async def _certify_provider(parser, args) -> int:
         "passed": (
             counts["trades"] > 0
             and counts["books"] > 0
+            and collection_error is None
             and health.connected
             and health.coverage_certifiable
             and health.unresolved_gaps == 0
@@ -647,19 +655,21 @@ async def _certify_provider(parser, args) -> int:
         "live_soak": live_soak,
         "unresolved_gaps": health.unresolved_gaps,
         "clock_uncertainty_ms": health.clock_uncertainty_ms,
-        "valid": (
-            replay_results["passed"]
-            and fault_results["passed"]
-            and live_soak["passed"]
-        ),
+        "collection_error": collection_error,
+        "valid": (replay_results["passed"] and fault_results["passed"] and live_soak["passed"]),
     }
     temporary = args.output + ".tmp"
     os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
-    with open(temporary, "w", encoding="utf-8") as handle:
-        json.dump(report, handle, indent=2, sort_keys=True)
+    payload = json.dumps(report, indent=2, sort_keys=True)
+    _write_text(temporary, payload)
     os.replace(temporary, args.output)
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0 if report["valid"] else 2
+
+
+def _write_text(path: str, content: str) -> None:
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(content)
 
 
 def _build_dataset(parser, args) -> int:
@@ -716,9 +726,7 @@ def _build_dataset(parser, args) -> int:
         development_rows = rows[:split_index]
         calibration_rows = rows[split_index:]
         payload = {
-            "dataset_hash": hashlib.sha256(
-                json.dumps(rows, sort_keys=True).encode()
-            ).hexdigest(),
+            "dataset_hash": hashlib.sha256(json.dumps(rows, sort_keys=True).encode()).hexdigest(),
             "development_start_ms": development_rows[0]["feature"]["start_ms"],
             "development_end_ms": development_rows[-1]["feature"]["end_ms"],
             "calibration_start_ms": (
@@ -795,8 +803,7 @@ def _analysis_document(store: V7Store, run_id: str) -> dict:
         document["reason"] = "no scoreable labels"
         return document
     calibration_statuses = {
-        row["forecast"].get("diagnostics", {}).get("calibration_status", "unknown")
-        for row in rows
+        row["forecast"].get("diagnostics", {}).get("calibration_status", "unknown") for row in rows
     }
     calibration_status = (
         next(iter(calibration_statuses)) if len(calibration_statuses) == 1 else "mixed"
@@ -809,15 +816,11 @@ def _analysis_document(store: V7Store, run_id: str) -> dict:
             "calibration_status": calibration_status,
             "calibration_available": calibration_status == "fitted",
             "model": report.__dict__,
-            "baselines": {
-                name: baseline.__dict__ for name, baseline in baselines.items()
-            },
+            "baselines": {name: baseline.__dict__ for name, baseline in baselines.items()},
         }
     )
     if len(rows) >= 3 and baselines:
-        baseline_name = status["manifest"].get(
-            "primary_comparator", "regularized_logistic_v1"
-        )
+        baseline_name = status["manifest"].get("primary_comparator", "regularized_logistic_v1")
         if baseline_name not in baselines:
             document["reason"] = f"primary comparator is unavailable: {baseline_name}"
             return document
@@ -826,17 +829,16 @@ def _analysis_document(store: V7Store, run_id: str) -> dict:
 
         def _losses(probabilities):
             buy_counts = np.array([row["label"]["buy_count"] for row in rows], dtype=float)
-            total_counts = np.array(
-                [row["label"]["trade_count"] for row in rows], dtype=float
+            total_counts = np.array([row["label"]["trade_count"] for row in rows], dtype=float)
+            return (
+                -(
+                    xlogy(buy_counts, probabilities)
+                    + xlogy(total_counts - buy_counts, 1.0 - probabilities)
+                )
+                / total_counts
             )
-            return -(
-                xlogy(buy_counts, probabilities)
-                + xlogy(total_counts - buy_counts, 1.0 - probabilities)
-            ) / total_counts
 
-        model_probs = np.array(
-            [row["forecast"]["probability_buy"] for row in rows], dtype=float
-        )
+        model_probs = np.array([row["forecast"]["probability_buy"] for row in rows], dtype=float)
         baseline_probs = np.array(
             [
                 row["forecast"]["diagnostics"]["baseline_probabilities"][baseline_name]

@@ -177,8 +177,8 @@ diagnostic slot cap).
 
 ```bash
 ./scripts/exchange-q analyze \
-  --database runs/<run-id>.sqlite3 \
-  --run-id <run-id>
+  --database "$RUN_DATABASE" \
+  --run-id "$RUN_ID"
 ```
 
 ## Iran / blocked exchanges
@@ -227,8 +227,8 @@ See the bootstrap pipeline above. Example study template:
 ```bash
 ./scripts/exchange-q run \
   --profile diagnostic \
-  --database runs/<run-id>.sqlite3 \
-  --run-id <run-id> \
+  --database "$RUN_DATABASE" \
+  --run-id "$RUN_ID" \
   --artifact artifacts/v8/diagnostic-born.json \
   --resume
 ```

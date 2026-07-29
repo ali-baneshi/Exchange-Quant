@@ -18,12 +18,8 @@ def _row(probability, buys, total):
 
 
 def test_proper_scores_reward_better_probabilities():
-    calibrated = score_rows(
-        [_row(0.65, 70, 100), _row(0.35, 30, 100), _row(0.55, 58, 100)] * 4
-    )
-    weak = score_rows(
-        [_row(0.5, 70, 100), _row(0.5, 30, 100), _row(0.5, 58, 100)] * 4
-    )
+    calibrated = score_rows([_row(0.65, 70, 100), _row(0.35, 30, 100), _row(0.55, 58, 100)] * 4)
+    weak = score_rows([_row(0.5, 70, 100), _row(0.5, 30, 100), _row(0.5, 58, 100)] * 4)
     assert calibrated.negative_log_likelihood < weak.negative_log_likelihood
     assert calibrated.brier < weak.brier
 

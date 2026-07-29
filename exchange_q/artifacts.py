@@ -40,7 +40,6 @@ def load_artifact(path: str) -> ModelArtifact:
         payload = json.load(handle)
     payload["parameters"] = tuple(payload["parameters"])
     payload["baseline_parameters"] = tuple(
-        (name, tuple(parameters))
-        for name, parameters in payload.get("baseline_parameters", ())
+        (name, tuple(parameters)) for name, parameters in payload.get("baseline_parameters", ())
     )
     return ModelArtifact(**payload)
