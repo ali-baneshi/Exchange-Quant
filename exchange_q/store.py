@@ -29,7 +29,6 @@ from exchange_q.domain import (
     compute_evidence_status,
     forecast_created_statuses,
     resolution_statuses,
-    transition_timestamp,
 )
 
 
@@ -64,6 +63,22 @@ ALLOWED_TRANSITIONS = {
         ForecastStatus.FAILED,
     },
 }
+
+
+def _decision_timestamp(
+    transitions: dict[tuple[int, str], tuple[int, int | None]],
+    slot_start: int,
+    status_names: tuple[str, ...],
+) -> int | None:
+    # Prefer the decision-domain timestamp recorded by the runner (exchange
+    # watermark for primary, scheduling watermark for diagnostic); fall back to
+    # the local wall-clock stamp for rows written before v8r2.
+    for name in status_names:
+        entry = transitions.get((slot_start, name))
+        if entry is not None:
+            created_at_ms, observed_decision_ms = entry
+            return created_at_ms if observed_decision_ms is None else observed_decision_ms
+    return None
 
 
 class V7Store:
@@ -404,6 +419,7 @@ class V7Store:
         features: FeatureWindow,
         forecast: Forecast,
         artifact_hash: str,
+        observed_decision_ms: int | None = None,
     ) -> None:
         now = int(time.time() * 1000)
         with self.transaction() as connection:
@@ -435,6 +451,7 @@ class V7Store:
                     ),
                 },
                 now,
+                observed_decision_ms,
             )
             self._transition(
                 connection,
@@ -463,6 +480,7 @@ class V7Store:
         slot_start_ms: int,
         label: Label,
         minimum_trades: int,
+        observed_decision_ms: int | None = None,
     ) -> ForecastStatus:
         reasons = list(label.exclusion_reasons)
         if not label.coverage_complete:
@@ -486,6 +504,7 @@ class V7Store:
                     "exclusion_json": json.dumps(sorted(set(reasons))),
                 },
                 now,
+                observed_decision_ms,
             )
         return status
 
@@ -547,6 +566,16 @@ class V7Store:
             if coverage
             else ("missing_coverage",),
         )
+
+    def latest_book_time(self, provider: str, symbol: str, before_ms: int) -> int | None:
+        row = self.connection.execute(
+            """
+            SELECT MAX(exchange_time_ms) FROM books
+            WHERE provider = ? AND symbol = ? AND exchange_time_ms < ?
+            """,
+            (provider, symbol, before_ms),
+        ).fetchone()
+        return int(row[0]) if row and row[0] is not None else None
 
     def build_features(
         self,
@@ -716,7 +745,8 @@ class V7Store:
         if not run:
             raise KeyError(run_id)
         manifest = json.loads(run["manifest_json"])
-        transitions: dict[tuple[int, str], int] = {}
+        decision_lead_ms = int(manifest.get("decision_lead_ms", 0) or 0)
+        transitions: dict[tuple[int, str], tuple[int, int | None]] = {}
         for row in self.connection.execute(
             """
             SELECT slot_start_ms, payload_json, created_at_ms
@@ -727,7 +757,10 @@ class V7Store:
             (run_id,),
         ):
             payload = json.loads(row["payload_json"])
-            transitions[(row["slot_start_ms"], payload["to"])] = row["created_at_ms"]
+            transitions[(row["slot_start_ms"], payload["to"])] = (
+                row["created_at_ms"],
+                payload.get("observed_decision_ms"),
+            )
 
         errors: list[dict[str, Any]] = []
         checked_slots = 0
@@ -742,20 +775,21 @@ class V7Store:
             slot_start = int(slot["slot_start_ms"])
             slot_end = int(slot["slot_end_ms"])
             if slot["forecast_json"]:
-                created_at = transition_timestamp(
+                created_at = _decision_timestamp(
                     transitions, slot_start, forecast_created_statuses()
                 )
+                earliest_creation = slot_start - decision_lead_ms
                 if created_at is None:
                     errors.append(
                         {"code": "missing_forecast_transition", "slot_start_ms": slot_start}
                     )
-                elif created_at < slot_start:
+                elif created_at < earliest_creation:
                     errors.append(
                         {
                             "code": "forecast_created_early",
                             "slot_start_ms": slot_start,
                             "observed_at_ms": created_at,
-                            "required_at_ms": slot_start,
+                            "required_at_ms": earliest_creation,
                         }
                     )
             status = ForecastStatus(slot["status"])
@@ -763,7 +797,7 @@ class V7Store:
                 ForecastStatus.RESOLVED_UNSCOREABLE,
                 ForecastStatus.RESOLVED_INELIGIBLE,
             }:
-                resolved_at = transition_timestamp(transitions, slot_start, resolution_statuses())
+                resolved_at = _decision_timestamp(transitions, slot_start, resolution_statuses())
                 if resolved_at is None:
                     errors.append(
                         {"code": "missing_resolution_transition", "slot_start_ms": slot_start}
@@ -872,15 +906,135 @@ class V7Store:
                     (run_id,),
                 )
             ]
+            manifest = status["manifest"]
+            provider = manifest["provider"]
+            symbol = manifest["symbol"]
             return {
                 "schema_version": self.schema_version,
                 "implementation_revision": IMPLEMENTATION_REVISION,
                 **status,
                 "forecast_slots": slots,
                 "lifecycle_events": lifecycle,
+                "capture_ledger": self._export_capture_ledger(provider, symbol),
+                "raw_streams": self._export_raw_stream_summary(provider, symbol),
             }
         finally:
             self.connection.execute("ROLLBACK")
+
+    def _table_exists(self, table: str) -> bool:
+        row = self.connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+            (table,),
+        ).fetchone()
+        return row is not None
+
+    def _export_capture_ledger(self, provider: str, symbol: str) -> dict[str, Any]:
+        # Ledger tables are scoped by (provider, symbol), not run_id; the
+        # export therefore snapshots every ledger row relevant to this run's
+        # stream so the snapshot is self-auditable for capture continuity.
+        queries: dict[str, tuple[str, tuple[Any, ...], tuple[str, ...]]] = {
+            "coverage": (
+                """
+                SELECT * FROM coverage
+                WHERE provider = ? AND symbol = ? ORDER BY start_ms
+                """,
+                (provider, symbol),
+                ("reasons_json",),
+            ),
+            "capture_sessions": (
+                """
+                SELECT * FROM capture_sessions
+                WHERE provider = ? AND symbol = ? ORDER BY started_at_ms
+                """,
+                (provider, symbol),
+                ("detail_json",),
+            ),
+            "capture_checkpoints": (
+                """
+                SELECT * FROM capture_checkpoints
+                WHERE provider = ? AND symbol = ?
+                ORDER BY stream_kind, sequence_no
+                """,
+                (provider, symbol),
+                (),
+            ),
+            "continuity_intervals": (
+                """
+                SELECT * FROM continuity_intervals
+                WHERE provider = ? AND symbol = ? ORDER BY interval_id
+                """,
+                (provider, symbol),
+                ("reasons_json",),
+            ),
+            "recovery_attempts": (
+                """
+                SELECT * FROM recovery_attempts
+                WHERE provider = ? AND symbol = ? ORDER BY attempt_id
+                """,
+                (provider, symbol),
+                (),
+            ),
+            "clock_samples": (
+                """
+                SELECT * FROM clock_samples
+                WHERE provider = ? ORDER BY sample_id
+                """,
+                (provider,),
+                (),
+            ),
+            "provider_certifications": (
+                """
+                SELECT * FROM provider_certifications
+                WHERE provider = ? AND symbol = ? ORDER BY issued_at_ms
+                """,
+                (provider, symbol),
+                ("report_json",),
+            ),
+        }
+        ledger: dict[str, Any] = {}
+        for table, (query, parameters, json_columns) in queries.items():
+            if not self._table_exists(table):
+                ledger[table] = []
+                continue
+            table_rows = []
+            for row in self.connection.execute(query, parameters):
+                document = dict(row)
+                for column in json_columns:
+                    source = document.pop(column)
+                    key = column[: -len("_json")]
+                    document[key] = json.loads(source) if source else (
+                        [] if column == "reasons_json" else {}
+                    )
+                table_rows.append(document)
+            ledger[table] = table_rows
+        return ledger
+
+    def _export_raw_stream_summary(self, provider: str, symbol: str) -> dict[str, Any]:
+        summary: dict[str, Any] = {}
+        for table in ("trades", "books"):
+            if not self._table_exists(table):
+                summary[table] = {
+                    "count": 0,
+                    "first_exchange_time_ms": None,
+                    "last_exchange_time_ms": None,
+                }
+                continue
+            row = self.connection.execute(
+                f"""
+                SELECT COUNT(*) AS row_count,
+                       MIN(exchange_time_ms) AS first_ms,
+                       MAX(exchange_time_ms) AS last_ms
+                FROM {table}
+                WHERE provider = ? AND symbol = ?
+                """,
+                (provider, symbol),
+            ).fetchone()
+            summary[table] = {
+                "count": int(row["row_count"]),
+                "first_exchange_time_ms": row["first_ms"],
+                "last_exchange_time_ms": row["last_ms"],
+            }
+        return summary
 
     def start_capture_session(
         self,
@@ -1048,19 +1202,25 @@ class V7Store:
         return int(row[0]) if row else 0
 
     def interval_has_unresolved_gap(
-        self, provider: str, symbol: str, start_ms: int, end_ms: int
+        self,
+        provider: str,
+        symbol: str,
+        start_ms: int,
+        end_ms: int,
+        stream_kind: str | None = None,
     ) -> bool:
         if self.schema_version < 8:
             return False
-        row = self.connection.execute(
-            """
+        query = """
             SELECT 1 FROM continuity_intervals
             WHERE provider = ? AND symbol = ? AND complete = 0
               AND start_ms < ? AND end_ms > ?
-            LIMIT 1
-            """,
-            (provider, symbol, end_ms, start_ms),
-        ).fetchone()
+        """
+        parameters: list[Any] = [provider, symbol, end_ms, start_ms]
+        if stream_kind is not None:
+            query += " AND stream_kind = ?"
+            parameters.append(stream_kind)
+        row = self.connection.execute(f"{query} LIMIT 1", parameters).fetchone()
         return row is not None
 
     def save_provider_certification(
@@ -1109,6 +1269,7 @@ class V7Store:
         new_status: ForecastStatus,
         updates: dict[str, Any],
         now: int,
+        observed_decision_ms: int | None = None,
     ) -> None:
         row = connection.execute(
             "SELECT status FROM forecast_slots WHERE run_id = ? AND slot_start_ms = ?",
@@ -1134,12 +1295,15 @@ class V7Store:
             """,
             parameters,
         )
+        payload: dict[str, Any] = {"from": current, "to": new_status}
+        if observed_decision_ms is not None:
+            payload["observed_decision_ms"] = int(observed_decision_ms)
         self._append_event(
             connection,
             run_id,
             slot_start_ms,
             "forecast_transition",
-            {"from": current, "to": new_status},
+            payload,
             now,
         )
 

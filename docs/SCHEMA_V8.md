@@ -68,11 +68,25 @@ Artifacts record provenance:
 
 The bundled four-row artifact is `diagnostic_fixture` only.
 
+## Export
+
+`exchange-q export` writes an atomic JSON snapshot of the authoritative SQLite
+state. The snapshot is self-auditable: alongside run status, forecast slots,
+and lifecycle events it includes the full capture ledger for the run's
+(provider, symbol) stream — coverage rows, capture sessions and checkpoints,
+continuity intervals, recovery attempts, clock samples, and provider
+certifications — plus raw stream summaries (row counts and exchange-time
+bounds for trades and books). Capture continuity for any exported slot can
+therefore be verified from the JSON document alone, without database access.
+
 ## Compatibility
 
-- Schema v7 databases open read-only for inspect/export
-- Resume and mixed-schema analysis are prohibited
+- Schema v7 databases open read-only for inspect/export and cannot be resumed
+- Mixed-schema analysis is prohibited
 - Schema v8 evidence cannot be combined with v7 or incompatible policy revisions
+- Resume is diagnostic-only: an interrupted schema v8 diagnostic run may resume
+  in place with `--resume`; primary runs are single-session and `--resume` is
+  rejected
 
 ## Commands
 

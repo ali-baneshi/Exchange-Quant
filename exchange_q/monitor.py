@@ -138,10 +138,20 @@ class RunConsole:
                 flush=True,
             )
             self._started = True
-            print(
-                "[exchange-q] EVIDENCE diagnostic-only; HTX coverage is not certifiable",
-                flush=True,
-            )
+            manifest = snapshot.get("manifest") or {}
+            provider_name = manifest.get("provider", "unknown")
+            if manifest.get("mode") == "primary":
+                print(
+                    f"[exchange-q] EVIDENCE primary provider={provider_name}; "
+                    "labels scoreable only with proven capture continuity",
+                    flush=True,
+                )
+            else:
+                print(
+                    f"[exchange-q] EVIDENCE diagnostic-only provider={provider_name}; "
+                    "not a preregistered primary record",
+                    flush=True,
+                )
         if previous is None or previous.get("stream_state") != snapshot["stream_state"]:
             print(
                 f"[exchange-q] STREAM state={snapshot['stream_state']} "

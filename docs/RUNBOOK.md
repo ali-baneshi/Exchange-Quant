@@ -224,6 +224,9 @@ See the bootstrap pipeline above. Example study template:
 
 ## Resume
 
+Resume is diagnostic-only. Primary runs are single-session: `--resume` with
+`--profile primary` is rejected.
+
 ```bash
 ./scripts/exchange-q run \
   --profile diagnostic \

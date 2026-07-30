@@ -9,7 +9,7 @@ window. Each label retains buy count, sell count, and total trades.
 
 - **Primary:** per-trade binomial negative log-likelihood.
 - **Secondary:** Brier score, MAE of window buy ratio, calibration intercept,
-  calibration slope, reliability, sharpness, and prediction distribution.
+  and calibration slope.
 
 MAE alone is not a proper probability score and does not account for variable
 information across windows.
@@ -21,7 +21,6 @@ collection. Supported baseline concepts are:
 
 - development-set prior;
 - flow persistence;
-- exponentially weighted flow;
 - regularized conventional probabilistic regression.
 
 The weakest observed comparator may not be selected after collection.
@@ -48,8 +47,10 @@ covariance. Reports must include:
 - circular moving-block bootstrap sensitivity with fixed seed and block length;
 - proper scores and calibration diagnostics.
 
-Multiple symbols, horizons, models, or post-hoc segments require explicit
-multiplicity handling.
+The automated report evaluates a single preregistered run against its frozen
+primary comparator. Multi-symbol, multi-horizon, multi-model, or post-hoc
+segment comparisons are outside the automated report and require external,
+explicit multiplicity handling before any claim is made.
 
 ## Claim Boundary
 

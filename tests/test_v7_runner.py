@@ -103,6 +103,7 @@ def test_resume_continues_after_terminal_slot_without_duplicate(tmp_path):
         _trade("h1", 200, "buy"),
         _trade("h2", 800, "sell"),
         _trade("l1", 1000, "buy"),
+        _book(1100),
         _trade("l2", 1500, "sell"),
         _trade("edge", 2000, "buy"),
     ]
@@ -112,6 +113,7 @@ def test_resume_continues_after_terminal_slot_without_duplicate(tmp_path):
         _trade("h3", 2200, "buy"),
         _trade("h4", 2800, "sell"),
         _trade("l3", 3000, "buy"),
+        _book(3100),
         _trade("l4", 3500, "sell"),
         _trade("edge-2", 4000, "buy"),
     ]

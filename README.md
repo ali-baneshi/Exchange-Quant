@@ -21,6 +21,8 @@ consumed messages do not provide enough continuity information to prove that no
 trade was missed. It cannot produce eligible primary labels.
 
 Each SQLite database is single-run. Start a new run with a new database path.
+An interrupted diagnostic run may resume in place with `--resume`; primary runs
+are single-session and cannot be resumed.
 
 ## Install
 

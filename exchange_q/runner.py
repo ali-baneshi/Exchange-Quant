@@ -8,7 +8,8 @@ import uuid
 
 from exchange_q.capture import CaptureHooks
 from exchange_q.domain import (
-    TERMINAL_FORECAST_STATUSES,
+    SCOREABLE_STATUSES,
+    UNSCOREABLE_RESOLVED_STATUSES,
     BookEvent,
     ForecastStatus,
     RunManifest,
@@ -23,7 +24,9 @@ class LiveRunner:
     LEASE_TTL_MS = 30_000
     HEARTBEAT_INTERVAL_S = 5.0
     FIRST_EVENT_TIMEOUT_MS = 60_000
+    STALL_TIMEOUT_MS = 120_000
     EVENT_POLL_TIMEOUT_S = 5.0
+    STATUS_CHECK_EVENT_INTERVAL = 20
 
     def __init__(
         self,
@@ -45,6 +48,8 @@ class LiveRunner:
         self._last_slot_start: int | None = None
         self._stream_start_ms: int | None = None
         self._capture_sessions: set[tuple[str, str]] = set()
+        self._events_since_status_check = 0
+        self._work_since_status_check = False
         self._install_capture_hooks()
 
     def _install_capture_hooks(self) -> None:
@@ -123,6 +128,7 @@ class LiveRunner:
         self._install_signal_handlers()
         terminal_status = "stopped"
         detail = ""
+        stream_exhausted = False
         heartbeat_task = asyncio.create_task(self._heartbeat_loop())
         run_started_ms = int(time.time() * 1000)
         try:
@@ -134,6 +140,7 @@ class LiveRunner:
                         timeout=self.EVENT_POLL_TIMEOUT_S,
                     )
                 except StopAsyncIteration:
+                    stream_exhausted = True
                     break
                 except asyncio.TimeoutError:
                     if self._stream_start_ms is None:
@@ -146,48 +153,75 @@ class LiveRunner:
                                     f"after {elapsed_ms}ms; "
                                     f"detail={health.detail or 'none'}"
                                 )
+                    else:
+                        health = self.provider.health()
+                        last_received_ms = health.last_event_received_ms
+                        if (
+                            last_received_ms is not None
+                            and int(time.time() * 1000) - last_received_ms
+                            >= self.STALL_TIMEOUT_MS
+                        ):
+                            raise RuntimeError(
+                                "provider_stalled: no market events for "
+                                f"{int(time.time() * 1000) - last_received_ms}ms "
+                                "after stream start; "
+                                f"detail={health.detail or 'none'}"
+                            )
                     continue
                 if self._stream_start_ms is None:
                     self._stream_start_ms = event.exchange_time_ms
+                # Raw persistence is lossless: every accepted event is stored
+                # before any scheduling decision. Boundary violations are
+                # recorded as continuity evidence, never dropped.
                 if isinstance(event, TradeEvent):
-                    if self._is_late_event(event) or self._is_retroactive_label_trade(event):
-                        continue
-                    self.store.save_trade(event)
-                    self._checkpoint_event(event, "trades")
+                    with self.store.transaction():
+                        self.store.save_trade(event)
+                        self._checkpoint_event(event, "trades")
+                    self._record_boundary_violations(event)
                 elif isinstance(event, BookEvent):
-                    self.store.save_book(event)
-                    self._checkpoint_event(event, "books")
+                    with self.store.transaction():
+                        self.store.save_book(event)
+                        self._checkpoint_event(event, "books")
                 scheduling_time_ms = (
                     event.exchange_time_ms
                     if self.manifest.mode == "primary"
                     else max(event.exchange_time_ms, event.received_time_ms)
                 )
                 await self._advance(scheduling_time_ms)
-                self.store.heartbeat(self.manifest.run_id, self.owner_id)
-                status = self.store.status(self.manifest.run_id)
-                eligible = status["forecast_counts"].get(ForecastStatus.RESOLVED_SCOREABLE.value, 0)
-                if eligible >= self.manifest.target_eligible:
-                    terminal_status = "completed"
-                    break
-                terminal_slots = sum(
-                    status["forecast_counts"].get(slot_status, 0)
-                    for slot_status in (
-                        ForecastStatus.SKIPPED,
-                        ForecastStatus.RESOLVED_SCOREABLE,
-                        ForecastStatus.RESOLVED_UNSCOREABLE,
-                        ForecastStatus.CANCELLED,
-                        ForecastStatus.RESOLVED_ELIGIBLE,
-                        ForecastStatus.RESOLVED_INELIGIBLE,
-                        ForecastStatus.EXPIRED,
-                        ForecastStatus.FAILED,
-                    )
-                )
+                self._events_since_status_check += 1
                 if (
-                    self.manifest.terminal_slot_limit is not None
-                    and terminal_slots >= self.manifest.terminal_slot_limit
+                    self._work_since_status_check
+                    or self._events_since_status_check >= self.STATUS_CHECK_EVENT_INTERVAL
                 ):
-                    terminal_status = "diagnostic_limit"
-                    break
+                    self._work_since_status_check = False
+                    self._events_since_status_check = 0
+                    self.store.heartbeat(self.manifest.run_id, self.owner_id)
+                    status = self.store.status(self.manifest.run_id)
+                    eligible = status["forecast_counts"].get(
+                        ForecastStatus.RESOLVED_SCOREABLE.value, 0
+                    )
+                    if eligible >= self.manifest.target_eligible:
+                        terminal_status = "completed"
+                        break
+                    terminal_slots = sum(
+                        status["forecast_counts"].get(slot_status, 0)
+                        for slot_status in (
+                            ForecastStatus.SKIPPED,
+                            ForecastStatus.RESOLVED_SCOREABLE,
+                            ForecastStatus.RESOLVED_UNSCOREABLE,
+                            ForecastStatus.CANCELLED,
+                            ForecastStatus.RESOLVED_ELIGIBLE,
+                            ForecastStatus.RESOLVED_INELIGIBLE,
+                            ForecastStatus.EXPIRED,
+                            ForecastStatus.FAILED,
+                        )
+                    )
+                    if (
+                        self.manifest.terminal_slot_limit is not None
+                        and terminal_slots >= self.manifest.terminal_slot_limit
+                    ):
+                        terminal_status = "diagnostic_limit"
+                        break
         except Exception as exc:
             terminal_status = "failed"
             detail = f"{type(exc).__name__}: {exc}"
@@ -212,6 +246,8 @@ class LiveRunner:
                     "completed": "target_reached_before_slot_completion",
                     "diagnostic_limit": "diagnostic_limit_before_slot_completion",
                 }[terminal_status]
+                if terminal_status == "stopped" and stream_exhausted:
+                    reason = "provider_stream_exhausted_before_slot_completion"
                 self.store.cancel_open_slots(self.manifest.run_id, reason)
             self.store.set_run_status(self.manifest.run_id, terminal_status, detail)
             self.store.release_lease(self.manifest.run_id, self.owner_id)
@@ -242,10 +278,7 @@ class LiveRunner:
                 raise RuntimeError(f"missing active slot {active_start}")
             status = ForecastStatus(row["status"])
             if status == ForecastStatus.SCHEDULED:
-                decision_at = active_start - self.manifest.decision_lead_ms
-                if observed_time_ms < decision_at:
-                    return
-                self._create_or_skip(active_start, active_end)
+                self._create_or_skip(active_start, active_end, observed_time_ms)
                 if self._terminal_limit_reached():
                     return
                 row = self.store.connection.execute(
@@ -267,7 +300,7 @@ class LiveRunner:
                     return
                 if not self._capture_is_settled(active_end):
                     return
-                self._resolve(active_start, active_end)
+                self._resolve(active_start, active_end, observed_time_ms)
             if self._terminal_limit_reached():
                 return
             if self._target_reached():
@@ -294,9 +327,21 @@ class LiveRunner:
             self.store.schedule_slot(self.manifest.run_id, next_slot.start_ms, next_slot.end_ms)
             self._last_slot_start = next_slot.start_ms
 
-    def _create_or_skip(self, slot_start_ms: int, slot_end_ms: int) -> None:
+    def _create_or_skip(self, slot_start_ms: int, slot_end_ms: int, observed_time_ms: int) -> None:
         feature_end = slot_start_ms - self.manifest.decision_lead_ms
         feature_start = feature_end - self.manifest.lookback_ms
+        book_time = self.store.latest_book_time(
+            self.manifest.provider,
+            self.manifest.symbol,
+            feature_end,
+        )
+        if book_time is not None and feature_end - book_time > self.manifest.lookback_ms:
+            # The book snapshot feeding signed_imbalance/spread is older than
+            # the entire trade feature window; score it as disconnected rather
+            # than silently forecasting from arbitrarily stale market state.
+            self.store.skip_slot(self.manifest.run_id, slot_start_ms, ["stale_book"])
+            self._work_since_status_check = True
+            return
         features = self.store.build_features(
             self.manifest.provider,
             self.manifest.symbol,
@@ -305,6 +350,7 @@ class LiveRunner:
         )
         if features is None:
             self.store.skip_slot(self.manifest.run_id, slot_start_ms, ["insufficient_feature_data"])
+            self._work_since_status_check = True
             return
         forecast = self.model.predict(features, self.artifact)
         self.store.create_forecast(
@@ -313,9 +359,11 @@ class LiveRunner:
             features,
             forecast,
             self.artifact.artifact_hash,
+            observed_decision_ms=observed_time_ms,
         )
+        self._work_since_status_check = True
 
-    def _resolve(self, slot_start_ms: int, slot_end_ms: int) -> None:
+    def _resolve(self, slot_start_ms: int, slot_end_ms: int, observed_time_ms: int) -> None:
         row = self.store.connection.execute(
             """
             SELECT status FROM forecast_slots
@@ -329,17 +377,20 @@ class LiveRunner:
         }:
             return
         health = self.provider.health()
+        # Gating is interval-scoped to the trade stream: lifetime counters and
+        # recovered book resyncs must not poison label resolution, while any
+        # unrecovered trade gap overlapping the feature or label window does.
+        feature_start_ms = slot_start_ms - self.manifest.decision_lead_ms - self.manifest.lookback_ms
         complete = (
             health.coverage_certifiable
-            and health.sequence_gaps == 0
-            and health.unresolved_gaps == 0
             and self._stream_start_ms is not None
             and self._stream_start_ms <= slot_start_ms
             and not self.store.interval_has_unresolved_gap(
                 self.manifest.provider,
                 self.manifest.symbol,
-                slot_start_ms,
+                feature_start_ms,
                 slot_end_ms,
+                stream_kind="trades",
             )
         )
         reasons = () if complete else ("provider_coverage_not_certifiable",)
@@ -362,7 +413,9 @@ class LiveRunner:
             slot_start_ms,
             label,
             self.manifest.minimum_label_trades,
+            observed_decision_ms=observed_time_ms,
         )
+        self._work_since_status_check = True
 
     def _restore_progress(self) -> None:
         row = self.store.connection.execute(
@@ -415,15 +468,22 @@ class LiveRunner:
         return scoreable >= self.manifest.target_eligible
 
     def _capture_is_settled(self, slot_end_ms: int) -> bool:
-        if self.manifest.mode != "primary":
-            return True
         health = self.provider.health()
+        if self.manifest.mode != "primary":
+            # Diagnostic runs settle on drain: resolve only once the provider
+            # has no queued events, so labels see every delivered trade.
+            return health.pending_events == 0
         return (
             health.connected
             and health.coverage_certifiable
             and health.trade_watermark_ms is not None
             and health.trade_watermark_ms >= slot_end_ms + self.manifest.settlement_delay_ms
         )
+
+    def _record_boundary_violations(self, event: TradeEvent) -> None:
+        if self._is_late_event(event):
+            return
+        self._is_retroactive_label_trade(event)
 
     def _is_late_event(self, event: TradeEvent) -> bool:
         if self.manifest.mode != "primary":
@@ -461,8 +521,15 @@ class LiveRunner:
         return True
 
     def _is_retroactive_label_trade(self, event: TradeEvent) -> bool:
-        terminal_statuses = tuple(status.value for status in TERMINAL_FORECAST_STATUSES)
-        placeholders = ", ".join("?" for _ in terminal_statuses)
+        # Only slots with a computed label can suffer label mutation. Trades
+        # landing in cancelled/skipped windows (e.g. live deliveries after a
+        # resume seam) are persisted without poisoning continuity, because no
+        # label was ever computed for those slots.
+        resolved_statuses = tuple(
+            status.value
+            for status in SCOREABLE_STATUSES | UNSCOREABLE_RESOLVED_STATUSES
+        )
+        placeholders = ", ".join("?" for _ in resolved_statuses)
         row = self.store.connection.execute(
             f"""
             SELECT slot_start_ms, slot_end_ms FROM forecast_slots
@@ -474,7 +541,7 @@ class LiveRunner:
             """,
             (
                 self.manifest.run_id,
-                *terminal_statuses,
+                *resolved_statuses,
                 event.exchange_time_ms,
                 event.exchange_time_ms,
             ),

@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import hashlib
 import json
+import math
 import os
 import signal
 import sqlite3
@@ -13,6 +14,7 @@ import uuid
 from dataclasses import dataclass, replace
 
 from exchange_q.analysis import (
+    calibration_parameters,
     paired_block_bootstrap_test,
     paired_hac_test,
     required_sample_size,
@@ -92,7 +94,7 @@ def _parser() -> argparse.ArgumentParser:
         default="diagnostic_fixture",
     )
 
-    run = subparsers.add_parser("run", help="run the schema-v7 live evaluator")
+    run = subparsers.add_parser("run", help="run the schema-v8 live runner")
     run.add_argument("--profile", choices=("diagnostic", "primary"), required=True)
     run.add_argument("--study", help="frozen primary study manifest")
     run.add_argument("--database")
@@ -101,7 +103,10 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument(
         "--resume",
         action="store_true",
-        help="resume an existing run ID; otherwise existing IDs are rejected",
+        help=(
+            "resume an existing diagnostic run ID; primary runs are "
+            "single-session and cannot be resumed"
+        ),
     )
     run.add_argument("--symbol")
     run.add_argument("--provider", choices=PROVIDER_CHOICES)
@@ -128,7 +133,7 @@ def _parser() -> argparse.ArgumentParser:
     status.add_argument("--run-id", required=True)
     status.add_argument("--json", action="store_true")
 
-    analyze = subparsers.add_parser("analyze", help="score eligible v7 forecasts")
+    analyze = subparsers.add_parser("analyze", help="score eligible schema-v8 forecasts")
     analyze.add_argument("--database", required=True)
     analyze.add_argument("--run-id", required=True)
 
@@ -137,7 +142,7 @@ def _parser() -> argparse.ArgumentParser:
     stop.add_argument("--run-id", required=True)
     stop.add_argument("--timeout-s", type=float, default=10.0)
 
-    export = subparsers.add_parser("export", help="write a consistent v7 JSON snapshot")
+    export = subparsers.add_parser("export", help="write a consistent schema-v8 JSON snapshot")
     export.add_argument("--database", required=True)
     export.add_argument("--run-id", required=True)
     export.add_argument("--output", required=True)
@@ -231,8 +236,7 @@ def main(argv=None) -> int:
     if args.command != "run" and not os.path.isfile(args.database):
         parser.error(f"database does not exist: {args.database}")
     if args.command == "run":
-        _run_command(parser, args)
-        return 0
+        return _run_command(parser, args)
     store = V7Store(args.database)
     try:
         if args.command == "status":
@@ -243,13 +247,22 @@ def main(argv=None) -> int:
                 print(_format_status(document, store.schema_version))
             return 0
         if args.command == "analyze":
-            print(json.dumps(_analysis_document(store, args.run_id), indent=2, sort_keys=True))
+            # allow_nan=False: non-finite scores must fail loudly instead of
+            # emitting non-standard JSON (Infinity) into the analysis record.
+            print(
+                json.dumps(
+                    _analysis_document(store, args.run_id),
+                    indent=2,
+                    sort_keys=True,
+                    allow_nan=False,
+                )
+            )
             return 0
         if args.command == "export":
             document = store.export_run(args.run_id)
             temporary = args.output + ".tmp"
             with open(temporary, "w", encoding="utf-8") as handle:
-                json.dump(document, handle, indent=2, sort_keys=True)
+                json.dump(document, handle, indent=2, sort_keys=True, allow_nan=False)
             os.replace(temporary, args.output)
             return 0
         if args.command == "stop":
@@ -259,11 +272,13 @@ def main(argv=None) -> int:
     return 2
 
 
-def _run_command(parser: argparse.ArgumentParser, args) -> None:
+def _run_command(parser: argparse.ArgumentParser, args) -> int:
     study = _load_study(parser, args.study) if args.profile == "primary" else {}
     profile = PRIMARY_PROFILE if args.profile == "primary" else DIAGNOSTIC_PROFILE
     if args.refresh_s <= 0:
         parser.error("--refresh-s must be positive")
+    if args.resume and args.profile != "diagnostic":
+        parser.error("--resume is diagnostic-only; primary runs are single-session")
     if args.resume and (not args.database or not args.run_id or not args.artifact):
         parser.error("--resume requires explicit --database, --run-id, and --artifact")
     if args.profile == "primary" and not args.study:
@@ -283,6 +298,11 @@ def _run_command(parser: argparse.ArgumentParser, args) -> None:
     if not os.path.isfile(artifact_path):
         if args.artifact:
             parser.error(f"artifact does not exist: {artifact_path}")
+        if args.profile != "diagnostic":
+            parser.error(
+                f"artifact does not exist: {artifact_path} "
+                f"({args.profile} runs never auto-create artifacts; fit a primary artifact first)"
+            )
         _fit_artifact(
             DIAGNOSTIC_DATASET,
             artifact_path,
@@ -293,13 +313,22 @@ def _run_command(parser: argparse.ArgumentParser, args) -> None:
             flush=True,
         )
     artifact = load_artifact(artifact_path)
+    certification = None
     if args.profile == "primary":
         if artifact.purpose != "primary":
             parser.error("primary runs reject diagnostic or unproven artifacts")
-        _validate_certification(parser, study, profile)
+        certification = _validate_certification(parser, study, profile)
+    target_eligible = _value_or_default(args.target_eligible, study.get("target_eligible"))
+    if target_eligible is None:
+        target_eligible = profile.target_eligible
+    if int(target_eligible) <= 0:
+        parser.error(
+            f"{args.profile} runs require a positive target_eligible "
+            "(set it in the study or pass --target-eligible)"
+        )
     manifest = RunManifest(
         run_id=run_id,
-        symbol=args.symbol or study.get("symbol") or profile.symbol,
+        symbol=(args.symbol or study.get("symbol") or profile.symbol).lower(),
         provider=args.provider or study.get("provider") or profile.provider,
         model_artifact_hash=artifact.artifact_hash,
         feature_policy="causal_trade_book_v1",
@@ -316,10 +345,7 @@ def _run_command(parser: argparse.ArgumentParser, args) -> None:
                 profile.minimum_label_trades,
             )
         ),
-        target_eligible=_value_or_default(
-            args.target_eligible,
-            profile.target_eligible,
-        ),
+        target_eligible=int(target_eligible),
         terminal_slot_limit=(
             _optional_positive(
                 args.max_terminal_slots,
@@ -329,8 +355,8 @@ def _run_command(parser: argparse.ArgumentParser, args) -> None:
         ),
         mode=profile.mode,
         capture_policy=(study.get("capture_policy") or profile.capture_policy),
-        clock_policy="exchange_clock_watermark_v1",
-        eligibility_policy="certified_continuity_v1",
+        clock_policy=_RUN_CLOCK_POLICY,
+        eligibility_policy=_RUN_ELIGIBILITY_POLICY,
         decision_lead_ms=profile.decision_lead_s * 1000,
         settlement_delay_ms=profile.settlement_delay_s * 1000,
         artifact_purpose=artifact.purpose,
@@ -351,6 +377,16 @@ def _run_command(parser: argparse.ArgumentParser, args) -> None:
                     f"run ID already exists: {run_id}\n"
                     "Use a new --run-id or add --resume intentionally."
                 )
+        if certification is not None:
+            store.save_provider_certification(
+                f"{run_id}:{certification['provider']}",
+                certification["provider"],
+                certification.get("symbol", manifest.symbol),
+                certification["adapter_revision"],
+                True,
+                certification,
+                expires_at_ms=certification["issued_at_ms"] + 24 * 60 * 60 * 1000,
+            )
         provider = _make_provider(args.provider or study.get("provider") or profile.provider)
         runner = LiveRunner(store, provider, manifest, artifact)
         console = RunConsole(
@@ -364,6 +400,8 @@ def _run_command(parser: argparse.ArgumentParser, args) -> None:
             view=args.view,
         )
         asyncio.run(_run_foreground(runner, console))
+        final_status = store.status(run_id)["status"]
+        return 2 if final_status == "failed" else 0
     finally:
         store.close()
 
@@ -427,10 +465,33 @@ def _fit_artifact(
         dataset_hash=dataset_hash,
     )
     if purpose == "primary":
+        calibration_split = rows[split_index:]
+        import numpy as np
+
+        raw_probabilities = []
+        for row in calibration_split:
+            probability, _ = NormalizedBornModel._raw_probability(
+                FeatureWindow(**row["feature"]), artifact.parameters
+            )
+            raw_probabilities.append(min(1.0 - 1e-9, max(1e-9, probability)))
+        intercept, slope = calibration_parameters(
+            np.asarray(raw_probabilities, dtype=float),
+            np.asarray([int(row["buy_count"]) for row in calibration_split], dtype=float),
+            np.asarray([int(row["total_count"]) for row in calibration_split], dtype=float),
+        )
+        calibration_fitted = (
+            intercept is not None
+            and slope is not None
+            and math.isfinite(intercept)
+            and math.isfinite(slope)
+            and slope > 0
+        )
         artifact = replace(
             artifact,
+            calibration_intercept=intercept if calibration_fitted else 0.0,
+            calibration_slope=slope if calibration_fitted else 1.0,
             calibration_rows=calibration_rows,
-            calibration_status="uncalibrated",
+            calibration_status="fitted" if calibration_fitted else "uncalibrated",
         )
     save_artifact(output, artifact)
     return artifact, len(rows)
@@ -459,14 +520,23 @@ def _load_study(parser, path):
     return document
 
 
+_PROVIDER_CLASSES = {
+    "binance-sequenced": BinanceSequencedProvider,
+    "kucoin-sequenced": KucoinSequencedProvider,
+    "htx-ws": HtxWebSocketProvider,
+}
+
+# Policy revisions the v8r2 runtime enforces for primary runs. The study may
+# declare them, but cannot override them.
+_RUN_CLOCK_POLICY = "exchange_clock_watermark_v1"
+_RUN_ELIGIBILITY_POLICY = "certified_continuity_v1"
+
+
 def _make_provider(provider_name: str):
-    if provider_name == "binance-sequenced":
-        return BinanceSequencedProvider()
-    if provider_name == "kucoin-sequenced":
-        return KucoinSequencedProvider()
-    if provider_name == "htx-ws":
-        return HtxWebSocketProvider()
-    raise ValueError(f"unsupported provider: {provider_name}")
+    provider_class = _PROVIDER_CLASSES.get(provider_name)
+    if provider_class is None:
+        raise ValueError(f"unsupported provider: {provider_name}")
+    return provider_class()
 
 
 def _validate_certification(parser, study, profile):
@@ -483,8 +553,26 @@ def _validate_certification(parser, study, profile):
     expected_symbol = (study.get("symbol") or profile.symbol).lower()
     if certification.get("symbol", "").lower() != expected_symbol:
         parser.error("provider certification does not match the primary symbol")
-    if not certification.get("adapter_revision"):
+    adapter_revision = certification.get("adapter_revision")
+    if not adapter_revision:
         parser.error("provider certification is missing adapter revision")
+    provider_class = _PROVIDER_CLASSES.get(expected_provider)
+    expected_revision = getattr(provider_class, "adapter_revision", None)
+    if expected_revision is not None and adapter_revision != expected_revision:
+        parser.error(
+            f"provider certification adapter revision {adapter_revision!r} "
+            f"does not match the runtime adapter revision {expected_revision!r}"
+        )
+    for policy_key, expected_policy in (
+        ("clock_policy", _RUN_CLOCK_POLICY),
+        ("eligibility_policy", _RUN_ELIGIBILITY_POLICY),
+    ):
+        declared = study.get(policy_key)
+        if declared is not None and declared != expected_policy:
+            parser.error(
+                f"study {policy_key} {declared!r} does not match "
+                f"the runtime policy revision {expected_policy!r}"
+            )
     issued_at_ms = certification.get("issued_at_ms")
     if not isinstance(issued_at_ms, int) or issued_at_ms <= 0:
         parser.error("provider certification has invalid issue time")
@@ -498,6 +586,7 @@ def _validate_certification(parser, study, profile):
     soak = certification["live_soak"]
     if float(soak.get("duration_s", 0)) < 60:
         parser.error("provider certification live soak is shorter than 60 seconds")
+    return certification
 
 
 async def _doctor(parser, args) -> int:
@@ -616,8 +705,9 @@ async def _certify_provider(parser, args) -> int:
         await asyncio.wait_for(asyncio.shield(task), timeout=args.duration_s)
         health = provider.health()
     except asyncio.TimeoutError:
-        pass
+        health = provider.health()
     except Exception as exc:
+        health = provider.health()
         collection_error = f"{type(exc).__name__}: {exc}"
     finally:
         await provider.close()
@@ -682,6 +772,31 @@ def _build_dataset(parser, args) -> int:
             parser.error("dataset build requires a schema-v8 capture database")
         if store.unresolved_gap_count(args.provider, args.symbol.lower()) > 0:
             parser.error("capture database contains unresolved continuity gaps")
+        provenance_runs = []
+        for run_row in store.connection.execute(
+            "SELECT run_id, manifest_json FROM runs ORDER BY created_at_ms"
+        ).fetchall():
+            run_manifest = json.loads(run_row["manifest_json"])
+            run_provider = run_manifest.get("provider", "unknown")
+            if run_provider not in SEQUENCED_PROVIDERS:
+                parser.error(
+                    f"capture database run {run_row['run_id']} used provider "
+                    f"{run_provider}, which cannot certify capture continuity"
+                )
+            integrity = store.run_integrity(run_row["run_id"])
+            if not integrity["valid"]:
+                parser.error(
+                    f"capture database run {run_row['run_id']} failed integrity "
+                    f"({', '.join(sorted(integrity['error_codes']))}); "
+                    "refusing to build a certified dataset from a quarantined capture"
+                )
+            provenance_runs.append(
+                {
+                    "run_id": run_row["run_id"],
+                    "mode": run_manifest.get("mode", "diagnostic"),
+                    "provider": run_provider,
+                }
+            )
         bounds = store.connection.execute(
             """
             SELECT MIN(exchange_time_ms), MAX(exchange_time_ms)
@@ -727,6 +842,13 @@ def _build_dataset(parser, args) -> int:
         calibration_rows = rows[split_index:]
         payload = {
             "dataset_hash": hashlib.sha256(json.dumps(rows, sort_keys=True).encode()).hexdigest(),
+            "source": {
+                "capture_database": args.capture_database,
+                "provider": args.provider,
+                "symbol": args.symbol.lower(),
+                "runs": provenance_runs,
+                "integrity_validated": True,
+            },
             "development_start_ms": development_rows[0]["feature"]["start_ms"],
             "development_end_ms": development_rows[-1]["feature"]["end_ms"],
             "calibration_start_ms": (
@@ -846,16 +968,25 @@ def _analysis_document(store: V7Store, run_id: str) -> dict:
             ],
             dtype=float,
         )
+        baseline_losses = _losses(baseline_probs).tolist()
+        model_losses = _losses(model_probs).tolist()
+        default_lags = max(1, int(len(rows) ** (1 / 3)))
+        sensitivity_lags = sorted(
+            {1, default_lags, min(2 * default_lags, len(rows) - 1)}
+        )
         document["paired_inference"] = {
             "baseline": baseline_name,
-            "hac": paired_hac_test(
-                _losses(baseline_probs).tolist(),
-                _losses(model_probs).tolist(),
-            ),
-            "block_bootstrap": paired_block_bootstrap_test(
-                _losses(baseline_probs).tolist(),
-                _losses(model_probs).tolist(),
-            ),
+            "hac": paired_hac_test(baseline_losses, model_losses),
+            "block_bootstrap": paired_block_bootstrap_test(baseline_losses, model_losses),
+            "lag_sensitivity": [
+                {
+                    "max_lags": lags,
+                    "one_sided_p_value": paired_hac_test(
+                        baseline_losses, model_losses, max_lags=lags
+                    )["one_sided_p_value"],
+                }
+                for lags in sensitivity_lags
+            ],
         }
     else:
         document["paired_inference"] = {
@@ -913,6 +1044,7 @@ def _stop_run(store: V7Store, run_id: str, timeout_s: float) -> int:
     current_lease = current.get("lease")
     if current_lease and current_lease["owner_id"] == owner_id:
         store.release_lease(run_id, owner_id)
+        store.cancel_open_slots(run_id, "force_stop_before_slot_completion")
         store.set_run_status(run_id, "stopped_forcefully", "writer exited before cleanup")
     print(f"Writer {pid} stopped; no active lease remains.")
     return 0

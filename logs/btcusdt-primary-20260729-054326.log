@@ -1,0 +1,4 @@
+[exchange-q] created diagnostic-only artifact: artifacts/v8/btcusdt-born.json
+usage: exchange-q [-h]
+                  {fit,run,status,analyze,stop,export,power,doctor,provider-certify,dataset} ...
+exchange-q: error: primary runs reject diagnostic or unproven artifacts

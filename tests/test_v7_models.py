@@ -74,3 +74,24 @@ def test_artifact_identity_cannot_be_mutated():
     with pytest.raises(FrozenInstanceError):
         artifact.parameters = (2.0,)
     assert artifact.artifact_hash == original_hash
+
+
+def test_persistence_baseline_clips_degenerate_probabilities():
+    from exchange_q.models import PersistenceBaseline
+
+    baseline = PersistenceBaseline()
+    artifact = baseline.fit([None], [], [])
+    for buy_ratio in (0.0, 1.0):
+        forecast = baseline.predict(_feature(buy_ratio=buy_ratio), artifact)
+        assert 0.0 < forecast.probability_buy < 1.0
+        assert 0.0 < forecast.raw_probability_buy < 1.0
+
+
+def test_prior_baseline_clips_degenerate_prior():
+    from exchange_q.models import PriorBaseline
+
+    baseline = PriorBaseline()
+    artifact = baseline.fit([None, None], [10, 10], [10, 10])
+    assert artifact.parameters[0] == 1.0
+    forecast = baseline.predict(_feature(), artifact)
+    assert 0.0 < forecast.probability_buy < 1.0

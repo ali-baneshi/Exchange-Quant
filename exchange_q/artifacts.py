@@ -10,7 +10,8 @@ def save_artifact(path: str, artifact: ModelArtifact) -> None:
     directory = os.path.dirname(path)
     if directory:
         os.makedirs(directory, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as handle:
+    temporary = f"{path}.tmp"
+    with open(temporary, "w", encoding="utf-8") as handle:
         json.dump(
             {
                 "model_id": artifact.model_id,
@@ -33,6 +34,7 @@ def save_artifact(path: str, artifact: ModelArtifact) -> None:
             indent=2,
             sort_keys=True,
         )
+    os.replace(temporary, path)
 
 
 def load_artifact(path: str) -> ModelArtifact:

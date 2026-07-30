@@ -131,6 +131,9 @@ def test_trade_sequence_gap_requires_complete_recovery():
 
 
 def test_trade_sequence_gap_fails_closed_when_recovery_is_incomplete():
+    from exchange_q.capture import CaptureHooks
+
+    recorded_gaps = []
     provider = KucoinSequencedProvider(
         rest_get=lambda path, params: (
             [
@@ -145,9 +148,13 @@ def test_trade_sequence_gap_fails_closed_when_recovery_is_incomplete():
             ]
             if path == "/api/v1/market/histories"
             else 1
-        )
+        ),
+        capture_hooks=CaptureHooks(
+            record_continuity_gap=lambda *args, **kwargs: recorded_gaps.append((args, kwargs))
+        ),
     )
     provider._last_trade_sequence = 5
+    provider._trade_watermark_ms = 105
     events = asyncio.run(
         provider._trade_events(
             {
@@ -163,8 +170,26 @@ def test_trade_sequence_gap_fails_closed_when_recovery_is_incomplete():
             "sess",
         )
     )
-    assert events == []
+    assert [event.sequence for event in events] == [8]
+    assert provider._last_trade_sequence == 8
     assert provider._unresolved_gaps == 1
+    assert provider.health().trade_sequence_gaps == 1
+    assert len(recorded_gaps) == 1
+    args, kwargs = recorded_gaps[0]
+    assert args == ("trades", 105, 108)
+    assert kwargs["complete"] is False
+    assert kwargs["first_sequence"] == 6
+    assert kwargs["last_sequence"] == 7
+    assert kwargs["reasons"] == ("unrecovered_trade_gap",)
+
+
+def test_kucoin_timestamp_units():
+    from exchange_q.providers.kucoin_ws import _kucoin_timestamp_ms
+
+    assert _kucoin_timestamp_ms(1_780_000_000_000_123_456, 0) == 1_780_000_000_000
+    assert _kucoin_timestamp_ms(1_780_000_000_000, 0) == 1_780_000_000_000
+    assert _kucoin_timestamp_ms(108, 0) == 108
+    assert _kucoin_timestamp_ms(None, 555) == 555
 
 
 def test_normalize_symbol():

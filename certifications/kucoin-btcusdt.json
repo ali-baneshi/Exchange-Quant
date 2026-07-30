@@ -1,0 +1,63 @@
+{
+  "adapter_revision": "kucoin-spot-sequenced-v1",
+  "certification_id": "kucoin-sequenced-btcusdt-1785304222",
+  "clock_uncertainty_ms": null,
+  "collection_error": null,
+  "fault_results": {
+    "detail": "duplicate provider event observed for fault injection",
+    "duplicate_observed": 1,
+    "expected_events": 4,
+    "observed_events": 4,
+    "passed": true
+  },
+  "issued_at_ms": 1785304222990,
+  "live_soak": {
+    "counts": {
+      "books": 3672,
+      "trades": 1
+    },
+    "duration_s": 300.0,
+    "health": {
+      "book_watermark_ms": null,
+      "clock_offset_ms": null,
+      "clock_uncertainty_ms": null,
+      "connected": false,
+      "coverage_certifiable": false,
+      "detail": "",
+      "last_book_sequence": null,
+      "last_event_received_ms": null,
+      "last_trade_sequence": null,
+      "reconnects": 0,
+      "sequence_gaps": 0,
+      "trade_watermark_ms": null,
+      "unresolved_gaps": 0
+    },
+    "passed": false
+  },
+  "provider": "kucoin-sequenced",
+  "replay_results": {
+    "counts": {
+      "books": 1,
+      "trades": 2
+    },
+    "health": {
+      "book_watermark_ms": 100,
+      "clock_offset_ms": null,
+      "clock_uncertainty_ms": null,
+      "connected": false,
+      "coverage_certifiable": true,
+      "detail": "",
+      "last_book_sequence": null,
+      "last_event_received_ms": 301,
+      "last_trade_sequence": null,
+      "reconnects": 0,
+      "sequence_gaps": 0,
+      "trade_watermark_ms": 300,
+      "unresolved_gaps": 0
+    },
+    "passed": true
+  },
+  "symbol": "btcusdt",
+  "unresolved_gaps": 0,
+  "valid": false
+}

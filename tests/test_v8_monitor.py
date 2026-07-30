@@ -62,3 +62,46 @@ def test_slots_and_exclusions_reflect_resolved_slots(tmp_path):
         assert "EXCLUSIONS " in report
     finally:
         store.close()
+
+
+def test_startup_evidence_line_is_profile_aware(tmp_path, capsys):
+    import dataclasses
+
+    from exchange_q.monitor import RunConsole, monitor_snapshot
+
+    for mode in ("diagnostic", "primary"):
+        store = V7Store(str(tmp_path / f"{mode}.sqlite3"))
+        try:
+            manifest = dataclasses.replace(
+                _manifest(),
+                mode=mode,
+                artifact_purpose="primary" if mode == "primary" else "diagnostic_fixture",
+            )
+            store.create_run(manifest)
+            snapshot = monitor_snapshot(store, "monitor-run")
+            snapshot["provider_health"] = {
+                "connected": True,
+                "last_event_received_ms": None,
+                "reconnects": 0,
+                "sequence_gaps": 0,
+                "coverage_certifiable": True,
+                "detail": "",
+                "last_trade_sequence": None,
+                "last_book_sequence": None,
+                "unresolved_gaps": 0,
+                "clock_offset_ms": None,
+            }
+            console = RunConsole(
+                store,
+                "monitor-run",
+                provider=None,
+                database_path=f"runs/{mode}.sqlite3",
+                artifact_path="artifact.json",
+            )
+            console._render_log(snapshot, None)
+        finally:
+            store.close()
+    output = capsys.readouterr().out
+    assert "EVIDENCE diagnostic-only provider=replay" in output
+    assert "EVIDENCE primary provider=replay" in output
+    assert "HTX coverage is not certifiable" not in output

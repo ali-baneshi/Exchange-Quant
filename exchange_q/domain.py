@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import asdict, dataclass, field
 from decimal import Decimal
 from enum import Enum
 from typing import Any, Literal
+
+_SYMBOL_PATTERN = re.compile(r"^[a-z0-9-]+$")
 
 
 class ForecastStatus(str, Enum):
@@ -309,6 +312,11 @@ class RunManifest:
     def __post_init__(self) -> None:
         if not self.run_id or not self.symbol or not self.provider:
             raise ValueError("run, symbol, and provider identities are required")
+        if not _SYMBOL_PATTERN.match(self.symbol):
+            raise ValueError(
+                "symbol must be lowercase alphanumeric with optional dashes: "
+                f"{self.symbol!r}"
+            )
         if (
             not self.model_artifact_hash
             or not self.feature_policy

@@ -20,6 +20,9 @@ class ProviderHealth:
     last_trade_sequence: int | None = None
     last_book_sequence: int | None = None
     unresolved_gaps: int = 0
+    trade_sequence_gaps: int = 0
+    book_sequence_gaps: int = 0
+    pending_events: int = 0
     clock_offset_ms: float | None = None
     clock_uncertainty_ms: float | None = None
     trade_watermark_ms: int | None = None

@@ -72,3 +72,93 @@ def test_block_bootstrap_is_reproducible():
     )
     assert result["one_sided_p_value"] == 0.0
     assert result["seed"] == 42
+
+
+def test_analysis_document_reports_lag_sensitivity(tmp_path):
+    store = V7Store(str(tmp_path / "run.sqlite3"))
+    try:
+        store.create_run(
+            RunManifest(
+                run_id="analysis-run",
+                symbol="btcusdt",
+                provider="replay",
+                model_artifact_hash="hash",
+                feature_policy="causal_trade_book_v1",
+                label_policy="half_open_streamed_trades_v1",
+                primary_metric="per_trade_negative_log_likelihood",
+                horizon_ms=1000,
+                lookback_ms=1000,
+                cadence_ms=1000,
+                minimum_label_trades=2,
+                target_eligible=4,
+            )
+        )
+        for index, slot_start in enumerate((1000, 2000, 3000, 4000)):
+            store.schedule_slot("analysis-run", slot_start, slot_start + 1000)
+            buy_count = 5 + index % 2
+            for trade_index in range(10):
+                store.save_trade(
+                    TradeEvent(
+                        provider="replay",
+                        symbol="btcusdt",
+                        exchange_trade_id=f"t{slot_start}-{trade_index}",
+                        exchange_time_ms=slot_start + trade_index,
+                        received_time_ms=slot_start + trade_index + 1,
+                        aggressor_side="buy" if trade_index < buy_count else "sell",
+                        price=Decimal(100),
+                        quantity=Decimal(1),
+                    )
+                )
+            store.mark_coverage("replay", "btcusdt", slot_start, slot_start + 1000, True)
+            features = FeatureWindow(
+                slot_start - 1000,
+                slot_start,
+                10,
+                buy_count,
+                10 - buy_count,
+                buy_count / 10,
+                0.0,
+                0.001,
+                0.01,
+            )
+            forecast = Forecast(
+                "normalized_born_v1",
+                0.4 + 0.05 * index,
+                0.4 + 0.05 * index,
+                {
+                    "artifact_hash": "hash",
+                    "baseline_probabilities": {
+                        "development_prior_v1": 0.5,
+                        "flow_persistence_v1": 0.45 + 0.05 * index,
+                        "regularized_logistic_v1": 0.42 + 0.05 * index,
+                    },
+                },
+            )
+            store.create_forecast(
+                "analysis-run",
+                slot_start,
+                features,
+                forecast,
+                "hash",
+                observed_decision_ms=slot_start,
+            )
+            label = store.build_label("replay", "btcusdt", slot_start, slot_start + 1000)
+            store.resolve_slot(
+                "analysis-run",
+                slot_start,
+                label,
+                2,
+                observed_decision_ms=slot_start + 1000,
+            )
+        document = _analysis_document(store, "analysis-run")
+        assert document["analysis_available"] is True
+        inference = document["paired_inference"]
+        lag_entries = inference["lag_sensitivity"]
+        lags = [entry["max_lags"] for entry in lag_entries]
+        assert lags == sorted(set(lags))
+        assert len(lags) >= 2
+        assert inference["hac"]["max_lags"] in lags
+        for entry in lag_entries:
+            assert 0.0 <= entry["one_sided_p_value"] <= 1.0
+    finally:
+        store.close()

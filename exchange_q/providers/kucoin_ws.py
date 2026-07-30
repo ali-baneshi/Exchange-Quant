@@ -16,6 +16,17 @@ from exchange_q.capture import CaptureHooks
 from exchange_q.domain import BookEvent, TradeEvent
 from exchange_q.providers.base import ProviderHealth
 
+# KuCoin /market/match and /api/v1/market/histories payload times are
+# nanoseconds; values that are already millisecond-scale are passed through.
+_NANOSECOND_THRESHOLD_MS = 1_000_000_000_000_000
+
+
+def _kucoin_timestamp_ms(value, fallback_ms: int) -> int:
+    raw = int(value) if value is not None else int(fallback_ms)
+    if raw > _NANOSECOND_THRESHOLD_MS:
+        return raw // 1_000_000
+    return raw
+
 
 class KucoinSequencedProvider:
     name = "kucoin-sequenced"
@@ -36,9 +47,12 @@ class KucoinSequencedProvider:
         self._closed = False
         self._connected = False
         self._socket = None
+        self._queue: asyncio.Queue | None = None
         self._last_event_received_ms: int | None = None
         self._reconnects = 0
         self._sequence_gaps = 0
+        self._trade_sequence_gaps = 0
+        self._book_sequence_gaps = 0
         self._unresolved_gaps = 0
         self._detail = ""
         self._reconnect_limit = reconnect_limit
@@ -100,6 +114,7 @@ class KucoinSequencedProvider:
                     self._socket = socket
                     self._connected = True
                     queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+                    self._queue = queue
                     pump = asyncio.create_task(self._pump(socket, queue))
                     ping = asyncio.create_task(self._ping_loop(socket, ping_interval_s))
                     try:
@@ -154,6 +169,7 @@ class KucoinSequencedProvider:
                 ConnectionClosed,
                 OSError,
                 TimeoutError,
+                asyncio.TimeoutError,
                 ValueError,
                 json.JSONDecodeError,
             ) as exc:
@@ -166,6 +182,7 @@ class KucoinSequencedProvider:
                     )
             finally:
                 self._socket = None
+        self._queue = None
         self._connected = False
 
     async def close(self) -> None:
@@ -185,13 +202,14 @@ class KucoinSequencedProvider:
             last_event_received_ms=self._last_event_received_ms,
             reconnects=self._reconnects,
             sequence_gaps=self._sequence_gaps,
-            coverage_certifiable=(
-                self._connected and self._unresolved_gaps == 0 and depth_ready and clock_ready
-            ),
+            coverage_certifiable=(self._connected and depth_ready and clock_ready),
             detail=self._detail,
             last_trade_sequence=self._last_trade_sequence,
             last_book_sequence=self._last_depth_sequence,
             unresolved_gaps=self._unresolved_gaps,
+            trade_sequence_gaps=self._trade_sequence_gaps,
+            book_sequence_gaps=self._book_sequence_gaps,
+            pending_events=self._queue.qsize() if self._queue is not None else 0,
             clock_offset_ms=self._clock_offset_ms,
             clock_uncertainty_ms=self._clock_uncertainty_ms,
             trade_watermark_ms=self._trade_watermark_ms,
@@ -278,14 +296,16 @@ class KucoinSequencedProvider:
         events: list[TradeEvent] = []
         if self._last_trade_sequence is not None and sequence <= self._last_trade_sequence:
             return []
+        event = self._parse_trade(payload, symbol, received_ms, session_id)
         if self._last_trade_sequence is not None and sequence > self._last_trade_sequence + 1:
             self._sequence_gaps += 1
+            self._trade_sequence_gaps += 1
             missing_from = self._last_trade_sequence + 1
             missing_to = sequence - 1
             recovered = await self._recover_trades(
                 symbol, missing_from, missing_to, received_ms, session_id
             )
-            recovered_sequences = [int(event.sequence or -1) for event in recovered]
+            recovered_sequences = [int(item.sequence or -1) for item in recovered]
             expected_sequences = list(range(missing_from, missing_to + 1))
             if recovered_sequences != expected_sequences:
                 self._unresolved_gaps += 1
@@ -293,9 +313,15 @@ class KucoinSequencedProvider:
                 self._record_gap(
                     symbol,
                     "trades",
-                    missing_from,
-                    missing_to,
+                    (
+                        self._trade_watermark_ms
+                        if self._trade_watermark_ms is not None
+                        else event.exchange_time_ms
+                    ),
+                    event.exchange_time_ms,
                     complete=False,
+                    first_sequence=missing_from,
+                    last_sequence=missing_to,
                     reasons=("unrecovered_trade_gap",),
                 )
                 if self._capture_hooks.record_recovery:
@@ -307,18 +333,17 @@ class KucoinSequencedProvider:
                         len(recovered),
                         self._detail,
                     )
-                return []
-            events.extend(recovered)
-            if self._capture_hooks.record_recovery:
-                self._capture_hooks.record_recovery(
-                    "trades",
-                    missing_from,
-                    missing_to,
-                    "success",
-                    len(recovered),
-                    "",
-                )
-        event = self._parse_trade(payload, symbol, received_ms, session_id)
+            else:
+                events.extend(recovered)
+                if self._capture_hooks.record_recovery:
+                    self._capture_hooks.record_recovery(
+                        "trades",
+                        missing_from,
+                        missing_to,
+                        "success",
+                        len(recovered),
+                        "",
+                    )
         events.append(event)
         self._last_trade_sequence = sequence
         self._trade_watermark_ms = event.exchange_time_ms
@@ -344,9 +369,7 @@ class KucoinSequencedProvider:
                 continue
             if sequence > missing_to:
                 break
-            exchange_time_ms = int(row["time"])
-            if exchange_time_ms > 1_000_000_000_000:
-                exchange_time_ms //= 1_000_000
+            exchange_time_ms = _kucoin_timestamp_ms(row.get("time"), received_ms)
             recovered.append(
                 TradeEvent(
                     provider=self.name,
@@ -374,9 +397,7 @@ class KucoinSequencedProvider:
         session_id: str,
     ) -> TradeEvent:
         sequence = int(payload["sequence"])
-        exchange_time_ms = int(payload.get("time", received_ms))
-        if exchange_time_ms > 1_000_000_000_000:
-            exchange_time_ms //= 1_000_000
+        exchange_time_ms = _kucoin_timestamp_ms(payload.get("time"), received_ms)
         return TradeEvent(
             provider=self.name,
             symbol=symbol,
@@ -401,17 +422,25 @@ class KucoinSequencedProvider:
             applied = self._depth.apply(payload)
         except ValueError as exc:
             self._sequence_gaps += 1
+            self._book_sequence_gaps += 1
             market_symbol = self.normalize_symbol(symbol)
             resynced = await self._resync_depth(market_symbol, str(exc))
             if not resynced:
                 self._unresolved_gaps += 1
                 self._detail = str(exc)
+                event_time_ms = int(payload.get("time", received_ms))
                 self._record_gap(
                     symbol,
                     "books",
-                    int(payload.get("sequenceStart", 0)),
-                    int(payload.get("sequenceEnd", 0)),
+                    (
+                        self._book_watermark_ms
+                        if self._book_watermark_ms is not None
+                        else event_time_ms
+                    ),
+                    event_time_ms,
                     complete=False,
+                    first_sequence=int(payload.get("sequenceStart", 0)),
+                    last_sequence=int(payload.get("sequenceEnd", 0)),
                     reasons=("depth_sequence_gap",),
                 )
             return None
@@ -482,6 +511,8 @@ class KucoinSequencedProvider:
         end_ms: int,
         *,
         complete: bool,
+        first_sequence: int | None = None,
+        last_sequence: int | None = None,
         reasons: tuple[str, ...],
     ) -> None:
         if self._capture_hooks.record_continuity_gap:
@@ -490,8 +521,8 @@ class KucoinSequencedProvider:
                 start_ms,
                 end_ms,
                 complete=complete,
-                first_sequence=start_ms,
-                last_sequence=end_ms,
+                first_sequence=first_sequence,
+                last_sequence=last_sequence,
                 reasons=reasons,
             )
 

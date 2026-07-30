@@ -259,7 +259,7 @@ class PriorBaseline:
         return ModelArtifact(self.model_id, (prior,), len(buy_counts))
 
     def predict(self, context: FeatureWindow, artifact: ModelArtifact) -> Forecast:
-        probability = float(artifact.parameters[0])
+        probability = min(1.0 - 1e-9, max(1e-9, float(artifact.parameters[0])))
         return Forecast(
             self.model_id, probability, probability, {"artifact_hash": artifact.artifact_hash}
         )
@@ -272,9 +272,12 @@ class PersistenceBaseline:
         return ModelArtifact(self.model_id, (), len(features))
 
     def predict(self, context: FeatureWindow, artifact: ModelArtifact) -> Forecast:
+        # Clip away from 0/1: a one-sided feature window would otherwise emit
+        # a degenerate probability and infinite per-trade NLL downstream.
+        probability = min(1.0 - 1e-9, max(1e-9, float(context.buy_ratio)))
         return Forecast(
             self.model_id,
-            context.buy_ratio,
-            context.buy_ratio,
+            probability,
+            probability,
             {"artifact_hash": artifact.artifact_hash},
         )

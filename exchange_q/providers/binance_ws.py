@@ -36,9 +36,12 @@ class BinanceSequencedProvider:
         self._closed = False
         self._connected = False
         self._socket = None
+        self._queue: asyncio.Queue | None = None
         self._last_event_received_ms: int | None = None
         self._reconnects = 0
         self._sequence_gaps = 0
+        self._trade_sequence_gaps = 0
+        self._book_sequence_gaps = 0
         self._unresolved_gaps = 0
         self._detail = ""
         self._reconnect_limit = reconnect_limit
@@ -85,6 +88,7 @@ class BinanceSequencedProvider:
                     self._socket = socket
                     self._connected = True
                     queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+                    self._queue = queue
                     pump = asyncio.create_task(self._pump(socket, queue))
                     try:
                         await self._sample_clock()
@@ -124,6 +128,7 @@ class BinanceSequencedProvider:
                 ConnectionClosed,
                 OSError,
                 TimeoutError,
+                asyncio.TimeoutError,
                 ValueError,
                 json.JSONDecodeError,
             ) as exc:
@@ -134,6 +139,7 @@ class BinanceSequencedProvider:
                     await asyncio.sleep(min(30.0, 2.0 ** min(self._reconnects, 5)))
             finally:
                 self._socket = None
+        self._queue = None
         self._connected = False
 
     async def close(self) -> None:
@@ -153,13 +159,14 @@ class BinanceSequencedProvider:
             last_event_received_ms=self._last_event_received_ms,
             reconnects=self._reconnects,
             sequence_gaps=self._sequence_gaps,
-            coverage_certifiable=(
-                self._connected and self._unresolved_gaps == 0 and depth_ready and clock_ready
-            ),
+            coverage_certifiable=(self._connected and depth_ready and clock_ready),
             detail=self._detail,
             last_trade_sequence=self._last_trade_id,
             last_book_sequence=self._last_depth_id,
             unresolved_gaps=self._unresolved_gaps,
+            trade_sequence_gaps=self._trade_sequence_gaps,
+            book_sequence_gaps=self._book_sequence_gaps,
+            pending_events=self._queue.qsize() if self._queue is not None else 0,
             clock_offset_ms=self._clock_offset_ms,
             clock_uncertainty_ms=self._clock_uncertainty_ms,
             trade_watermark_ms=self._trade_watermark_ms,
@@ -189,103 +196,47 @@ class BinanceSequencedProvider:
         received_ms: int,
         session_id: str,
     ) -> list[TradeEvent]:
+        # Raw-trade IDs cannot be recovered without the authenticated
+        # historicalTrades endpoint, so a gap is always unrecovered: flag the
+        # affected interval fail-closed and continue the stream after it.
         trade_id = int(payload["t"])
-        events: list[TradeEvent] = []
+        if self._last_trade_id is not None and trade_id <= self._last_trade_id:
+            return []
+        event = self._parse_trade(payload, symbol, received_ms, session_id)
         if self._last_trade_id is not None and trade_id > self._last_trade_id + 1:
             self._sequence_gaps += 1
+            self._trade_sequence_gaps += 1
             missing_from = self._last_trade_id + 1
             missing_to = trade_id - 1
-            recovered = await self._recover_trades(
+            self._unresolved_gaps += 1
+            self._detail = f"unrecovered Binance trade IDs {missing_from}-{missing_to}"
+            self._record_gap(
                 symbol,
-                missing_from,
-                missing_to,
-                received_ms,
-                session_id,
+                "trades",
+                (
+                    self._trade_watermark_ms
+                    if self._trade_watermark_ms is not None
+                    else event.exchange_time_ms
+                ),
+                event.exchange_time_ms,
+                complete=False,
+                first_sequence=missing_from,
+                last_sequence=missing_to,
+                reasons=("unrecovered_trade_gap",),
             )
-            events.extend(recovered)
-            expected = missing_to - missing_from + 1
-            if len(recovered) != expected:
-                self._unresolved_gaps += 1
-                self._detail = f"unrecovered trade IDs {missing_from}-{missing_to}"
-                self._record_gap(
-                    symbol,
-                    "trades",
-                    missing_from,
-                    missing_to,
-                    complete=False,
-                    reasons=("unrecovered_trade_gap",),
-                )
-                if self._capture_hooks.record_recovery:
-                    self._capture_hooks.record_recovery(
-                        "trades",
-                        missing_from,
-                        missing_to,
-                        "failed",
-                        len(recovered),
-                        self._detail,
-                    )
-            elif self._capture_hooks.record_recovery:
+            if self._capture_hooks.record_recovery:
                 self._capture_hooks.record_recovery(
                     "trades",
                     missing_from,
                     missing_to,
-                    "success",
-                    len(recovered),
-                    "",
+                    "failed",
+                    0,
+                    "trade recovery unsupported: raw-trade IDs require the "
+                    "authenticated historicalTrades endpoint",
                 )
-        if self._last_trade_id is not None and trade_id <= self._last_trade_id:
-            return events
-        event = self._parse_trade(payload, symbol, received_ms, session_id)
-        events.append(event)
         self._last_trade_id = trade_id
         self._trade_watermark_ms = event.exchange_time_ms
-        return events
-
-    async def _recover_trades(
-        self,
-        symbol: str,
-        missing_from: int,
-        missing_to: int,
-        received_ms: int,
-        session_id: str,
-    ) -> list[TradeEvent]:
-        recovered: list[TradeEvent] = []
-        cursor = missing_from
-        while cursor <= missing_to:
-            rows = await self._get(
-                "/api/v3/aggTrades",
-                {
-                    "symbol": symbol.upper(),
-                    "fromId": cursor,
-                    "limit": min(1000, missing_to - cursor + 1),
-                },
-            )
-            if not rows:
-                break
-            for row in rows:
-                identifier = int(row["a"])
-                if identifier < missing_from:
-                    continue
-                if identifier > missing_to:
-                    return recovered
-                recovered.append(
-                    TradeEvent(
-                        provider=self.name,
-                        symbol=symbol,
-                        exchange_trade_id=str(identifier),
-                        exchange_time_ms=int(row["T"]),
-                        received_time_ms=received_ms,
-                        aggressor_side="sell" if row["m"] else "buy",
-                        price=Decimal(str(row["p"])),
-                        quantity=Decimal(str(row["q"])),
-                        sequence=identifier,
-                        session_id=session_id,
-                    )
-                )
-                cursor = identifier + 1
-            if int(rows[-1]["a"]) >= missing_to:
-                break
-        return recovered
+        return [event]
 
     def _parse_trade(
         self,
@@ -319,16 +270,24 @@ class BinanceSequencedProvider:
             applied = self._depth.apply(payload)
         except ValueError as exc:
             self._sequence_gaps += 1
+            self._book_sequence_gaps += 1
             resynced = await self._resync_depth(symbol, str(exc))
             if not resynced:
                 self._unresolved_gaps += 1
                 self._detail = str(exc)
+                event_time_ms = int(payload.get("E", received_ms))
                 self._record_gap(
                     symbol,
                     "books",
-                    int(payload.get("U", 0)),
-                    int(payload.get("u", 0)),
+                    (
+                        self._book_watermark_ms
+                        if self._book_watermark_ms is not None
+                        else event_time_ms
+                    ),
+                    event_time_ms,
                     complete=False,
+                    first_sequence=int(payload.get("U", 0)),
+                    last_sequence=int(payload.get("u", 0)),
                     reasons=("depth_sequence_gap",),
                 )
             return None
@@ -399,6 +358,8 @@ class BinanceSequencedProvider:
         end_ms: int,
         *,
         complete: bool,
+        first_sequence: int | None = None,
+        last_sequence: int | None = None,
         reasons: tuple[str, ...],
     ) -> None:
         if self._capture_hooks.record_continuity_gap:
@@ -407,8 +368,8 @@ class BinanceSequencedProvider:
                 start_ms,
                 end_ms,
                 complete=complete,
-                first_sequence=start_ms,
-                last_sequence=end_ms,
+                first_sequence=first_sequence,
+                last_sequence=last_sequence,
                 reasons=reasons,
             )
 
