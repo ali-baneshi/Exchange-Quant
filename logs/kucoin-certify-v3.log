@@ -1,7 +1,7 @@
 {
   "adapter_revision": "kucoin-spot-sequenced-v2",
-  "certification_id": "kucoin-sequenced-btcusdt-1785463107",
-  "clock_uncertainty_ms": 372.5,
+  "certification_id": "kucoin-sequenced-btcusdt-1785397355",
+  "clock_uncertainty_ms": 394.5,
   "collection_error": null,
   "fault_results": {
     "detail": "duplicate provider event observed for fault injection",
@@ -10,29 +10,29 @@
     "observed_events": 4,
     "passed": true
   },
-  "issued_at_ms": 1785463107670,
+  "issued_at_ms": 1785397355107,
   "live_soak": {
     "counts": {
-      "books": 122030,
-      "trades": 355
+      "books": 94834,
+      "trades": 162
     },
     "duration_s": 300.0,
     "health": {
       "book_sequence_gaps": 0,
-      "book_watermark_ms": 1785463102474,
-      "clock_offset_ms": 291.5,
-      "clock_uncertainty_ms": 372.5,
+      "book_watermark_ms": 1785397349620,
+      "clock_offset_ms": 176.5,
+      "clock_uncertainty_ms": 394.5,
       "connected": true,
       "coverage_certifiable": true,
       "detail": "",
-      "last_book_sequence": 35080524588,
-      "last_event_received_ms": 1785463102657,
-      "last_trade_sequence": 23763169216839680,
+      "last_book_sequence": 35052418294,
+      "last_event_received_ms": 1785397350089,
+      "last_trade_sequence": 23753890902196225,
       "pending_events": 0,
       "reconnects": 0,
       "sequence_gaps": 0,
       "trade_sequence_gaps": 0,
-      "trade_watermark_ms": 1785463096341,
+      "trade_watermark_ms": 1785397347253,
       "unresolved_gaps": 0
     },
     "passed": true

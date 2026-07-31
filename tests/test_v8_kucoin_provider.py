@@ -92,24 +92,36 @@ def test_monotonic_trade_sequence_is_accepted_without_gap_recovery():
     assert provider._unresolved_gaps == 0
 
 
-def test_trade_sequence_gap_requires_complete_recovery():
-    provider = KucoinSequencedProvider(
-        rest_get=lambda path, params: (
-            [
-                {
-                    "sequence": str(sequence),
-                    "tradeId": str(sequence),
-                    "side": "buy",
-                    "price": "100",
-                    "size": "1",
-                    "time": 100 + sequence,
-                }
-                for sequence in (6, 7)
-            ]
-            if path == "/api/v1/market/histories"
-            else 1
+def test_sparse_trade_sequence_jump_is_not_a_dense_gap():
+    # KuCoin match sequences are snowflake IDs; large jumps are normal.
+    provider = KucoinSequencedProvider(rest_get=lambda *_args, **_kwargs: [])
+    provider._last_trade_sequence = 23753813018034176
+    events = asyncio.run(
+        provider._trade_events(
+            {
+                "sequence": "23753813049491456",
+                "tradeId": "23753813049491456",
+                "side": "buy",
+                "price": "100",
+                "size": "1",
+                "time": 200,
+            },
+            "btcusdt",
+            201,
+            "sess",
         )
     )
+    assert len(events) == 1
+    assert events[0].sequence == 23753813049491456
+    assert provider._unresolved_gaps == 0
+    assert provider._trade_sequence_gaps == 0
+    assert provider._last_trade_sequence == 23753813049491456
+
+
+def test_trade_sequence_gap_requires_complete_recovery():
+    # Dense +1 recovery is no longer used for KuCoin match sequences; a jump
+    # from 5 to 8 is accepted as a normal sparse ID advance.
+    provider = KucoinSequencedProvider(rest_get=lambda *_args, **_kwargs: [])
     provider._last_trade_sequence = 5
     events = asyncio.run(
         provider._trade_events(
@@ -126,33 +138,14 @@ def test_trade_sequence_gap_requires_complete_recovery():
             "sess",
         )
     )
-    assert [event.sequence for event in events] == [6, 7, 8]
+    assert [event.sequence for event in events] == [8]
     assert provider._unresolved_gaps == 0
 
 
 def test_trade_sequence_gap_fails_closed_when_recovery_is_incomplete():
-    from exchange_q.capture import CaptureHooks
-
-    recorded_gaps = []
-    provider = KucoinSequencedProvider(
-        rest_get=lambda path, params: (
-            [
-                {
-                    "sequence": "6",
-                    "tradeId": "6",
-                    "side": "buy",
-                    "price": "100",
-                    "size": "1",
-                    "time": 106,
-                }
-            ]
-            if path == "/api/v1/market/histories"
-            else 1
-        ),
-        capture_hooks=CaptureHooks(
-            record_continuity_gap=lambda *args, **kwargs: recorded_gaps.append((args, kwargs))
-        ),
-    )
+    # Retained name for compatibility with older audit notes: incomplete dense
+    # recovery is obsolete; sparse jumps must not poison continuity.
+    provider = KucoinSequencedProvider(rest_get=lambda *_args, **_kwargs: [])
     provider._last_trade_sequence = 5
     provider._trade_watermark_ms = 105
     events = asyncio.run(
@@ -172,15 +165,8 @@ def test_trade_sequence_gap_fails_closed_when_recovery_is_incomplete():
     )
     assert [event.sequence for event in events] == [8]
     assert provider._last_trade_sequence == 8
-    assert provider._unresolved_gaps == 1
-    assert provider.health().trade_sequence_gaps == 1
-    assert len(recorded_gaps) == 1
-    args, kwargs = recorded_gaps[0]
-    assert args == ("trades", 105, 108)
-    assert kwargs["complete"] is False
-    assert kwargs["first_sequence"] == 6
-    assert kwargs["last_sequence"] == 7
-    assert kwargs["reasons"] == ("unrecovered_trade_gap",)
+    assert provider._unresolved_gaps == 0
+    assert provider.health().trade_sequence_gaps == 0
 
 
 def test_kucoin_timestamp_units():
@@ -208,6 +194,7 @@ def test_pump_handles_connection_closed():
     provider = KucoinSequencedProvider()
     queue = asyncio.Queue()
     asyncio.run(provider._pump(_ClosingSocket(), queue))
+    assert queue.get_nowait() == {"type": "provider_stream_end"}
     assert queue.empty()
 
 

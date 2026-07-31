@@ -112,12 +112,15 @@ flowchart LR
 ./scripts/exchange-q run --profile diagnostic --view detail \
   --provider kucoin-sequenced \
   --max-terminal-slots 120 \
+  --target-eligible 1000 \
   --refresh-s 1 \
   --database runs/btcusdt-capture-dev.sqlite3 \
   --run-id btcusdt-capture-dev
 ```
 
 About 120 minutes for 120 slots. Increase `--max-terminal-slots` for more history.
+Set `--target-eligible` high (e.g. 1000): diagnostic profile defaults to
+`target_eligible=1`, which stops the capture after the first scoreable slot.
 
 The dashboard shows **GOALS** (run targets), **PROGRESS**, and **BLOCKER** when
 no market events arrive (provider blocked or unreachable).
@@ -156,17 +159,22 @@ Use longer `--duration-s` (e.g. 3600) for production soak. Output must have
 ### Step 5 — Study manifest and doctor
 
 First live primary test uses [`studies/btcusdt-primary.json`](../studies/btcusdt-primary.json)
-with `target_eligible: 5` (~5 hours at one slot per minute):
+with `target_eligible: 5` (~5–15 minutes when most slots are scoreable).
+
+After the n=5 smoke report, freeze a powered target with
+[`studies/btcusdt-primary-powered.json`](../studies/btcusdt-primary-powered.json)
+(`target_eligible: 11` from `exchange-q power` on the smoke paired-loss
+moments; comparator remains `regularized_logistic_v1`):
 
 ```bash
-./scripts/exchange-q doctor --profile primary --study studies/btcusdt-primary.json
+./scripts/exchange-q doctor --profile primary --study studies/btcusdt-primary-powered.json
 ```
 
 ### Step 6 — Primary run
 
 ```bash
 ./scripts/exchange-q run --profile primary --view outcome \
-  --study studies/btcusdt-primary.json \
+  --study studies/btcusdt-primary-powered.json \
   --refresh-s 1
 ```
 
@@ -203,7 +211,8 @@ database and start a fresh capture. Do not `--resume` a quarantined run:
 rm -f runs/btcusdt-capture-dev.sqlite3
 
 ./scripts/exchange-q run --profile diagnostic --view detail \
-  --provider kucoin-sequenced --max-terminal-slots 120 --refresh-s 1 \
+  --provider kucoin-sequenced --max-terminal-slots 120 \
+  --target-eligible 1000 --refresh-s 1 \
   --database runs/btcusdt-capture-dev.sqlite3 --run-id btcusdt-capture-dev
 ```
 
@@ -238,6 +247,74 @@ Resume is diagnostic-only. Primary runs are single-session: `--resume` with
 
 Schema v7 databases are read-only under v8 and cannot be resumed. New schema-v8
 databases are single-run; use a new database for every independent run.
+
+## Reading results for researchers
+
+After any finished run, print the researcher verdict:
+
+```bash
+./scripts/exchange-q report \
+  --database "$RUN_DATABASE" \
+  --run-id "$RUN_ID"
+```
+
+Or keep the machine-readable JSON and append the same verdict:
+
+```bash
+./scripts/exchange-q analyze \
+  --database "$RUN_DATABASE" \
+  --run-id "$RUN_ID" \
+  --human
+```
+
+Interpretation:
+
+- `VERDICT: NO COMPARATIVE EVIDENCE` — zero scoreable labels (typical for HTX
+  diagnostic). Born vs classical scores are intentionally not computed.
+- `VERDICT: COMPARATIVE EVIDENCE AVAILABLE (n=N)` — primary corpus with N
+  scoreable slots. The report prints Born NLL/Brier against frozen baselines
+  and paired HAC / block-bootstrap inference versus the primary comparator.
+
+### Reading ΔNLL and paired inference
+
+Sign convention in `exchange-q report` / `exchange-q analyze`:
+
+- **ΔNLL** = Born NLL − baseline NLL. Negative means Born is better on NLL.
+- **mean_Δ** (HAC / bootstrap) = mean(Born loss − comparator loss). Negative
+  means Born is better than the frozen primary comparator.
+- One-sided HAC / block-bootstrap tests the preregistered direction “model
+  better than comparator” (lower loss).
+
+The primary comparator is frozen in the study (default
+`regularized_logistic_v1`). Secondary baselines (`development_prior_v1`,
+`flow_persistence_v1`) are reported for context only. Do **not** re-designate
+the weakest observed baseline as the primary comparator after collection
+([STATISTICS.md](STATISTICS.md)).
+
+### Worked example — smoke primary `n=5`
+
+Run `btcusdt-primary-20260731-045724-ce2611b9` unlocked comparative evidence:
+
+| Comparator | Role | ΔNLL vs Born | Reading |
+|---|---|---|---|
+| `regularized_logistic_v1` | primary | negative | Born beat frozen logistic on this sample |
+| `development_prior_v1` | secondary | positive | Prior slightly better than Born |
+| `flow_persistence_v1` | secondary | positive | Persistence much better than Born |
+
+That record proves the pipeline can score Born vs classical under certified
+KuCoin continuity. It does **not** authorize a scientific claim that Born is
+best overall: `n=5` is a smoke target, calibration was `uncalibrated`, and
+persistence/prior beat Born on raw NLL. Forecast accuracy is not trading PnL.
+
+Platt calibration on `fit --purpose primary` requires an independent calibration
+split of **at least 10 rows** (`calibration_parameters` floor). With a 14-row
+development set (11 fit / 3 calib) the artifact stays
+`calibration_status: uncalibrated`; grow the capture until the dataset yields
+≥50 rows before expecting `fitted`.
+
+HTX diagnostic runs (including one-hour `--max-terminal-slots 60` soaks) prove
+pipeline operability only. Comparative model evidence requires the primary
+bootstrap pipeline above.
 
 ## References
 

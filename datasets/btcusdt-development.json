@@ -1,0 +1,260 @@
+{
+  "calibration_end_ms": 1785402180000,
+  "calibration_start_ms": 1785401760000,
+  "dataset_hash": "1c5ed9cb487179c41d0d3ef932d83e88f29abc1f4ea5ff1c1fd706946b19ba95",
+  "development_end_ms": 1785402000000,
+  "development_start_ms": 1785400500000,
+  "rows": [
+    {
+      "buy_count": 33,
+      "feature": {
+        "buy_count": 71,
+        "buy_ratio": 0.284,
+        "closing_book_depth_imbalance": -0.3308673998756776,
+        "end_ms": 1785400800000,
+        "historical_aggressor_buy_share": 0.284,
+        "sell_count": 179,
+        "signed_imbalance": -0.3308673998756776,
+        "spread": 1.5566201107535209e-06,
+        "start_ms": 1785400500000,
+        "trade_count": 250,
+        "volatility": 3.6714131659090844e-05
+      },
+      "total_count": 53
+    },
+    {
+      "buy_count": 26,
+      "feature": {
+        "buy_count": 83,
+        "buy_ratio": 0.36403508771929827,
+        "closing_book_depth_imbalance": -0.8651187704896847,
+        "end_ms": 1785400860000,
+        "historical_aggressor_buy_share": 0.36403508771929827,
+        "sell_count": 145,
+        "signed_imbalance": -0.8651187704896847,
+        "spread": 1.5568527598718088e-06,
+        "start_ms": 1785400560000,
+        "trade_count": 228,
+        "volatility": 3.123140686131748e-05
+      },
+      "total_count": 39
+    },
+    {
+      "buy_count": 3,
+      "feature": {
+        "buy_count": 100,
+        "buy_ratio": 0.4032258064516129,
+        "closing_book_depth_imbalance": 0.05293855043134835,
+        "end_ms": 1785400920000,
+        "historical_aggressor_buy_share": 0.4032258064516129,
+        "sell_count": 148,
+        "signed_imbalance": 0.05293855043134835,
+        "spread": 1.555741034458886e-06,
+        "start_ms": 1785400620000,
+        "trade_count": 248,
+        "volatility": 2.8134508700869557e-05
+      },
+      "total_count": 11
+    },
+    {
+      "buy_count": 8,
+      "feature": {
+        "buy_count": 61,
+        "buy_ratio": 0.46564885496183206,
+        "closing_book_depth_imbalance": -0.526869801170904,
+        "end_ms": 1785401580000,
+        "historical_aggressor_buy_share": 0.46564885496183206,
+        "sell_count": 70,
+        "signed_imbalance": -0.526869801170904,
+        "spread": 1.5551724647384084e-06,
+        "start_ms": 1785401280000,
+        "trade_count": 131,
+        "volatility": 3.135656804316345e-05
+      },
+      "total_count": 21
+    },
+    {
+      "buy_count": 3,
+      "feature": {
+        "buy_count": 65,
+        "buy_ratio": 0.4676258992805755,
+        "closing_book_depth_imbalance": 0.08048252313817425,
+        "end_ms": 1785401640000,
+        "historical_aggressor_buy_share": 0.4676258992805755,
+        "sell_count": 74,
+        "signed_imbalance": 0.08048252313817425,
+        "spread": 1.55511200305424e-06,
+        "start_ms": 1785401340000,
+        "trade_count": 139,
+        "volatility": 3.568648363394814e-05
+      },
+      "total_count": 16
+    },
+    {
+      "buy_count": 4,
+      "feature": {
+        "buy_count": 56,
+        "buy_ratio": 0.40875912408759124,
+        "closing_book_depth_imbalance": 0.348558949341071,
+        "end_ms": 1785401700000,
+        "historical_aggressor_buy_share": 0.40875912408759124,
+        "sell_count": 81,
+        "signed_imbalance": 0.348558949341071,
+        "spread": 1.555196650728493e-06,
+        "start_ms": 1785401400000,
+        "trade_count": 137,
+        "volatility": 3.467054771023215e-05
+      },
+      "total_count": 39
+    },
+    {
+      "buy_count": 46,
+      "feature": {
+        "buy_count": 34,
+        "buy_ratio": 0.2463768115942029,
+        "closing_book_depth_imbalance": -0.1722458704961027,
+        "end_ms": 1785401760000,
+        "historical_aggressor_buy_share": 0.2463768115942029,
+        "sell_count": 104,
+        "signed_imbalance": -0.1722458704961027,
+        "spread": 1.555598248085253e-06,
+        "start_ms": 1785401460000,
+        "trade_count": 138,
+        "volatility": 3.33658661467538e-05
+      },
+      "total_count": 53
+    },
+    {
+      "buy_count": 7,
+      "feature": {
+        "buy_count": 64,
+        "buy_ratio": 0.423841059602649,
+        "closing_book_depth_imbalance": 0.3095974009966675,
+        "end_ms": 1785401820000,
+        "historical_aggressor_buy_share": 0.423841059602649,
+        "sell_count": 87,
+        "signed_imbalance": 0.3095974009966675,
+        "spread": 1.555225674909622e-06,
+        "start_ms": 1785401520000,
+        "trade_count": 151,
+        "volatility": 3.3575441384262266e-05
+      },
+      "total_count": 23
+    },
+    {
+      "buy_count": 19,
+      "feature": {
+        "buy_count": 68,
+        "buy_ratio": 0.4473684210526316,
+        "closing_book_depth_imbalance": 0.9567303965656011,
+        "end_ms": 1785401880000,
+        "historical_aggressor_buy_share": 0.4473684210526316,
+        "sell_count": 84,
+        "signed_imbalance": 0.9567303965656011,
+        "spread": 1.555269213212634e-06,
+        "start_ms": 1785401580000,
+        "trade_count": 152,
+        "volatility": 3.232106891404862e-05
+      },
+      "total_count": 23
+    },
+    {
+      "buy_count": 24,
+      "feature": {
+        "buy_count": 79,
+        "buy_ratio": 0.512987012987013,
+        "closing_book_depth_imbalance": -0.33604011902518915,
+        "end_ms": 1785401940000,
+        "historical_aggressor_buy_share": 0.512987012987013,
+        "sell_count": 75,
+        "signed_imbalance": -0.33604011902518915,
+        "spread": 1.5550176922137932e-06,
+        "start_ms": 1785401640000,
+        "trade_count": 154,
+        "volatility": 2.95985988837247e-05
+      },
+      "total_count": 42
+    },
+    {
+      "buy_count": 28,
+      "feature": {
+        "buy_count": 100,
+        "buy_ratio": 0.5555555555555556,
+        "closing_book_depth_imbalance": -0.36058308073170153,
+        "end_ms": 1785402000000,
+        "historical_aggressor_buy_share": 0.5555555555555556,
+        "sell_count": 80,
+        "signed_imbalance": -0.36058308073170153,
+        "spread": 1.5551434425432816e-06,
+        "start_ms": 1785401700000,
+        "trade_count": 180,
+        "volatility": 2.774566119544114e-05
+      },
+      "total_count": 41
+    },
+    {
+      "buy_count": 6,
+      "feature": {
+        "buy_count": 124,
+        "buy_ratio": 0.6813186813186813,
+        "closing_book_depth_imbalance": 0.25677417571405864,
+        "end_ms": 1785402060000,
+        "historical_aggressor_buy_share": 0.6813186813186813,
+        "sell_count": 58,
+        "signed_imbalance": 0.25677417571405864,
+        "spread": 1.5553877464997943e-06,
+        "start_ms": 1785401760000,
+        "trade_count": 182,
+        "volatility": 3.0078613709097456e-05
+      },
+      "total_count": 17
+    },
+    {
+      "buy_count": 8,
+      "feature": {
+        "buy_count": 84,
+        "buy_ratio": 0.5753424657534246,
+        "closing_book_depth_imbalance": -0.267397316953556,
+        "end_ms": 1785402120000,
+        "historical_aggressor_buy_share": 0.5753424657534246,
+        "sell_count": 62,
+        "signed_imbalance": -0.267397316953556,
+        "spread": 1.5548750385803368e-06,
+        "start_ms": 1785401820000,
+        "trade_count": 146,
+        "volatility": 3.803859021310549e-05
+      },
+      "total_count": 14
+    },
+    {
+      "buy_count": 15,
+      "feature": {
+        "buy_count": 85,
+        "buy_ratio": 0.6204379562043796,
+        "closing_book_depth_imbalance": 0.3725422345379855,
+        "end_ms": 1785402180000,
+        "historical_aggressor_buy_share": 0.6204379562043796,
+        "sell_count": 52,
+        "signed_imbalance": 0.3725422345379855,
+        "spread": 1.5550926563081944e-06,
+        "start_ms": 1785401880000,
+        "trade_count": 137,
+        "volatility": 3.751247836477544e-05
+      },
+      "total_count": 27
+    }
+  ],
+  "source": {
+    "capture_database": "runs/btcusdt-capture-dev-v3.sqlite3",
+    "integrity_validated": true,
+    "provider": "kucoin-sequenced",
+    "runs": [
+      {
+        "mode": "diagnostic",
+        "provider": "kucoin-sequenced",
+        "run_id": "btcusdt-capture-dev-v3"
+      }
+    ],
+    "symbol": "btcusdt"
+  }
+}

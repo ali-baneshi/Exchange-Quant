@@ -30,7 +30,7 @@ def _kucoin_timestamp_ms(value, fallback_ms: int) -> int:
 
 class KucoinSequencedProvider:
     name = "kucoin-sequenced"
-    adapter_revision = "kucoin-spot-sequenced-v1"
+    adapter_revision = "kucoin-spot-sequenced-v2"
     rest_endpoint = "https://api.kucoin.com"
 
     def __init__(
@@ -131,7 +131,12 @@ class KucoinSequencedProvider:
                         while not self._closed:
                             message = await queue.get()
                             received_ms = int(time.time() * 1000)
-                            if message.get("type") == "message":
+                            message_type = message.get("type")
+                            if message_type in {"provider_close", "provider_stream_end"}:
+                                if message_type == "provider_stream_end" and not self._closed:
+                                    raise OSError("KuCoin websocket stream ended")
+                                break
+                            if message_type == "message":
                                 self._last_event_received_ms = received_ms
                                 topic = message.get("topic", "")
                                 data = message.get("data") or {}
@@ -176,6 +181,28 @@ class KucoinSequencedProvider:
                 self._detail = f"{type(exc).__name__}: {exc}"
                 self._connected = False
                 self._reconnects += 1
+                if self._symbol and (
+                    self._trade_watermark_ms is not None or self._book_watermark_ms is not None
+                ):
+                    # Session break is the certifiable continuity defect once
+                    # trade sequences are known to be non-dense snowflake IDs.
+                    watermark = max(
+                        value
+                        for value in (self._trade_watermark_ms, self._book_watermark_ms)
+                        if value is not None
+                    )
+                    end_ms = max(watermark, int(time.time() * 1000))
+                    self._unresolved_gaps += 1
+                    self._record_gap(
+                        self._symbol,
+                        "trades",
+                        watermark,
+                        end_ms,
+                        complete=False,
+                        first_sequence=self._last_trade_sequence,
+                        last_sequence=self._last_trade_sequence,
+                        reasons=("websocket_reconnect",),
+                    )
                 if not self._closed:
                     await asyncio.sleep(
                         min(self._reconnect_backoff_cap_s, 2.0 ** min(self._reconnects, 5))
@@ -188,8 +215,20 @@ class KucoinSequencedProvider:
     async def close(self) -> None:
         self._closed = True
         self._connected = False
+        queue = self._queue
+        if queue is not None:
+            # Unblock events()/pump waiters so certification and runner shutdown
+            # cannot hang on queue.get() after the socket is closed.
+            try:
+                queue.put_nowait({"type": "provider_close"})
+            except Exception:  # noqa: BLE001
+                pass
         if self._socket is not None:
-            await self._socket.close()
+            try:
+                await asyncio.wait_for(self._socket.close(), timeout=5.0)
+            except Exception:  # noqa: BLE001
+                pass
+            self._socket = None
 
     def health(self) -> ProviderHealth:
         depth_ready = self._depth.synchronized
@@ -264,11 +303,18 @@ class KucoinSequencedProvider:
                     try:
                         await socket.send(json.dumps({"id": message.get("id"), "type": "pong"}))
                     except (ConnectionClosed, OSError):
-                        return
+                        break
                     continue
                 await queue.put(message)
         except ConnectionClosed:
-            return
+            pass
+        finally:
+            # Unblock events() so a silent WS drop reconnects instead of hanging
+            # until the runner stall watchdog.
+            try:
+                queue.put_nowait({"type": "provider_stream_end"})
+            except Exception:  # noqa: BLE001
+                pass
 
     async def _ping_loop(self, socket, interval_s: float) -> None:
         while True:
@@ -293,61 +339,15 @@ class KucoinSequencedProvider:
         session_id: str,
     ) -> list[TradeEvent]:
         sequence = int(payload["sequence"])
-        events: list[TradeEvent] = []
+        # KuCoin match/history "sequence" values are sparse matching-engine IDs
+        # (snowflake-like), not dense counters. Contiguity is NOT sequence+1;
+        # treat only duplicates / regressions as defects.
         if self._last_trade_sequence is not None and sequence <= self._last_trade_sequence:
             return []
         event = self._parse_trade(payload, symbol, received_ms, session_id)
-        if self._last_trade_sequence is not None and sequence > self._last_trade_sequence + 1:
-            self._sequence_gaps += 1
-            self._trade_sequence_gaps += 1
-            missing_from = self._last_trade_sequence + 1
-            missing_to = sequence - 1
-            recovered = await self._recover_trades(
-                symbol, missing_from, missing_to, received_ms, session_id
-            )
-            recovered_sequences = [int(item.sequence or -1) for item in recovered]
-            expected_sequences = list(range(missing_from, missing_to + 1))
-            if recovered_sequences != expected_sequences:
-                self._unresolved_gaps += 1
-                self._detail = f"unrecovered KuCoin trade sequence {missing_from}-{missing_to}"
-                self._record_gap(
-                    symbol,
-                    "trades",
-                    (
-                        self._trade_watermark_ms
-                        if self._trade_watermark_ms is not None
-                        else event.exchange_time_ms
-                    ),
-                    event.exchange_time_ms,
-                    complete=False,
-                    first_sequence=missing_from,
-                    last_sequence=missing_to,
-                    reasons=("unrecovered_trade_gap",),
-                )
-                if self._capture_hooks.record_recovery:
-                    self._capture_hooks.record_recovery(
-                        "trades",
-                        missing_from,
-                        missing_to,
-                        "failed",
-                        len(recovered),
-                        self._detail,
-                    )
-            else:
-                events.extend(recovered)
-                if self._capture_hooks.record_recovery:
-                    self._capture_hooks.record_recovery(
-                        "trades",
-                        missing_from,
-                        missing_to,
-                        "success",
-                        len(recovered),
-                        "",
-                    )
-        events.append(event)
         self._last_trade_sequence = sequence
         self._trade_watermark_ms = event.exchange_time_ms
-        return events
+        return [event]
 
     async def _recover_trades(
         self,

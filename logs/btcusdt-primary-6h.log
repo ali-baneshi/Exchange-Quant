@@ -1,0 +1,33 @@
+[exchange-q] START run=btcusdt-primary-20260731-055348-aebadd04 database=runs/btcusdt-primary-20260731-055348-aebadd04.sqlite3 artifact=artifacts/v8/btcusdt-born.json
+[exchange-q] EVIDENCE primary provider=kucoin-sequenced; labels scoreable only with proven capture continuity
+[exchange-q] STREAM state=no_data trades=0 books=0
+[exchange-q] PROVIDER connected=False reconnects=0 gaps=0 detail=-
+[exchange-q] EVENT type=run_status slot=- detail=running
+[exchange-q] EVENT type=run_status slot=- detail=stopped
+[exchange-q] FINAL status=stopped terminal=0 database=runs/btcusdt-primary-20260731-055348-aebadd04.sqlite3
+Exchange-Q primary run finished
+status:      stopped
+duration:    10s
+progress:    0
+scoreable:   0/360
+slot tally:  awaiting 0 | scoreable 0 | unscoreable 0 | skipped 0 | cancelled 0
+exclusions:  none yet
+integrity:   valid (0 errors)
+capture:     certified
+evidence:    unscoreable
+run ID:      btcusdt-primary-20260731-055348-aebadd04
+database:    runs/btcusdt-primary-20260731-055348-aebadd04.sqlite3
+artifact:    artifacts/v8/btcusdt-born.json
+
+VERDICT: NO COMPARATIVE EVIDENCE
+  mode=primary provider=kucoin-sequenced scoreable=0/0
+  why: no scoreable labels
+  Born vs classical: NOT COMPUTED (fail-closed)
+  next:
+    1) capture with kucoin-sequenced (diagnostic profile, provider override)
+    2) dataset build → fit --purpose primary
+    3) provider-certify → run --profile primary --study studies/btcusdt-primary.json
+    4) exchange-q report --database <primary-run.sqlite3> --run-id <primary-run-id>
+status cmd:  ./scripts/exchange-q status --database runs/btcusdt-primary-20260731-055348-aebadd04.sqlite3 --run-id btcusdt-primary-20260731-055348-aebadd04 --json
+analyze cmd: ./scripts/exchange-q analyze --database runs/btcusdt-primary-20260731-055348-aebadd04.sqlite3 --run-id btcusdt-primary-20260731-055348-aebadd04
+report cmd:  ./scripts/exchange-q report --database runs/btcusdt-primary-20260731-055348-aebadd04.sqlite3 --run-id btcusdt-primary-20260731-055348-aebadd04

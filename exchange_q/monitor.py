@@ -11,6 +11,7 @@ from typing import Any
 
 from exchange_q.artifacts import load_artifact
 from exchange_q.domain import TERMINAL_FORECAST_STATUSES, ForecastStatus
+from exchange_q.report import format_research_report, report_document_from_snapshot
 from exchange_q.store import V7Store
 
 TERMINAL_STATUS_NAMES = {status.value for status in TERMINAL_FORECAST_STATUSES}
@@ -79,8 +80,18 @@ class RunConsole:
         finally:
             if self.display == "dashboard":
                 self._leave_screen()
-                if final_snapshot is not None:
-                    print(format_final_summary(final_snapshot), flush=True)
+            if final_snapshot is not None:
+                analysis = None
+                try:
+                    from exchange_q.report import build_analysis_document
+
+                    analysis = build_analysis_document(self.store, self.run_id)
+                except Exception:  # noqa: BLE001 — final summary must still print
+                    analysis = None
+                print(
+                    format_final_summary(final_snapshot, analysis_document=analysis),
+                    flush=True,
+                )
 
     def _snapshot(self) -> dict[str, Any]:
         snapshot = monitor_snapshot(self.store, self.run_id)
@@ -630,7 +641,10 @@ def format_monitor_report(
     return "\n".join(_fit_line(line, width) for line in lines) + "\n"
 
 
-def format_final_summary(snapshot: dict[str, Any]) -> str:
+def format_final_summary(
+    snapshot: dict[str, Any],
+    analysis_document: dict[str, Any] | None = None,
+) -> str:
     elapsed_s = max(
         0,
         (snapshot["updated_at_ms"] - snapshot["created_at_ms"]) / 1000,
@@ -669,6 +683,14 @@ def format_final_summary(snapshot: dict[str, Any]) -> str:
     ]
     if mode == "diagnostic":
         lines.append("note:        diagnostic captured ratios are descriptive, not scored evidence")
+    report_document = analysis_document or report_document_from_snapshot(snapshot)
+    lines.append("")
+    lines.append(
+        format_research_report(
+            report_document,
+            database=None if database == "-" else database,
+        )
+    )
     if database != "-":
         lines.extend(
             [
@@ -678,6 +700,10 @@ def format_final_summary(snapshot: dict[str, Any]) -> str:
                 ),
                 (
                     "analyze cmd: ./scripts/exchange-q analyze "
+                    f"--database {database} --run-id {run_id}"
+                ),
+                (
+                    "report cmd:  ./scripts/exchange-q report "
                     f"--database {database} --run-id {run_id}"
                 ),
             ]

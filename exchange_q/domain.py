@@ -222,6 +222,11 @@ class FeatureWindow:
         record["closing_book_depth_imbalance"] = self.signed_imbalance
         return record
 
+    @classmethod
+    def from_record(cls, record: dict[str, Any]) -> "FeatureWindow":
+        fields = {field.name for field in cls.__dataclass_fields__.values()}  # type: ignore[attr-defined]
+        return cls(**{key: record[key] for key in fields if key in record})
+
 
 @dataclass(frozen=True)
 class Forecast:

@@ -2,7 +2,8 @@ import asyncio
 import json
 from argparse import Namespace
 
-from exchange_q.cli import _analysis_document, _doctor, _parser, _slot_summary
+from exchange_q.cli import _analysis_document, _doctor, _parser
+from exchange_q.report import _slot_summary
 from exchange_q.domain import ForecastStatus
 from exchange_q.providers.base import ProviderHealth
 from exchange_q.store import V7Store
@@ -68,7 +69,7 @@ def test_provider_certification_passes_when_soak_reaches_timeout(tmp_path, monke
 
     class StreamingProvider:
         name = "kucoin-sequenced"
-        adapter_revision = "kucoin-spot-sequenced-v1"
+        adapter_revision = "kucoin-spot-sequenced-v2"
 
         def __init__(self):
             self._closed = False
@@ -254,7 +255,7 @@ def _write_primary_study(tmp_path, *, target_eligible=5, artifact_path=None):
             {
                 "provider": "kucoin-sequenced",
                 "symbol": "btcusdt",
-                "adapter_revision": "kucoin-spot-sequenced-v1",
+                "adapter_revision": "kucoin-spot-sequenced-v2",
                 "valid": True,
                 "issued_at_ms": int(time.time() * 1000),
                 "replay_results": {"passed": True},
@@ -436,7 +437,7 @@ def test_primary_run_persists_validated_certification(tmp_path, monkeypatch):
         store.close()
     assert len(rows) == 1
     assert rows[0]["provider"] == "kucoin-sequenced"
-    assert rows[0]["adapter_revision"] == "kucoin-spot-sequenced-v1"
+    assert rows[0]["adapter_revision"] == "kucoin-spot-sequenced-v2"
     assert rows[0]["valid"] == 1
 
 
@@ -937,3 +938,70 @@ def test_dataset_build_refuses_uncertifiable_provider_capture(tmp_path):
                 str(tmp_path / "dataset.json"),
             ]
         )
+
+
+def test_report_command_prints_human_verdict_for_blocked_run(tmp_path, capsys):
+    from decimal import Decimal
+
+    from exchange_q import cli
+    from exchange_q.domain import FeatureWindow, Forecast, RunManifest, TradeEvent
+    from exchange_q.store import V7Store
+
+    database = tmp_path / "blocked.sqlite3"
+    store = V7Store(str(database))
+    try:
+        store.create_run(
+            RunManifest(
+                run_id="blocked-cli",
+                symbol="btcusdt",
+                provider="htx-ws",
+                model_artifact_hash="hash",
+                feature_policy="causal_trade_book_v1",
+                label_policy="half_open_streamed_trades_v1",
+                primary_metric="per_trade_negative_log_likelihood",
+                horizon_ms=1000,
+                lookback_ms=1000,
+                cadence_ms=1000,
+                minimum_label_trades=2,
+                target_eligible=1,
+                mode="diagnostic",
+                artifact_purpose="diagnostic_fixture",
+            )
+        )
+        store.schedule_slot("blocked-cli", 1000, 2000)
+        store.create_forecast(
+            "blocked-cli",
+            1000,
+            FeatureWindow(0, 1000, 2, 1, 1, 0.5, 0.0, 0.001, 0.0),
+            Forecast("model", 0.5, 0.5),
+            "hash",
+            observed_decision_ms=1000,
+        )
+        store.mark_coverage(
+            "htx-ws", "btcusdt", 1000, 2000, False, ("provider_coverage_not_certifiable",)
+        )
+        store.save_trade(
+            TradeEvent(
+                provider="htx-ws",
+                symbol="btcusdt",
+                exchange_trade_id="1",
+                exchange_time_ms=1000,
+                received_time_ms=1001,
+                aggressor_side="buy",
+                price=Decimal(100),
+                quantity=Decimal(1),
+            )
+        )
+        label = store.build_label("htx-ws", "btcusdt", 1000, 2000)
+        store.resolve_slot("blocked-cli", 1000, label, 2, observed_decision_ms=2000)
+        store.set_run_status("blocked-cli", "diagnostic_limit")
+    finally:
+        store.close()
+
+    exit_code = cli.main(
+        ["report", "--database", str(database), "--run-id", "blocked-cli"]
+    )
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "VERDICT: NO COMPARATIVE EVIDENCE" in output
+    assert "HTX cannot certify capture continuity" in output

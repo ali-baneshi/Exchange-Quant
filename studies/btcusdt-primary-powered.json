@@ -1,0 +1,21 @@
+{
+  "artifact": "artifacts/v8/btcusdt-born.json",
+  "provider": "kucoin-sequenced",
+  "provider_certification": "certifications/kucoin-btcusdt.json",
+  "symbol": "btcusdt",
+  "target_eligible": 11,
+  "primary_comparator": "regularized_logistic_v1",
+  "capture_policy": "kucoin_trade_depth_sequenced_v1",
+  "clock_policy": "exchange_clock_watermark_v1",
+  "eligibility_policy": "certified_continuity_v1",
+  "power": {
+    "source_run_id": "btcusdt-primary-20260731-045724-ce2611b9",
+    "mean_difference": -0.25591179858238045,
+    "standard_deviation": 0.243914488189439,
+    "autocorrelation": 0.3,
+    "alpha": 0.05,
+    "power": 0.8,
+    "required_sample_size": 11,
+    "command": "./scripts/exchange-q power --mean-difference -0.25591179858238045 --standard-deviation 0.243914488189439 --autocorrelation 0.3 --alpha 0.05 --power 0.8"
+  }
+}

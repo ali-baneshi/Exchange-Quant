@@ -1,0 +1,78 @@
+[exchange-q] START run=btcusdt-primary-20260731-045724-ce2611b9 database=runs/btcusdt-primary-20260731-045724-ce2611b9.sqlite3 artifact=artifacts/v8/btcusdt-born.json
+[exchange-q] EVIDENCE primary provider=kucoin-sequenced; labels scoreable only with proven capture continuity
+[exchange-q] STREAM state=no_data trades=0 books=0
+[exchange-q] PROVIDER connected=False reconnects=0 gaps=0 detail=-
+[exchange-q] EVENT type=run_status slot=- detail=running
+[exchange-q] STREAM state=active trades=4 books=3740
+[exchange-q] PROVIDER connected=True reconnects=0 gaps=0 detail=-
+[exchange-q] EVENT type=slot_scheduled slot=1785461280000 detail={"end_ms": 1785461340000}
+[exchange-q] EVENT type=forecast_transition slot=1785461280000 detail=scheduled -> forecasted
+[exchange-q] EVENT type=forecast_transition slot=1785461280000 detail=forecasted -> awaiting_label
+[exchange-q] EVENT type=forecast_transition slot=1785461280000 detail=awaiting_label -> resolved_unscoreable
+[exchange-q] EVENT type=slot_scheduled slot=1785461340000 detail={"end_ms": 1785461400000}
+[exchange-q] EVENT type=forecast_transition slot=1785461340000 detail=scheduled -> forecasted
+[exchange-q] EVENT type=forecast_transition slot=1785461340000 detail=forecasted -> awaiting_label
+[exchange-q] EVENT type=forecast_transition slot=1785461340000 detail=awaiting_label -> resolved_unscoreable
+[exchange-q] EVENT type=slot_scheduled slot=1785461400000 detail={"end_ms": 1785461460000}
+[exchange-q] EVENT type=forecast_transition slot=1785461400000 detail=scheduled -> forecasted
+[exchange-q] EVENT type=forecast_transition slot=1785461400000 detail=forecasted -> awaiting_label
+[exchange-q] EVENT type=forecast_transition slot=1785461400000 detail=awaiting_label -> resolved_unscoreable
+[exchange-q] EVENT type=slot_scheduled slot=1785461460000 detail={"end_ms": 1785461520000}
+[exchange-q] EVENT type=forecast_transition slot=1785461460000 detail=scheduled -> forecasted
+[exchange-q] EVENT type=forecast_transition slot=1785461460000 detail=forecasted -> awaiting_label
+[exchange-q] EVENT type=forecast_transition slot=1785461460000 detail=awaiting_label -> resolved_scoreable
+[exchange-q] EVENT type=slot_scheduled slot=1785461520000 detail={"end_ms": 1785461580000}
+[exchange-q] EVENT type=forecast_transition slot=1785461520000 detail=scheduled -> forecasted
+[exchange-q] EVENT type=forecast_transition slot=1785461520000 detail=forecasted -> awaiting_label
+[exchange-q] EVENT type=forecast_transition slot=1785461520000 detail=awaiting_label -> resolved_scoreable
+[exchange-q] EVENT type=slot_scheduled slot=1785461580000 detail={"end_ms": 1785461640000}
+[exchange-q] EVENT type=forecast_transition slot=1785461580000 detail=scheduled -> forecasted
+[exchange-q] EVENT type=forecast_transition slot=1785461580000 detail=forecasted -> awaiting_label
+[exchange-q] EVENT type=forecast_transition slot=1785461580000 detail=awaiting_label -> resolved_unscoreable
+[exchange-q] EVENT type=slot_scheduled slot=1785461640000 detail={"end_ms": 1785461700000}
+[exchange-q] EVENT type=forecast_transition slot=1785461640000 detail=scheduled -> forecasted
+[exchange-q] EVENT type=forecast_transition slot=1785461640000 detail=forecasted -> awaiting_label
+[exchange-q] EVENT type=forecast_transition slot=1785461640000 detail=awaiting_label -> resolved_unscoreable
+[exchange-q] EVENT type=slot_scheduled slot=1785461700000 detail={"end_ms": 1785461760000}
+[exchange-q] EVENT type=forecast_transition slot=1785461700000 detail=scheduled -> forecasted
+[exchange-q] EVENT type=forecast_transition slot=1785461700000 detail=forecasted -> awaiting_label
+[exchange-q] EVENT type=forecast_transition slot=1785461700000 detail=awaiting_label -> resolved_scoreable
+[exchange-q] EVENT type=slot_scheduled slot=1785461760000 detail={"end_ms": 1785461820000}
+[exchange-q] EVENT type=forecast_transition slot=1785461760000 detail=scheduled -> forecasted
+[exchange-q] EVENT type=forecast_transition slot=1785461760000 detail=forecasted -> awaiting_label
+[exchange-q] EVENT type=forecast_transition slot=1785461760000 detail=awaiting_label -> resolved_scoreable
+[exchange-q] EVENT type=slot_scheduled slot=1785461820000 detail={"end_ms": 1785461880000}
+[exchange-q] EVENT type=forecast_transition slot=1785461820000 detail=scheduled -> forecasted
+[exchange-q] EVENT type=forecast_transition slot=1785461820000 detail=forecasted -> awaiting_label
+[exchange-q] PROVIDER connected=False reconnects=0 gaps=0 detail=-
+[exchange-q] EVENT type=forecast_transition slot=1785461820000 detail=awaiting_label -> resolved_scoreable
+[exchange-q] EVENT type=run_status slot=- detail=completed
+[exchange-q] FINAL status=completed terminal=10 database=runs/btcusdt-primary-20260731-045724-ce2611b9.sqlite3
+Exchange-Q primary run finished
+status:      completed
+duration:    10m 50s
+progress:    10
+scoreable:   5/5
+slot tally:  awaiting 0 | scoreable 5 | unscoreable 5 | skipped 0 | cancelled 0
+exclusions:  insufficient_label_trades=5
+integrity:   valid (0 errors)
+capture:     certified
+evidence:    scoreable
+run ID:      btcusdt-primary-20260731-045724-ce2611b9
+database:    runs/btcusdt-primary-20260731-045724-ce2611b9.sqlite3
+artifact:    artifacts/v8/btcusdt-born.json
+
+VERDICT: COMPARATIVE EVIDENCE AVAILABLE (n=5)
+  mode=primary provider=kucoin-sequenced scoreable=5/10
+  model (Born) NLL=0.823  Brier=0.17238  MAE=0.400606
+  baselines:
+    development_prior_v1  NLL=0.774953  Brier=0.139827  ΔNLL=0.0480466
+    flow_persistence_v1  NLL=0.497385  Brier=0.0483093  ΔNLL=0.325615
+    regularized_logistic_v1  NLL=1.16077  Brier=0.283899  ΔNLL=-0.337767
+  paired vs primary_comparator (regularized_logistic_v1):
+    HAC one-sided p=0.00948672  mean_Δ=-0.255912
+    block bootstrap p=0  block_length=2
+  calibration: uncalibrated (available=False)
+status cmd:  ./scripts/exchange-q status --database runs/btcusdt-primary-20260731-045724-ce2611b9.sqlite3 --run-id btcusdt-primary-20260731-045724-ce2611b9 --json
+analyze cmd: ./scripts/exchange-q analyze --database runs/btcusdt-primary-20260731-045724-ce2611b9.sqlite3 --run-id btcusdt-primary-20260731-045724-ce2611b9
+report cmd:  ./scripts/exchange-q report --database runs/btcusdt-primary-20260731-045724-ce2611b9.sqlite3 --run-id btcusdt-primary-20260731-045724-ce2611b9

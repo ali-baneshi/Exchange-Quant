@@ -145,8 +145,18 @@ class BinanceSequencedProvider:
     async def close(self) -> None:
         self._closed = True
         self._connected = False
+        queue = self._queue
+        if queue is not None:
+            try:
+                queue.put_nowait({"type": "provider_close"})
+            except Exception:  # noqa: BLE001
+                pass
         if self._socket is not None:
-            await self._socket.close()
+            try:
+                await asyncio.wait_for(self._socket.close(), timeout=5.0)
+            except Exception:  # noqa: BLE001
+                pass
+            self._socket = None
 
     def health(self) -> ProviderHealth:
         depth_ready = self._depth.synchronized

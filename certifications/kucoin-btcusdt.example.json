@@ -1,5 +1,5 @@
 {
-  "adapter_revision": "kucoin-spot-sequenced-v1",
+  "adapter_revision": "kucoin-spot-sequenced-v2",
   "certification_id": "example-invalid",
   "clock_uncertainty_ms": null,
   "fault_results": {

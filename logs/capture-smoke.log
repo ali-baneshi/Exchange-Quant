@@ -1,0 +1,43 @@
+[exchange-q] START run=btcusdt-capture-smoke database=runs/btcusdt-capture-smoke.sqlite3 artifact=artifacts/v8/diagnostic-born.json
+[exchange-q] EVIDENCE diagnostic-only provider=kucoin-sequenced; not a preregistered primary record
+[exchange-q] STREAM state=no_data trades=0 books=0
+[exchange-q] PROVIDER connected=False reconnects=0 gaps=0 detail=-
+[exchange-q] EVENT type=run_status slot=- detail=running
+[exchange-q] PROVIDER connected=True reconnects=0 gaps=0 detail=-
+[exchange-q] STREAM state=active trades=0 books=555
+[exchange-q] EVENT type=slot_scheduled slot=1785397620000 detail={"end_ms": 1785397680000}
+[exchange-q] EVENT type=forecast_transition slot=1785397620000 detail=scheduled -> forecasted
+[exchange-q] EVENT type=forecast_transition slot=1785397620000 detail=forecasted -> awaiting_label
+[exchange-q] PROVIDER connected=False reconnects=0 gaps=0 detail=-
+[exchange-q] EVENT type=forecast_transition slot=1785397620000 detail=awaiting_label -> cancelled
+[exchange-q] EVENT type=run_status slot=- detail=stopped
+[exchange-q] FINAL status=stopped terminal=1/3 database=runs/btcusdt-capture-smoke.sqlite3
+Exchange-Q diagnostic run finished
+status:      stopped
+duration:    48s
+progress:    1/3
+scoreable:   0/100
+slot tally:  awaiting 0 | scoreable 0 | unscoreable 0 | skipped 0 | cancelled 1
+exclusions:  operator_stop_before_slot_completion=1
+integrity:   valid (0 errors)
+capture:     uncertified
+evidence:    diagnostic
+run ID:      btcusdt-capture-smoke
+database:    runs/btcusdt-capture-smoke.sqlite3
+artifact:    artifacts/v8/diagnostic-born.json
+note:        diagnostic captured ratios are descriptive, not scored evidence
+
+VERDICT: NO COMPARATIVE EVIDENCE
+  mode=diagnostic provider=kucoin-sequenced scoreable=0/1
+  why: no scoreable labels
+       exclusions: operator_stop_before_slot_completion=1
+       capture_quality=uncertified (not a primary record)
+  Born vs classical: NOT COMPUTED (fail-closed)
+  next:
+    1) capture with kucoin-sequenced (diagnostic profile, provider override)
+    2) dataset build → fit --purpose primary
+    3) provider-certify → run --profile primary --study studies/btcusdt-primary.json
+    4) exchange-q report --database <primary-run.sqlite3> --run-id <primary-run-id>
+status cmd:  ./scripts/exchange-q status --database runs/btcusdt-capture-smoke.sqlite3 --run-id btcusdt-capture-smoke --json
+analyze cmd: ./scripts/exchange-q analyze --database runs/btcusdt-capture-smoke.sqlite3 --run-id btcusdt-capture-smoke
+report cmd:  ./scripts/exchange-q report --database runs/btcusdt-capture-smoke.sqlite3 --run-id btcusdt-capture-smoke

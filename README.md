@@ -52,12 +52,16 @@ Advanced commands:
 ./scripts/exchange-q status --database runs/RUN_ID.sqlite3 --run-id RUN_ID
 ./scripts/exchange-q stop --database runs/example.sqlite3 --run-id RUN_ID
 ./scripts/exchange-q analyze --database runs/example.sqlite3 --run-id RUN_ID
+./scripts/exchange-q report --database runs/example.sqlite3 --run-id RUN_ID
 ./scripts/exchange-q export \
   --database runs/example.sqlite3 \
   --run-id RUN_ID \
   --output artifacts/v8/RUN_ID.json
 ```
 
+`report` prints a researcher-readable Born vs classical verdict (or explains why
+comparative evidence is unavailable). `analyze --human` prints the same verdict
+after the JSON payload.
 The run dashboard always identifies the generated database and run ID.
 
 `fit` expects a JSON list containing `feature`, `buy_count`, and `total_count`.

@@ -19,6 +19,8 @@ def test_final_summary_is_mode_aware(tmp_path):
         assert "not scored evidence" in summary
         assert "--database runs/monitor-run.sqlite3" in summary
         assert "--run-id monitor-run" in summary
+        assert "VERDICT:" in summary
+        assert "report cmd:" in summary
     finally:
         store.close()
 

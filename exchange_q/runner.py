@@ -182,12 +182,11 @@ class LiveRunner:
                     with self.store.transaction():
                         self.store.save_book(event)
                         self._checkpoint_event(event, "books")
-                scheduling_time_ms = (
-                    event.exchange_time_ms
-                    if self.manifest.mode == "primary"
-                    else max(event.exchange_time_ms, event.received_time_ms)
-                )
-                await self._advance(scheduling_time_ms)
+                # Exchange-clock watermark only. Advancing on received time in
+                # diagnostic mode resolved labels before late exchange-time
+                # trades arrived, creating retroactive_label_trade gaps that
+                # poisoned capture databases used for dataset build.
+                await self._advance(event.exchange_time_ms)
                 self._events_since_status_check += 1
                 if (
                     self._work_since_status_check

@@ -1,0 +1,45 @@
+[exchange-q] START run=btcusdt-capture-dev-v4 database=runs/btcusdt-capture-dev-v4.sqlite3 artifact=artifacts/v8/diagnostic-born.json
+[exchange-q] EVIDENCE diagnostic-only provider=kucoin-sequenced; not a preregistered primary record
+[exchange-q] STREAM state=no_data trades=0 books=0
+[exchange-q] PROVIDER connected=False reconnects=0 gaps=0 detail=-
+[exchange-q] EVENT type=run_status slot=- detail=running
+[exchange-q] STREAM state=active trades=13 books=4813
+[exchange-q] PROVIDER connected=True reconnects=0 gaps=0 detail=-
+[exchange-q] EVENT type=slot_scheduled slot=1785462420000 detail={"end_ms": 1785462480000}
+[exchange-q] EVENT type=forecast_transition slot=1785462420000 detail=scheduled -> forecasted
+[exchange-q] EVENT type=forecast_transition slot=1785462420000 detail=forecasted -> awaiting_label
+[exchange-q] EVENT type=forecast_transition slot=1785462420000 detail=awaiting_label -> resolved_scoreable
+[exchange-q] EVENT type=slot_scheduled slot=1785462480000 detail={"end_ms": 1785462540000}
+[exchange-q] EVENT type=forecast_transition slot=1785462480000 detail=scheduled -> forecasted
+[exchange-q] EVENT type=forecast_transition slot=1785462480000 detail=forecasted -> awaiting_label
+[exchange-q] PROVIDER connected=False reconnects=1 gaps=0 detail=OSError: KuCoin websocket stream ended
+[exchange-q] EVENT type=forecast_transition slot=1785462480000 detail=awaiting_label -> cancelled
+[exchange-q] EVENT type=run_status slot=- detail=stopped
+[exchange-q] FINAL status=stopped terminal=2/90 database=runs/btcusdt-capture-dev-v4.sqlite3
+Exchange-Q diagnostic run finished
+status:      stopped
+duration:    4m 11s
+progress:    2/90
+scoreable:   1/1000
+slot tally:  awaiting 0 | scoreable 1 | unscoreable 0 | skipped 0 | cancelled 1
+exclusions:  provider_stream_exhausted_before_slot_completion=1
+integrity:   valid (0 errors)
+capture:     uncertified
+evidence:    diagnostic
+run ID:      btcusdt-capture-dev-v4
+database:    runs/btcusdt-capture-dev-v4.sqlite3
+artifact:    artifacts/v8/diagnostic-born.json
+note:        diagnostic captured ratios are descriptive, not scored evidence
+
+VERDICT: COMPARATIVE EVIDENCE AVAILABLE (n=1)
+  mode=diagnostic provider=kucoin-sequenced scoreable=1/2
+  model (Born) NLL=0.469102  Brier=0.00767849  MAE=0.087627
+  baselines:
+    development_prior_v1  NLL=0.693147  Brier=0.112682  ΔNLL=-0.224045
+    flow_persistence_v1  NLL=0.461273  Brier=0.00318159  ΔNLL=0.0078297
+    regularized_logistic_v1  NLL=0.4629  Brier=0.00538418  ΔNLL=0.00620248
+  paired inference: unavailable (requires at least three scoreable labels)
+  calibration: uncalibrated (available=False)
+status cmd:  ./scripts/exchange-q status --database runs/btcusdt-capture-dev-v4.sqlite3 --run-id btcusdt-capture-dev-v4 --json
+analyze cmd: ./scripts/exchange-q analyze --database runs/btcusdt-capture-dev-v4.sqlite3 --run-id btcusdt-capture-dev-v4
+report cmd:  ./scripts/exchange-q report --database runs/btcusdt-capture-dev-v4.sqlite3 --run-id btcusdt-capture-dev-v4

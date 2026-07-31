@@ -15,20 +15,17 @@ from dataclasses import dataclass, replace
 
 from exchange_q.analysis import (
     calibration_parameters,
-    paired_block_bootstrap_test,
-    paired_hac_test,
     required_sample_size,
-    score_baselines,
-    score_rows,
 )
 from exchange_q.artifacts import load_artifact, save_artifact
 from exchange_q.certification import run_fault_certification, run_replay_certification
-from exchange_q.domain import SCOREABLE_STATUSES, FeatureWindow, ForecastStatus, RunManifest
+from exchange_q.domain import FeatureWindow, RunManifest
 from exchange_q.models import NormalizedBornModel
 from exchange_q.monitor import RunConsole
 from exchange_q.providers.binance_ws import BinanceSequencedProvider
 from exchange_q.providers.htx_ws import HtxWebSocketProvider
 from exchange_q.providers.kucoin_ws import KucoinSequencedProvider
+from exchange_q.report import build_analysis_document, format_research_report
 from exchange_q.runner import LiveRunner
 from exchange_q.store import V7Store
 
@@ -136,6 +133,23 @@ def _parser() -> argparse.ArgumentParser:
     analyze = subparsers.add_parser("analyze", help="score eligible schema-v8 forecasts")
     analyze.add_argument("--database", required=True)
     analyze.add_argument("--run-id", required=True)
+    analyze.add_argument(
+        "--human",
+        action="store_true",
+        help="print a researcher-readable Born vs classical verdict after the JSON",
+    )
+
+    report = subparsers.add_parser(
+        "report",
+        help="print a researcher-readable Born vs classical evidence verdict",
+    )
+    report.add_argument("--database", required=True)
+    report.add_argument("--run-id", required=True)
+    report.add_argument(
+        "--json",
+        action="store_true",
+        help="also print the underlying analysis JSON after the human report",
+    )
 
     stop = subparsers.add_parser("stop", help="stop the repository-owned run writer")
     stop.add_argument("--database", required=True)
@@ -249,14 +263,18 @@ def main(argv=None) -> int:
         if args.command == "analyze":
             # allow_nan=False: non-finite scores must fail loudly instead of
             # emitting non-standard JSON (Infinity) into the analysis record.
-            print(
-                json.dumps(
-                    _analysis_document(store, args.run_id),
-                    indent=2,
-                    sort_keys=True,
-                    allow_nan=False,
-                )
-            )
+            document = _analysis_document(store, args.run_id)
+            print(json.dumps(document, indent=2, sort_keys=True, allow_nan=False))
+            if args.human:
+                print()
+                print(format_research_report(document, database=args.database))
+            return 0
+        if args.command == "report":
+            document = _analysis_document(store, args.run_id)
+            print(format_research_report(document, database=args.database))
+            if args.json:
+                print()
+                print(json.dumps(document, indent=2, sort_keys=True, allow_nan=False))
             return 0
         if args.command == "export":
             document = store.export_run(args.run_id)
@@ -458,7 +476,7 @@ def _fit_artifact(
         fit_rows = rows[:split_index]
         calibration_rows = len(rows) - split_index
     artifact = model.fit(
-        [FeatureWindow(**row["feature"]) for row in fit_rows],
+        [FeatureWindow.from_record(row["feature"]) for row in fit_rows],
         [int(row["buy_count"]) for row in fit_rows],
         [int(row["total_count"]) for row in fit_rows],
         purpose=purpose,
@@ -471,7 +489,7 @@ def _fit_artifact(
         raw_probabilities = []
         for row in calibration_split:
             probability, _ = NormalizedBornModel._raw_probability(
-                FeatureWindow(**row["feature"]), artifact.parameters
+                FeatureWindow.from_record(row["feature"]), artifact.parameters
             )
             raw_probabilities.append(min(1.0 - 1e-9, max(1e-9, probability)))
         intercept, slope = calibration_parameters(
@@ -714,8 +732,8 @@ async def _certify_provider(parser, args) -> int:
         if not task.done():
             task.cancel()
         try:
-            await task
-        except asyncio.CancelledError:
+            await asyncio.wait_for(task, timeout=10.0)
+        except (asyncio.TimeoutError, asyncio.CancelledError):
             pass
         except Exception as exc:
             collection_error = f"{type(exc).__name__}: {exc}"
@@ -770,8 +788,6 @@ def _build_dataset(parser, args) -> int:
     try:
         if store.schema_version < 8:
             parser.error("dataset build requires a schema-v8 capture database")
-        if store.unresolved_gap_count(args.provider, args.symbol.lower()) > 0:
-            parser.error("capture database contains unresolved continuity gaps")
         provenance_runs = []
         for run_row in store.connection.execute(
             "SELECT run_id, manifest_json FROM runs ORDER BY created_at_ms"
@@ -784,10 +800,18 @@ def _build_dataset(parser, args) -> int:
                     f"{run_provider}, which cannot certify capture continuity"
                 )
             integrity = store.run_integrity(run_row["run_id"])
-            if not integrity["valid"]:
+            # Forecast-slot label drift from late exchange-time trades does not
+            # invalidate offline recounting from the trades table. Other
+            # integrity failures still quarantine the capture.
+            blocking_codes = {
+                code
+                for code in integrity.get("error_codes", {})
+                if code != "label_trade_count_mismatch"
+            }
+            if blocking_codes:
                 parser.error(
                     f"capture database run {run_row['run_id']} failed integrity "
-                    f"({', '.join(sorted(integrity['error_codes']))}); "
+                    f"({', '.join(sorted(blocking_codes))}); "
                     "refusing to build a certified dataset from a quarantined capture"
                 )
             provenance_runs.append(
@@ -814,10 +838,20 @@ def _build_dataset(parser, args) -> int:
             target_end = target_start + args.horizon_s * 1000
             if target_end > end:
                 break
+            feature_start = target_start - args.lookback_s * 1000
+            # Skip windows that overlap unresolved continuity gaps rather than
+            # rejecting the entire capture for a localized defect.
+            if store.interval_has_unresolved_gap(
+                args.provider,
+                args.symbol.lower(),
+                feature_start,
+                target_end,
+            ):
+                continue
             features = store.build_features(
                 args.provider,
                 args.symbol.lower(),
-                target_start - args.lookback_s * 1000,
+                feature_start,
                 target_start,
             )
             label = store.build_label(
@@ -879,121 +913,8 @@ def _build_dataset(parser, args) -> int:
         store.close()
 
 
-def _slot_summary(counts: dict[str, int]) -> dict[str, int]:
-    scoreable = sum(counts.get(status.value, 0) for status in SCOREABLE_STATUSES)
-    unscoreable = counts.get(ForecastStatus.RESOLVED_UNSCOREABLE.value, 0) + counts.get(
-        ForecastStatus.RESOLVED_INELIGIBLE.value, 0
-    )
-    return {
-        "total": sum(counts.values()),
-        "scoreable": scoreable,
-        "unscoreable": unscoreable,
-        "skipped": counts.get(ForecastStatus.SKIPPED.value, 0),
-        "cancelled": counts.get(ForecastStatus.CANCELLED.value, 0),
-        "failed": counts.get(ForecastStatus.FAILED.value, 0),
-    }
-
-
 def _analysis_document(store: V7Store, run_id: str) -> dict:
-    status = store.status(run_id)
-    counts = status["forecast_counts"]
-    exclusions = {}
-    for row in store.connection.execute(
-        "SELECT exclusion_json FROM forecast_slots WHERE run_id=?",
-        (run_id,),
-    ):
-        for reason in json.loads(row["exclusion_json"]):
-            exclusions[reason] = exclusions.get(reason, 0) + 1
-    summary = _slot_summary(counts)
-    document = {
-        "run_id": run_id,
-        "schema_version": store.schema_version,
-        "status": status["status"],
-        "integrity": status["integrity"],
-        "evidence": status.get("evidence", {}),
-        "slot_counts": counts,
-        "slot_summary": summary,
-        "exclusions": exclusions,
-        "analysis_available": False,
-    }
-    try:
-        rows = store.eligible_rows(run_id)
-    except ValueError as exc:
-        document["reason"] = str(exc)
-        return document
-    if not rows:
-        document["reason"] = "no scoreable labels"
-        return document
-    calibration_statuses = {
-        row["forecast"].get("diagnostics", {}).get("calibration_status", "unknown") for row in rows
-    }
-    calibration_status = (
-        next(iter(calibration_statuses)) if len(calibration_statuses) == 1 else "mixed"
-    )
-    report = score_rows(rows)
-    baselines = score_baselines(rows)
-    document.update(
-        {
-            "analysis_available": True,
-            "calibration_status": calibration_status,
-            "calibration_available": calibration_status == "fitted",
-            "model": report.__dict__,
-            "baselines": {name: baseline.__dict__ for name, baseline in baselines.items()},
-        }
-    )
-    if len(rows) >= 3 and baselines:
-        baseline_name = status["manifest"].get("primary_comparator", "regularized_logistic_v1")
-        if baseline_name not in baselines:
-            document["reason"] = f"primary comparator is unavailable: {baseline_name}"
-            return document
-        import numpy as np
-        from scipy.special import xlogy
-
-        def _losses(probabilities):
-            buy_counts = np.array([row["label"]["buy_count"] for row in rows], dtype=float)
-            total_counts = np.array([row["label"]["trade_count"] for row in rows], dtype=float)
-            return (
-                -(
-                    xlogy(buy_counts, probabilities)
-                    + xlogy(total_counts - buy_counts, 1.0 - probabilities)
-                )
-                / total_counts
-            )
-
-        model_probs = np.array([row["forecast"]["probability_buy"] for row in rows], dtype=float)
-        baseline_probs = np.array(
-            [
-                row["forecast"]["diagnostics"]["baseline_probabilities"][baseline_name]
-                for row in rows
-            ],
-            dtype=float,
-        )
-        baseline_losses = _losses(baseline_probs).tolist()
-        model_losses = _losses(model_probs).tolist()
-        default_lags = max(1, int(len(rows) ** (1 / 3)))
-        sensitivity_lags = sorted(
-            {1, default_lags, min(2 * default_lags, len(rows) - 1)}
-        )
-        document["paired_inference"] = {
-            "baseline": baseline_name,
-            "hac": paired_hac_test(baseline_losses, model_losses),
-            "block_bootstrap": paired_block_bootstrap_test(baseline_losses, model_losses),
-            "lag_sensitivity": [
-                {
-                    "max_lags": lags,
-                    "one_sided_p_value": paired_hac_test(
-                        baseline_losses, model_losses, max_lags=lags
-                    )["one_sided_p_value"],
-                }
-                for lags in sensitivity_lags
-            ],
-        }
-    else:
-        document["paired_inference"] = {
-            "available": False,
-            "reason": "requires at least three scoreable labels",
-        }
-    return document
+    return build_analysis_document(store, run_id)
 
 
 def _format_status(document: dict, schema_version: int) -> str:
