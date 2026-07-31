@@ -111,7 +111,23 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument("--lookback-s", type=int)
     run.add_argument("--cadence-s", type=int)
     run.add_argument("--minimum-label-trades", type=int)
-    run.add_argument("--target-eligible", type=int)
+    run.add_argument(
+        "--hours",
+        type=float,
+        help=(
+            "approximate soak length in hours; sets --target-eligible to "
+            "int(hours * 60) for 60s-cadence studies unless --target-eligible "
+            "is also provided (explicit --target-eligible always wins)"
+        ),
+    )
+    run.add_argument(
+        "--target-eligible",
+        type=int,
+        help=(
+            "scoreable-slot target; when both --hours and --target-eligible "
+            "are set, --target-eligible wins"
+        ),
+    )
     run.add_argument(
         "--max-terminal-slots",
         type=int,
@@ -336,13 +352,20 @@ def _run_command(parser: argparse.ArgumentParser, args) -> int:
         if artifact.purpose != "primary":
             parser.error("primary runs reject diagnostic or unproven artifacts")
         certification = _validate_certification(parser, study, profile)
-    target_eligible = _value_or_default(args.target_eligible, study.get("target_eligible"))
+    if args.hours is not None and args.hours <= 0:
+        parser.error("--hours must be positive")
+    if args.target_eligible is not None:
+        target_eligible = args.target_eligible
+    elif args.hours is not None:
+        target_eligible = int(args.hours * 60)
+    else:
+        target_eligible = study.get("target_eligible")
     if target_eligible is None:
         target_eligible = profile.target_eligible
     if int(target_eligible) <= 0:
         parser.error(
             f"{args.profile} runs require a positive target_eligible "
-            "(set it in the study or pass --target-eligible)"
+            "(set it in the study or pass --target-eligible / --hours)"
         )
     manifest = RunManifest(
         run_id=run_id,
@@ -416,6 +439,7 @@ def _run_command(parser: argparse.ArgumentParser, args) -> int:
             display=args.display,
             refresh_s=args.refresh_s,
             view=args.view,
+            hours=args.hours,
         )
         asyncio.run(_run_foreground(runner, console))
         final_status = store.status(run_id)["status"]
@@ -432,8 +456,19 @@ async def _run_foreground(runner: LiveRunner, console: RunConsole) -> None:
         return_when=asyncio.FIRST_COMPLETED,
     )
     if console_task in done and not runner_task.done():
-        runner.stop()
-        await runner_task
+        # Console should only finish after the runner. If it crashed, keep the
+        # soak alive and wait for the runner (or an operator signal).
+        console_error = console_task.exception()
+        if console_error is not None:
+            print(
+                f"[exchange-q] console ended early ({type(console_error).__name__}: "
+                f"{console_error}); leaving runner active",
+                flush=True,
+            )
+            await runner_task
+        else:
+            runner.stop()
+            await runner_task
     if runner_task in done:
         await console_task
     for task in (runner_task, console_task):
@@ -442,6 +477,8 @@ async def _run_foreground(runner: LiveRunner, console: RunConsole) -> None:
         except Exception as exc:
             if task is runner_task:
                 print(f"[exchange-q] run ended with error: {exc}", flush=True)
+            elif task is console_task:
+                print(f"[exchange-q] console ended with error: {exc}", flush=True)
             else:
                 raise
 

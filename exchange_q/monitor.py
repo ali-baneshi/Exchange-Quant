@@ -29,6 +29,7 @@ class RunConsole:
         display: str = "auto",
         refresh_s: float = 2.0,
         view: str = "outcome",
+        hours: float | None = None,
     ):
         if refresh_s <= 0:
             raise ValueError("refresh interval must be positive")
@@ -39,6 +40,7 @@ class RunConsole:
         self.artifact_path = artifact_path
         self.refresh_s = refresh_s
         self.view = view
+        self.hours = hours
         try:
             artifact = load_artifact(artifact_path)
             self.artifact_summary = {
@@ -61,19 +63,35 @@ class RunConsole:
         self._started = False
         self._screen_active = False
 
+    def _print_start(self) -> None:
+        if self._started:
+            return
+        hours_part = f" hours={self.hours:g}" if self.hours is not None else ""
+        print(
+            f"[exchange-q] START run={self.run_id} "
+            f"database={self.database_path} artifact={self.artifact_path}"
+            f"{hours_part}; live monitor: this terminal (Ctrl+C stops)",
+            flush=True,
+        )
+        self._started = True
+
     async def watch(self, runner_task: asyncio.Task) -> None:
         final_snapshot: dict[str, Any] | None = None
         try:
+            self._print_start()
             if self.display == "dashboard":
                 self._enter_screen()
             while True:
-                previous = self._previous
-                snapshot = self._snapshot()
-                final_snapshot = snapshot
-                if self.display == "dashboard":
-                    self._render_dashboard(snapshot)
-                else:
-                    self._render_log(snapshot, previous)
+                try:
+                    previous = self._previous
+                    snapshot = self._snapshot()
+                    final_snapshot = snapshot
+                    if self.display == "dashboard":
+                        self._render_dashboard(snapshot)
+                    else:
+                        self._render_log(snapshot, previous)
+                except Exception as exc:  # noqa: BLE001 — never stop the run for UI errors
+                    print(f"[exchange-q] console refresh error: {exc}", flush=True)
                 if runner_task.done():
                     return
                 await asyncio.sleep(self.refresh_s)
@@ -142,13 +160,8 @@ class RunConsole:
         snapshot: dict[str, Any],
         previous: dict[str, Any] | None,
     ) -> None:
-        if not self._started:
-            print(
-                f"[exchange-q] START run={self.run_id} "
-                f"database={self.database_path} artifact={self.artifact_path}",
-                flush=True,
-            )
-            self._started = True
+        self._print_start()
+        if previous is None:
             manifest = snapshot.get("manifest") or {}
             provider_name = manifest.get("provider", "unknown")
             if manifest.get("mode") == "primary":
@@ -963,7 +976,9 @@ def _warning_line(snapshot: dict[str, Any], color: bool) -> str:
             f"{_integrity_label(name)}={count}" for name, count in integrity["error_codes"].items()
         )
         return f"WARN  {_style('RUN QUARANTINED', 'red', color)} | {codes}"
-    if provider.get("sequence_gaps", 0):
+    # Recovered sequence gaps (e.g. KuCoin depth resync that succeeded) must
+    # not paint a permanent red WARN; only unresolved continuity defects do.
+    if provider.get("unresolved_gaps", 0):
         return f"WARN  {_style('PROVIDER GAPS DETECTED', 'red', color)}"
     if snapshot["stream_state"] == "stale":
         return f"WARN  {_style('MARKET DATA IS STALE', 'red', color)}"

@@ -87,7 +87,7 @@ class BinanceSequencedProvider:
                 ) as socket:
                     self._socket = socket
                     self._connected = True
-                    queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+                    queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=4096)
                     self._queue = queue
                     pump = asyncio.create_task(self._pump(socket, queue))
                     try:
@@ -188,7 +188,11 @@ class BinanceSequencedProvider:
             async for raw_message in socket:
                 if isinstance(raw_message, bytes):
                     raw_message = raw_message.decode()
-                await queue.put(json.loads(raw_message))
+                # Never block the WS reader on a full queue (RAM blow-up).
+                try:
+                    queue.put_nowait(json.loads(raw_message))
+                except asyncio.QueueFull:
+                    continue
         except ConnectionClosed:
             return
 

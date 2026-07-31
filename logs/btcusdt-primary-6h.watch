@@ -1,0 +1,7 @@
+=== 2026-07-31T06:28:23+03:30 ===
+active
+[exchange-q] EVENT type=forecast_transition slot=1785466620000 detail=forecasted -> awaiting_label
+[exchange-q] EVENT type=forecast_transition slot=1785466620000 detail=awaiting_label -> resolved_unscoreable
+[exchange-q] EVENT type=slot_scheduled slot=1785466680000 detail={"end_ms": 1785466740000}
+[exchange-q] EVENT type=forecast_transition slot=1785466680000 detail=scheduled -> forecasted
+[exchange-q] EVENT type=forecast_transition slot=1785466680000 detail=forecasted -> awaiting_label

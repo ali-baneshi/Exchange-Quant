@@ -107,3 +107,20 @@ def test_startup_evidence_line_is_profile_aware(tmp_path, capsys):
     assert "EVIDENCE diagnostic-only provider=replay" in output
     assert "EVIDENCE primary provider=replay" in output
     assert "HTX coverage is not certifiable" not in output
+
+
+def test_warning_line_ignores_recovered_sequence_gaps():
+    from exchange_q.monitor import _warning_line
+
+    base = {
+        "integrity": {"valid": True, "error_codes": {}},
+        "stream_state": "active",
+        "manifest": {"provider": "kucoin-sequenced"},
+        "provider_health": {
+            "sequence_gaps": 1,
+            "unresolved_gaps": 0,
+        },
+    }
+    assert _warning_line(base, color=False) == ""
+    base["provider_health"]["unresolved_gaps"] = 1
+    assert "PROVIDER GAPS DETECTED" in _warning_line(base, color=False)

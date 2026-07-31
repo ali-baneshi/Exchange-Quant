@@ -198,6 +198,42 @@ def test_pump_handles_connection_closed():
     assert queue.empty()
 
 
+def test_offer_drops_instead_of_blocking():
+    provider = KucoinSequencedProvider()
+    queue: asyncio.Queue = asyncio.Queue(maxsize=1)
+    assert provider._offer(queue, {"type": "a"}) is True
+    assert provider._offer(queue, {"type": "b"}) is False
+    assert provider._dropped_queue_messages == 1
+    assert queue.qsize() == 1
+
+
+def test_depth_bootstrap_applies_buffered_updates_without_startup_gap():
+    provider = KucoinSequencedProvider()
+    provider._symbol = "btcusdt"
+    provider._depth_ready = False
+    provider._depth_bootstrap_buffer = [
+        {
+            "data": {
+                "sequenceStart": 101,
+                "sequenceEnd": 102,
+                "time": 1000,
+                "changes": {"bids": [["99", "2", "102"]], "asks": []},
+            },
+            "received_ms": 1000,
+        }
+    ]
+    provider._depth.load_snapshot(
+        {"sequence": 100, "bids": [["99", "1"]], "asks": [["101", "1"]]}
+    )
+    queue: asyncio.Queue = asyncio.Queue()
+    asyncio.run(provider._finish_depth_bootstrap(queue, "sess"))
+    assert provider._depth_ready is True
+    assert provider._sequence_gaps == 0
+    assert provider._unresolved_gaps == 0
+    assert provider._depth.last_sequence == 102
+    assert queue.get_nowait()["type"] == "book_ready"
+
+
 def test_events_reconnects_after_connection_closed(monkeypatch):
     attempts = {"count": 0}
 

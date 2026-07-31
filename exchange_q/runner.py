@@ -26,7 +26,8 @@ class LiveRunner:
     FIRST_EVENT_TIMEOUT_MS = 60_000
     STALL_TIMEOUT_MS = 120_000
     EVENT_POLL_TIMEOUT_S = 5.0
-    STATUS_CHECK_EVENT_INTERVAL = 20
+    STATUS_CHECK_EVENT_INTERVAL = 200
+    BOOK_CHECKPOINT_INTERVAL = 100
 
     def __init__(
         self,
@@ -50,6 +51,7 @@ class LiveRunner:
         self._capture_sessions: set[tuple[str, str]] = set()
         self._events_since_status_check = 0
         self._work_since_status_check = False
+        self._books_since_checkpoint = 0
         self._install_capture_hooks()
 
     def _install_capture_hooks(self) -> None:
@@ -131,16 +133,27 @@ class LiveRunner:
         stream_exhausted = False
         heartbeat_task = asyncio.create_task(self._heartbeat_loop())
         run_started_ms = int(time.time() * 1000)
+        next_event: asyncio.Task | None = None
         try:
             events = self.provider.events(self.manifest.symbol)
+            # wait_for() cancels its awaitable on timeout. Cancelling
+            # events.__anext__() destroys the async generator, so the next
+            # pull raises StopAsyncIteration and the soak dies after any
+            # quiet spell longer than EVENT_POLL_TIMEOUT_S. Shield a durable
+            # next-event task so timeouts only wake the stall watchdog.
+            next_event = asyncio.create_task(events.__anext__())
             while not self._stopping.is_set():
                 try:
                     event = await asyncio.wait_for(
-                        events.__anext__(),
+                        asyncio.shield(next_event),
                         timeout=self.EVENT_POLL_TIMEOUT_S,
                     )
                 except StopAsyncIteration:
-                    stream_exhausted = True
+                    # stop() closes the provider, which ends the generator.
+                    # Only treat a natural provider exit as stream exhaustion.
+                    if not self._stopping.is_set():
+                        stream_exhausted = True
+                    next_event = None
                     break
                 except asyncio.TimeoutError:
                     if self._stream_start_ms is None:
@@ -168,6 +181,7 @@ class LiveRunner:
                                 f"detail={health.detail or 'none'}"
                             )
                     continue
+                next_event = asyncio.create_task(events.__anext__())
                 if self._stream_start_ms is None:
                     self._stream_start_ms = event.exchange_time_ms
                 # Raw persistence is lossless: every accepted event is stored
@@ -181,7 +195,10 @@ class LiveRunner:
                 elif isinstance(event, BookEvent):
                     with self.store.transaction():
                         self.store.save_book(event)
-                        self._checkpoint_event(event, "books")
+                        self._books_since_checkpoint += 1
+                        if self._books_since_checkpoint >= self.BOOK_CHECKPOINT_INTERVAL:
+                            self._checkpoint_event(event, "books")
+                            self._books_since_checkpoint = 0
                 # Exchange-clock watermark only. Advancing on received time in
                 # diagnostic mode resolved labels before late exchange-time
                 # trades arrived, creating retroactive_label_trade gaps that
@@ -226,6 +243,12 @@ class LiveRunner:
             detail = f"{type(exc).__name__}: {exc}"
             raise
         finally:
+            if next_event is not None and not next_event.done():
+                next_event.cancel()
+                try:
+                    await next_event
+                except (asyncio.CancelledError, StopAsyncIteration):
+                    pass
             self._stopping.set()
             await self.provider.close()
             heartbeat_task.cancel()

@@ -306,6 +306,85 @@ def test_run_threads_study_target_eligible_into_manifest(tmp_path, monkeypatch):
     assert manifest["target_eligible"] == 7
 
 
+def test_run_hours_sets_target_eligible_for_60s_cadence(tmp_path, monkeypatch):
+    from exchange_q import cli
+
+    _patch_run_harness(monkeypatch, cli)
+    study = _write_primary_study(tmp_path, target_eligible=7)
+    database = tmp_path / "hours.sqlite3"
+    exit_code = cli.main(
+        [
+            "run",
+            "--profile",
+            "primary",
+            "--study",
+            str(study),
+            "--database",
+            str(database),
+            "--run-id",
+            "hours-target",
+            "--hours",
+            "6",
+        ]
+    )
+    assert exit_code == 0
+    store = V7Store(str(database))
+    try:
+        manifest = store.status("hours-target")["manifest"]
+    finally:
+        store.close()
+    assert manifest["target_eligible"] == 360
+
+
+def test_run_target_eligible_wins_over_hours(tmp_path, monkeypatch):
+    from exchange_q import cli
+
+    _patch_run_harness(monkeypatch, cli)
+    study = _write_primary_study(tmp_path, target_eligible=7)
+    database = tmp_path / "hours-override.sqlite3"
+    exit_code = cli.main(
+        [
+            "run",
+            "--profile",
+            "primary",
+            "--study",
+            str(study),
+            "--database",
+            str(database),
+            "--run-id",
+            "hours-override",
+            "--hours",
+            "6",
+            "--target-eligible",
+            "12",
+        ]
+    )
+    assert exit_code == 0
+    store = V7Store(str(database))
+    try:
+        manifest = store.status("hours-override")["manifest"]
+    finally:
+        store.close()
+    assert manifest["target_eligible"] == 12
+
+
+def test_parser_exposes_hours_help():
+    import argparse
+
+    from exchange_q import cli
+
+    parser = cli._parser()
+    run_parser = None
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            run_parser = action.choices["run"]
+            break
+    assert run_parser is not None
+    help_text = run_parser.format_help()
+    assert "--hours" in help_text
+    assert "always wins" in help_text
+
+
 def test_primary_run_requires_positive_target_eligible(tmp_path, monkeypatch):
     import pytest
 

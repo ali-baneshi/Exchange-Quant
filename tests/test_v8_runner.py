@@ -1,4 +1,5 @@
 import asyncio
+import time
 from decimal import Decimal
 
 from exchange_q.domain import BookEvent, RunManifest, TradeEvent
@@ -361,6 +362,69 @@ def test_mid_stream_stall_fails_run(tmp_path):
         with pytest.raises(RuntimeError, match="provider_stalled"):
             asyncio.run(runner.run())
         assert store.status(manifest.run_id)["status"] == "failed"
+    finally:
+        store.close()
+
+
+def test_event_poll_timeout_does_not_kill_async_generator(tmp_path):
+    """Regression: wait_for(__anext__) used to cancel the provider generator."""
+    from exchange_q.providers.base import ProviderHealth
+
+    class SlowGapProvider:
+        def __init__(self):
+            self._last_ms = int(time.time() * 1000)
+
+        def health(self):
+            return ProviderHealth(
+                connected=True,
+                last_event_received_ms=self._last_ms,
+                reconnects=0,
+                sequence_gaps=0,
+                coverage_certifiable=True,
+                clock_uncertainty_ms=5.0,
+            )
+
+        async def close(self):
+            return None
+
+        async def events(self, symbol):
+            self._last_ms = int(time.time() * 1000)
+            yield _book(100)
+            yield _trade("1", 200, "buy")
+            yield _trade("2", 300, "sell")
+            await asyncio.sleep(0.05)  # longer than EVENT_POLL_TIMEOUT_S
+            self._last_ms = int(time.time() * 1000)
+            yield _trade("3", 1100, "buy")
+            yield _trade("4", 1200, "sell")
+            yield _trade("5", 1999, "buy")
+            yield _trade("6", 2500, "sell")
+
+    model = NormalizedBornModel()
+    artifact = ModelArtifact(model.model_id, (0.0, 0.5, 1.0, 0.0, 1.0), 10)
+    manifest = RunManifest(
+        run_id="poll-gap-run",
+        symbol="btcusdt",
+        provider="replay",
+        model_artifact_hash=artifact.artifact_hash,
+        feature_policy="causal_trade_book_v1",
+        label_policy="half_open_streamed_trades_v1",
+        primary_metric="per_trade_negative_log_likelihood",
+        horizon_ms=1000,
+        lookback_ms=1000,
+        cadence_ms=1000,
+        minimum_label_trades=2,
+        target_eligible=1,
+    )
+    store = V7Store(str(tmp_path / "poll-gap.sqlite3"))
+    store.create_run(manifest)
+    try:
+        runner = LiveRunner(store, SlowGapProvider(), manifest, artifact)
+        runner.EVENT_POLL_TIMEOUT_S = 0.01
+        runner.STALL_TIMEOUT_MS = 60_000
+        asyncio.run(runner.run())
+        status = store.status(manifest.run_id)
+        assert status["status"] == "completed"
+        assert status["forecast_counts"].get("resolved_scoreable", 0) >= 1
     finally:
         store.close()
 

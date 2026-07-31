@@ -1,0 +1,13 @@
+[0;1;32m●[0m exchange-q-primary-6h.service - [systemd-run] /home/manjaruhp/Pictures/Autonomous-AI-june2026/Exchange-Q/scripts/exchange-q run --profile primary --view outcome --display log --study studies/btcusdt-primary-powered.json --target-eligible 360 --refresh-s 30
+     Loaded: loaded (]8;;file://alihpmanj/run/user/1000/systemd/transient/exchange-q-primary-6h.service\/run/user/1000/systemd/transient/exchange-q-primary-6h.service]8;;\; transient)
+  Transient: yes
+     Active: [0;1;32mactive (running)[0m since Fri 2026-07-31 06:12:53 +0330; 1s ago
+ Invocation: 63fe33afe3314e2aa100ab40dee2085f
+   Main PID: 415898 (python3)
+      Tasks: 32[0;38:5:245m (limit: 629145)[0m
+     Memory: 121.7M (peak: 121.9M)
+        CPU: 4.204s
+     CGroup: /user.slice/user-1000.slice/user@1000.service/app.slice/exchange-q-primary-6h.service
+             └─[0;38:5:245m415898 python3 -m exchange_q run --profile primary --view outcome --display log --study studies/btcusdt-primary-powered.json --target-eligible 360 --refresh-s 30[0m
+
+Jul 31 06:12:53 alihpmanj systemd[9383]: Started [systemd-run] /home/manjaruhp/Pictures/Autonomous-AI-june2026/Exchange-Q/scripts/exchange-q run --profile primary --view outcome --display log --study studies/btcusdt-primary-powered.json --target-eligible 360 --refresh-s 30.

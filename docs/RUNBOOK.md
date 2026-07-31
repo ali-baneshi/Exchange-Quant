@@ -181,6 +181,47 @@ moments; comparator remains `regularized_logistic_v1`):
 Primary runs continue until `target_eligible` scoreable slots are collected (no
 diagnostic slot cap).
 
+## Operator: foreground only
+
+Primary soaks are foreground-only. One terminal runs the soak **and** shows the
+live dashboard/log. There is no separate systemd unit and no need to hunt for a
+`RUN_ID` just to monitor progress.
+
+- Do **not** install or start systemd user units for soaks.
+- Do **not** run two KuCoin primary soaks on the same symbol concurrently.
+- Run `report` / `analyze` only after the run ends (the FINAL line prints the
+  exact commands).
+- `--hours N` sets `target_eligible = int(N * 60)` for 60s-cadence studies;
+  an explicit `--target-eligible` always wins if both are passed.
+- `--hours 6` is a **scoreable-slot budget** (360), not a wall-clock timer.
+  Slots with fewer than `minimum_label_trades` (30) resolve as
+  `insufficient_label_trades` and do **not** count toward the budget, so wall
+  time can exceed six hours when trade flow is quiet.
+- Red dashboard `PROVIDER GAPS DETECTED` means **unresolved** continuity
+  defects. A recovered depth resync at connect (`sequence_gaps` with
+  `unresolved_gaps=0`) is not a red WARN.
+
+Six-hour primary soak (foreground, live monitor in this terminal):
+
+```bash
+./scripts/exchange-q run --profile primary --view outcome \
+  --study studies/btcusdt-primary-powered.json \
+  --hours 6 \
+  --refresh-s 1
+```
+
+Short smoke (few scoreable slots):
+
+```bash
+./scripts/exchange-q run --profile primary --view outcome \
+  --study studies/btcusdt-primary-powered.json \
+  --target-eligible 2 \
+  --refresh-s 1
+```
+
+Press `Ctrl-C` to stop. Open slots are cancelled atomically before the run
+terminates.
+
 ### Step 7 — Analyze
 
 ```bash
