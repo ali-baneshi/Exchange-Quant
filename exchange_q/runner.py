@@ -255,7 +255,7 @@ class LiveRunner:
             try:
                 if self._write_batch:
                     await self._flush_write_batch()
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001, S110
                 pass
             await self.provider.close()
             heartbeat_task.cancel()
@@ -291,13 +291,14 @@ class LiveRunner:
         health = self.provider.health()
         if self._stream_start_ms is None:
             elapsed_ms = now_ms - run_started_ms
-            if elapsed_ms >= self.FIRST_EVENT_TIMEOUT_MS:
-                if health.last_event_received_ms is None or not health.connected:
-                    raise RuntimeError(
-                        "provider_no_events_timeout: no market events "
-                        f"after {elapsed_ms}ms; "
-                        f"detail={health.detail or 'none'}"
-                    )
+            if elapsed_ms >= self.FIRST_EVENT_TIMEOUT_MS and (
+                health.last_event_received_ms is None or not health.connected
+            ):
+                raise RuntimeError(
+                    "provider_no_events_timeout: no market events "
+                    f"after {elapsed_ms}ms; "
+                    f"detail={health.detail or 'none'}"
+                )
             return
         pending = int(health.pending_events or 0)
         dropped_trades = int(getattr(health, "queue_dropped_trades", 0) or 0)
