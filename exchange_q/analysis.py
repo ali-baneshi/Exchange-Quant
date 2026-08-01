@@ -92,13 +92,51 @@ def calibration_parameters(probabilities, buy_counts, total_counts):
         family=sm.families.Binomial(),
         freq_weights=total_counts,
     )
+    intercept = slope = None
     with warnings.catch_warnings():
         warnings.simplefilter("error", PerfectSeparationWarning)
         try:
             result = model.fit()
+            intercept = float(result.params[0])
+            slope = float(result.params[1])
         except PerfectSeparationWarning:
-            return None, None
-    return float(result.params[0]), float(result.params[1])
+            intercept = slope = None
+    if (
+        intercept is not None
+        and slope is not None
+        and math.isfinite(intercept)
+        and math.isfinite(slope)
+        and slope > 0
+    ):
+        return intercept, slope
+    return _calibration_parameters_positive_slope(logits, successes, total_counts)
+
+
+def _calibration_parameters_positive_slope(logits, successes, total_counts):
+    from scipy.optimize import minimize
+
+    weights = np.asarray(total_counts, dtype=float)
+    logits = np.asarray(logits, dtype=float)
+    successes = np.asarray(successes, dtype=float)
+
+    def objective(values):
+        intercept, raw_slope = values
+        slope = math.exp(raw_slope)
+        scores = intercept + slope * logits
+        pos = np.minimum(np.maximum(1.0 / (1.0 + np.exp(-scores)), 1e-9), 1.0 - 1e-9)
+        loss = -(
+            weights * (successes * np.log(pos) + (1.0 - successes) * np.log(1.0 - pos))
+        ).sum()
+        return float(loss)
+
+    result = minimize(objective, np.array([0.0, 0.0], dtype=float), method="L-BFGS-B")
+    if not result.success or not np.all(np.isfinite(result.x)):
+        return None, None
+    intercept = float(result.x[0])
+    slope = float(math.exp(result.x[1]))
+    if slope <= 0 or not math.isfinite(intercept):
+        return None, None
+    return intercept, slope
 
 
 def paired_hac_test(losses_baseline, losses_model, max_lags: int | None = None):

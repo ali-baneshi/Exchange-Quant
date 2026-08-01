@@ -3,38 +3,38 @@
     [
       "development_prior_v1",
       [
-        0.556786703601108
+        0.3640065728370365
       ]
     ],
     [
       "regularized_logistic_v1",
       [
-        -0.13434198536905648,
-        -1.4336363242476928,
-        -0.5430350448463214,
-        2.3141847713913966e-07,
-        -5.569049287718593e-05
+        -0.320061503332713,
+        1.0003649217224346,
+        0.04651844019507738,
+        2.2267934324661543e-06,
+        -8.603398986171239e-06
       ]
     ]
   ],
-  "calibration_intercept": 0.0,
-  "calibration_rows": 3,
-  "calibration_slope": 1.0,
-  "calibration_status": "uncalibrated",
-  "dataset_hash": "1c5ed9cb487179c41d0d3ef932d83e88f29abc1f4ea5ff1c1fd706946b19ba95",
-  "development_end_ms": 1785402000000,
-  "development_rows": 11,
-  "development_start_ms": 1785400500000,
+  "calibration_intercept": -0.29377564221544306,
+  "calibration_rows": 100,
+  "calibration_slope": 1.4620406108396888e-07,
+  "calibration_status": "fitted",
+  "dataset_hash": "f7ae0557292ea177f2a266d698c8a3d2790be88ce4f7b17ed75d4a840a373917",
+  "development_end_ms": 1785512940000,
+  "development_rows": 400,
+  "development_start_ms": 1785488700000,
   "feature_policy": "causal_trade_book_v1",
   "fitting_revision": "v8r1",
   "label_policy": "half_open_streamed_trades_v1",
   "model_id": "normalized_born_v1",
   "parameters": [
-    -0.5329014408561586,
-    -1.148779410773469,
-    3.121204024344122,
-    0.8784387416286231,
-    -0.532745211006219
+    -0.32665453227216745,
+    0.9971886512106864,
+    0.040253776845245934,
+    0.03202984083218539,
+    0.06627059796266409
   ],
   "purpose": "primary"
 }

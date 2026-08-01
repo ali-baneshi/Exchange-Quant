@@ -47,8 +47,12 @@ class KucoinSequencedProvider:
         self._closed = False
         self._connected = False
         self._socket = None
-        self._queue: asyncio.Queue | None = None
+        self._trade_queue: asyncio.Queue | None = None
+        self._book_slot: dict[str, Any] | None = None
+        self._wake: asyncio.Event | None = None
+        self._stream_end_pending = False
         self._last_event_received_ms: int | None = None
+        self._last_ws_received_ms: int | None = None
         self._reconnects = 0
         self._sequence_gaps = 0
         self._trade_sequence_gaps = 0
@@ -73,10 +77,13 @@ class KucoinSequencedProvider:
         self._depth = KucoinDepthBook()
         self._symbol = ""
         self._last_published_book: tuple[Decimal, Decimal, Decimal, Decimal] | None = None
-        self._dropped_queue_messages = 0
+        self._queue_dropped_trades = 0
+        self._queue_dropped_books = 0
+        self._pending_trade_gaps: list[dict[str, Any]] = []
         self._depth_ready = False
         self._depth_bootstrap_buffer: list[dict[str, Any]] = []
         self._depth_bootstrap_limit = 2_000
+        self._trade_queue_maxsize = 4096
 
     def set_capture_hooks(self, hooks: CaptureHooks) -> None:
         self._capture_hooks = hooks
@@ -122,14 +129,17 @@ class KucoinSequencedProvider:
                     self._last_published_book = None
                     self._depth_ready = False
                     self._depth_bootstrap_buffer = []
-                    # Slim envelopes only: raw level2 payloads are huge; bounding
-                    # alone is not enough when each queued dict is 100KB+.
-                    queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=512)
-                    self._queue = queue
-                    pump = asyncio.create_task(self._pump(socket, queue))
+                    self._stream_end_pending = False
+                    self._book_slot = None
+                    self._wake = asyncio.Event()
+                    trade_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(
+                        maxsize=self._trade_queue_maxsize
+                    )
+                    self._trade_queue = trade_queue
+                    pump = asyncio.create_task(self._pump(socket))
                     ping = asyncio.create_task(self._ping_loop(socket, ping_interval_s))
                     try:
-                        await self._wait_for_welcome(queue)
+                        await self._wait_for_welcome()
                         await self._subscribe(
                             socket,
                             (
@@ -139,9 +149,10 @@ class KucoinSequencedProvider:
                         )
                         await self._sample_clock()
                         await self._load_depth_snapshot(market_symbol)
-                        await self._finish_depth_bootstrap(queue, session_id)
+                        await self._finish_depth_bootstrap(session_id)
                         while not self._closed:
-                            message = await queue.get()
+                            self._flush_pending_trade_gaps()
+                            message = await self._next_envelope()
                             received_ms = int(time.time() * 1000)
                             message_type = message.get("type")
                             if message_type in {"provider_close", "provider_stream_end"}:
@@ -218,20 +229,15 @@ class KucoinSequencedProvider:
                     )
             finally:
                 self._socket = None
-        self._queue = None
+        self._trade_queue = None
+        self._book_slot = None
+        self._wake = None
         self._connected = False
 
     async def close(self) -> None:
         self._closed = True
         self._connected = False
-        queue = self._queue
-        if queue is not None:
-            # Unblock events()/pump waiters so certification and runner shutdown
-            # cannot hang on queue.get() after the socket is closed.
-            try:
-                queue.put_nowait({"type": "provider_close"})
-            except Exception:  # noqa: BLE001, S110
-                pass
+        self._offer_control({"type": "provider_close"})
         if self._socket is not None:
             try:
                 await asyncio.wait_for(self._socket.close(), timeout=5.0)
@@ -245,6 +251,11 @@ class KucoinSequencedProvider:
             self._clock_uncertainty_ms is not None
             and self._clock_uncertainty_ms <= self._max_clock_uncertainty_ms
         )
+        pending = 0
+        if self._trade_queue is not None:
+            pending += self._trade_queue.qsize()
+        if self._book_slot is not None:
+            pending += 1
         return ProviderHealth(
             connected=self._connected,
             last_event_received_ms=self._last_event_received_ms,
@@ -257,11 +268,14 @@ class KucoinSequencedProvider:
             unresolved_gaps=self._unresolved_gaps,
             trade_sequence_gaps=self._trade_sequence_gaps,
             book_sequence_gaps=self._book_sequence_gaps,
-            pending_events=self._queue.qsize() if self._queue is not None else 0,
+            pending_events=pending,
             clock_offset_ms=self._clock_offset_ms,
             clock_uncertainty_ms=self._clock_uncertainty_ms,
             trade_watermark_ms=self._trade_watermark_ms,
             book_watermark_ms=self._book_watermark_ms,
+            last_ws_received_ms=self._last_ws_received_ms,
+            queue_dropped_trades=self._queue_dropped_trades,
+            queue_dropped_books=self._queue_dropped_books,
         )
 
     async def _bullet_endpoint(self) -> tuple[str, float]:
@@ -273,11 +287,11 @@ class KucoinSequencedProvider:
         connect_id = uuid.uuid4().hex
         return f"{endpoint}?token={token}&connectId={connect_id}", ping_interval_s
 
-    async def _wait_for_welcome(self, queue: asyncio.Queue) -> None:
+    async def _wait_for_welcome(self) -> None:
         deadline = time.monotonic() + 10.0
         while time.monotonic() < deadline:
             remaining = deadline - time.monotonic()
-            message = await asyncio.wait_for(queue.get(), timeout=remaining)
+            message = await asyncio.wait_for(self._next_envelope(), timeout=remaining)
             if message.get("type") == "welcome":
                 return
         raise TimeoutError("KuCoin websocket welcome timeout")
@@ -302,22 +316,123 @@ class KucoinSequencedProvider:
             }
             await socket.send(json.dumps(message))
 
-    def _offer(self, queue: asyncio.Queue, item: dict[str, Any]) -> bool:
-        """Never block the WS reader: a full queue must drop, not buffer in RAM."""
+    def _signal_wake(self) -> None:
+        wake = self._wake
+        if wake is not None:
+            wake.set()
+
+    def _offer_control(self, item: dict[str, Any]) -> None:
+        queue = self._trade_queue
+        if queue is None:
+            self._signal_wake()
+            return
         try:
             queue.put_nowait(item)
-            return True
         except asyncio.QueueFull:
-            self._dropped_queue_messages += 1
-            self._detail = (
-                f"queue_drop count={self._dropped_queue_messages} "
-                f"pending={queue.qsize()}"
-            )
-            return False
+            if item.get("type") in {"provider_stream_end", "provider_close"}:
+                self._stream_end_pending = True
+                if item.get("type") == "provider_close":
+                    self._closed = True
+        self._signal_wake()
 
-    async def _pump(self, socket, queue: asyncio.Queue) -> None:
+    def _offer_book(self, item: dict[str, Any]) -> None:
+        if self._book_slot is not None:
+            self._queue_dropped_books += 1
+            pending = 1 + (self._trade_queue.qsize() if self._trade_queue is not None else 0)
+            self._detail = (
+                f"queue_drop books={self._queue_dropped_books} "
+                f"trades={self._queue_dropped_trades} pending={pending}"
+            )
+        self._book_slot = item
+        self._signal_wake()
+
+    def _offer_trade_message(self, message: dict[str, Any]) -> None:
+        queue = self._trade_queue
+        if queue is None:
+            return
+        try:
+            queue.put_nowait(message)
+            self._signal_wake()
+            return
+        except asyncio.QueueFull:
+            pass
+        self._queue_dropped_trades += 1
+        self._unresolved_gaps += 1
+        received_ms = int(time.time() * 1000)
+        data = message.get("data") or {}
+        trade_ms = _kucoin_timestamp_ms(data.get("time"), received_ms)
+        start_ms = self._trade_watermark_ms if self._trade_watermark_ms is not None else trade_ms
+        end_ms = max(start_ms + 1, trade_ms, received_ms)
+        self._pending_trade_gaps.append(
+            {
+                "start_ms": start_ms,
+                "end_ms": end_ms,
+                "first_sequence": self._last_trade_sequence,
+                "last_sequence": int(data["sequence"]) if data.get("sequence") is not None else None,
+            }
+        )
+        self._detail = (
+            f"queue_drop_trade count={self._queue_dropped_trades} "
+            f"books_coalesced={self._queue_dropped_books} pending={queue.qsize()}"
+        )
+        self._signal_wake()
+
+    def _flush_pending_trade_gaps(self) -> None:
+        if not self._pending_trade_gaps or not self._symbol:
+            return
+        pending = self._pending_trade_gaps
+        self._pending_trade_gaps = []
+        for gap in pending:
+            self._record_gap(
+                self._symbol,
+                "trades",
+                int(gap["start_ms"]),
+                int(gap["end_ms"]),
+                complete=False,
+                first_sequence=gap.get("first_sequence"),
+                last_sequence=gap.get("last_sequence"),
+                reasons=("queue_drop_trade",),
+            )
+
+    async def _next_envelope(self) -> dict[str, Any]:
+        while True:
+            if self._stream_end_pending:
+                self._stream_end_pending = False
+                return {"type": "provider_stream_end"}
+            queue = self._trade_queue
+            if queue is not None:
+                try:
+                    return queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    pass
+            if self._book_slot is not None:
+                item = self._book_slot
+                self._book_slot = None
+                return item
+            wake = self._wake
+            if wake is None:
+                await asyncio.sleep(0.01)
+                continue
+            wake.clear()
+            if self._stream_end_pending:
+                self._stream_end_pending = False
+                return {"type": "provider_stream_end"}
+            if queue is not None:
+                try:
+                    return queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    pass
+            if self._book_slot is not None:
+                item = self._book_slot
+                self._book_slot = None
+                return item
+            await wake.wait()
+
+    async def _pump(self, socket) -> None:
         try:
             async for raw_message in socket:
+                received_ms = int(time.time() * 1000)
+                self._last_ws_received_ms = received_ms
                 if isinstance(raw_message, bytes):
                     raw_message = raw_message.decode()
                 message = json.loads(raw_message)
@@ -327,21 +442,19 @@ class KucoinSequencedProvider:
                     except (ConnectionClosed, OSError):
                         break
                     continue
+                if message.get("type") == "welcome":
+                    self._offer_control(message)
+                    continue
                 if message.get("type") == "message":
                     topic = message.get("topic", "")
                     data = message.get("data") or {}
-                    received_ms = int(time.time() * 1000)
                     if topic.startswith("/market/level2:"):
                         if not self._depth_ready:
-                            # KuCoin protocol: buffer WS depth until the REST
-                            # snapshot is loaded, then apply in order.
                             if len(self._depth_bootstrap_buffer) < self._depth_bootstrap_limit:
                                 self._depth_bootstrap_buffer.append(
                                     {"data": data, "received_ms": received_ms}
                                 )
                             continue
-                        # Apply depth here so dropped queue deliveries cannot
-                        # desync the book; only enqueue slim TOB BookEvents.
                         event = await self._depth_event(
                             data,
                             self._symbol,
@@ -359,28 +472,24 @@ class KucoinSequencedProvider:
                         if tob == self._last_published_book:
                             continue
                         self._last_published_book = tob
-                        self._offer(
-                            queue,
+                        self._offer_book(
                             {
                                 "type": "book_ready",
                                 "event": event,
                                 "received_ms": received_ms,
-                            },
+                            }
                         )
                         continue
-                # Trades/control: still never block the socket reader.
-                self._offer(queue, message)
+                    if topic.startswith("/market/match:"):
+                        self._offer_trade_message(message)
+                        continue
+                self._offer_control(message)
         except ConnectionClosed:
             pass
         finally:
-            # Unblock events() so a silent WS drop reconnects instead of hanging
-            # until the runner stall watchdog.
-            try:
-                queue.put_nowait({"type": "provider_stream_end"})
-            except Exception:  # noqa: BLE001, S110
-                pass
+            self._offer_control({"type": "provider_stream_end"})
 
-    async def _finish_depth_bootstrap(self, queue: asyncio.Queue, session_id: str) -> None:
+    async def _finish_depth_bootstrap(self, session_id: str) -> None:
         buffered = self._depth_bootstrap_buffer
         self._depth_bootstrap_buffer = []
         for item in buffered:
@@ -401,13 +510,12 @@ class KucoinSequencedProvider:
             if tob == self._last_published_book:
                 continue
             self._last_published_book = tob
-            self._offer(
-                queue,
+            self._offer_book(
                 {
                     "type": "book_ready",
                     "event": event,
                     "received_ms": int(item["received_ms"]),
-                },
+                }
             )
         self._depth_ready = True
 

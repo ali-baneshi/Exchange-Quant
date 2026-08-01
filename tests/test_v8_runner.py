@@ -324,6 +324,8 @@ def test_mid_stream_stall_fails_run(tmp_path):
                 sequence_gaps=0,
                 coverage_certifiable=True,
                 clock_uncertainty_ms=5.0,
+                pending_events=0,
+                last_ws_received_ms=1,
             )
 
         async def close(self):
@@ -360,6 +362,76 @@ def test_mid_stream_stall_fails_run(tmp_path):
         runner.EVENT_POLL_TIMEOUT_S = 0.01
         runner.STALL_TIMEOUT_MS = 1
         with pytest.raises(RuntimeError, match="provider_stalled"):
+            asyncio.run(runner.run())
+        assert store.status(manifest.run_id)["status"] == "failed"
+        sessions = store.connection.execute(
+            "SELECT status FROM capture_sessions"
+        ).fetchall()
+        assert sessions
+        assert all(row["status"] == "failed" for row in sessions)
+    finally:
+        store.close()
+
+
+def test_backpressure_not_reported_as_provider_stall(tmp_path):
+    import pytest
+
+    from exchange_q.providers.base import ProviderHealth
+
+    class BackloggedProvider:
+        def __init__(self):
+            self._sent = False
+
+        def health(self):
+            now = int(time.time() * 1000)
+            return ProviderHealth(
+                connected=True,
+                last_event_received_ms=1,
+                reconnects=0,
+                sequence_gaps=0,
+                coverage_certifiable=True,
+                clock_uncertainty_ms=5.0,
+                pending_events=512,
+                last_ws_received_ms=now,
+                queue_dropped_trades=3,
+                detail="queue_drop_trade count=3",
+            )
+
+        async def close(self):
+            return None
+
+        async def events(self, symbol):
+            if not self._sent:
+                self._sent = True
+                yield _trade("only", 100, "buy")
+            while True:
+                await asyncio.sleep(60)
+                yield _trade("never", 200, "sell")
+
+    model = NormalizedBornModel()
+    artifact = ModelArtifact(model.model_id, (0.0, 0.5, 1.0, 0.0, 1.0), 10)
+    manifest = RunManifest(
+        run_id="backpressure-run",
+        symbol="btcusdt",
+        provider="replay",
+        model_artifact_hash=artifact.artifact_hash,
+        feature_policy="causal_trade_book_v1",
+        label_policy="half_open_streamed_trades_v1",
+        primary_metric="per_trade_negative_log_likelihood",
+        horizon_ms=1000,
+        lookback_ms=1000,
+        cadence_ms=1000,
+        minimum_label_trades=2,
+        target_eligible=5,
+    )
+    store = V7Store(str(tmp_path / "backpressure.sqlite3"))
+    store.create_run(manifest)
+    try:
+        runner = LiveRunner(store, BackloggedProvider(), manifest, artifact)
+        runner.EVENT_POLL_TIMEOUT_S = 0.01
+        runner.BACKPRESSURE_TIMEOUT_MS = 1
+        runner.STALL_TIMEOUT_MS = 1
+        with pytest.raises(RuntimeError, match="consumer_backpressure"):
             asyncio.run(runner.run())
         assert store.status(manifest.run_id)["status"] == "failed"
     finally:

@@ -199,6 +199,17 @@ def format_research_report(
                     f"  Brier={_fmt(baseline.get('brier'))}"
                     f"{delta_text}"
                 )
+            flow = baselines.get("flow_persistence_v1") or {}
+            if (
+                model_nll is not None
+                and flow.get("negative_log_likelihood") is not None
+            ):
+                flow_delta = float(model_nll) - float(flow["negative_log_likelihood"])
+                verdict = "beats" if flow_delta < 0 else "loses_to"
+                lines.append(
+                    f"  sanity vs flow_persistence_v1: {verdict}"
+                    f"  ΔNLL={_fmt(flow_delta)}"
+                )
         inference = document.get("paired_inference") or {}
         if inference.get("hac"):
             hac = inference["hac"]

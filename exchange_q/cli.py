@@ -200,6 +200,14 @@ def _parser() -> argparse.ArgumentParser:
         default=15.0,
         help="websocket soak duration for --connectivity-test",
     )
+    doctor.add_argument(
+        "--holdout-dataset",
+        help="development dataset JSON for Born vs baseline holdout gating",
+    )
+    doctor.add_argument(
+        "--capture-database",
+        help="reference capture DB used to estimate scoreable fraction / wall-clock",
+    )
 
     certification = subparsers.add_parser(
         "provider-certify",
@@ -351,6 +359,12 @@ def _run_command(parser: argparse.ArgumentParser, args) -> int:
     if args.profile == "primary":
         if artifact.purpose != "primary":
             parser.error("primary runs reject diagnostic or unproven artifacts")
+        if artifact.calibration_status != "fitted":
+            parser.error("primary runs require a fitted-calibration artifact")
+        if artifact.calibration_rows < PRIMARY_MIN_CALIBRATION_ROWS:
+            parser.error(
+                f"primary runs require calibration_rows>={PRIMARY_MIN_CALIBRATION_ROWS}"
+            )
         certification = _validate_certification(parser, study, profile)
     if args.hours is not None and args.hours <= 0:
         parser.error("--hours must be positive")
@@ -367,6 +381,19 @@ def _run_command(parser: argparse.ArgumentParser, args) -> int:
             f"{args.profile} runs require a positive target_eligible "
             "(set it in the study or pass --target-eligible / --hours)"
         )
+    if args.profile == "primary" and int(target_eligible) >= 360:
+        holdout_dataset = study.get("development_dataset")
+        if not holdout_dataset or not os.path.isfile(holdout_dataset):
+            parser.error(
+                "six-hour primary soaks require study.development_dataset "
+                "for holdout gating; run doctor --profile primary first"
+            )
+        holdout = _doctor_holdout_gate(artifact, holdout_dataset)
+        if not holdout.get("passed"):
+            parser.error(
+                "six-hour primary soak blocked by holdout gate: "
+                f"{holdout.get('reason') or holdout}"
+            )
     manifest = RunManifest(
         run_id=run_id,
         symbol=(args.symbol or study.get("symbol") or profile.symbol).lower(),
@@ -484,6 +511,10 @@ async def _run_foreground(runner: LiveRunner, console: RunConsole) -> None:
                 raise
 
 
+PRIMARY_MIN_ROWS = 500
+PRIMARY_MIN_CALIBRATION_ROWS = 50
+
+
 def _fit_artifact(
     dataset: str,
     output: str,
@@ -502,8 +533,11 @@ def _fit_artifact(
         rows = payload
         with open(dataset, "rb") as handle:
             dataset_hash = hashlib.sha256(handle.read()).hexdigest()
-    if purpose == "primary" and len(rows) < 10:
-        raise ValueError("primary artifacts require a larger certified development dataset")
+    if purpose == "primary" and len(rows) < PRIMARY_MIN_ROWS:
+        raise ValueError(
+            f"primary artifacts require at least {PRIMARY_MIN_ROWS} certified "
+            f"development rows (got {len(rows)})"
+        )
     model = NormalizedBornModel()
     fit_rows = rows
     calibration_rows = 0
@@ -513,6 +547,11 @@ def _fit_artifact(
             raise ValueError("primary artifacts require an independent calibration split")
         fit_rows = rows[:split_index]
         calibration_rows = len(rows) - split_index
+        if calibration_rows < PRIMARY_MIN_CALIBRATION_ROWS:
+            raise ValueError(
+                f"primary artifacts require at least {PRIMARY_MIN_CALIBRATION_ROWS} "
+                f"calibration rows (got {calibration_rows})"
+            )
     artifact = model.fit(
         [FeatureWindow.from_record(row["feature"]) for row in fit_rows],
         [int(row["buy_count"]) for row in fit_rows],
@@ -542,15 +581,147 @@ def _fit_artifact(
             and math.isfinite(slope)
             and slope > 0
         )
+        if not calibration_fitted:
+            raise ValueError(
+                "primary artifacts require a successful calibration fit "
+                "(need diverse holdout probabilities and positive slope)"
+            )
         artifact = replace(
             artifact,
-            calibration_intercept=intercept if calibration_fitted else 0.0,
-            calibration_slope=slope if calibration_fitted else 1.0,
+            calibration_intercept=intercept,
+            calibration_slope=slope,
             calibration_rows=calibration_rows,
-            calibration_status="fitted" if calibration_fitted else "uncalibrated",
+            calibration_status="fitted",
         )
     save_artifact(output, artifact)
     return artifact, len(rows)
+
+
+
+def _holdout_baseline_scores(artifact, rows: list[dict]) -> dict[str, float]:
+    model = NormalizedBornModel()
+    scores = {
+        "born_nll": 0.0,
+        "flow_persistence_nll": 0.0,
+        "development_prior_nll": 0.0,
+        "regularized_logistic_nll": 0.0,
+        "total_trades": 0,
+    }
+    prior = artifact.baseline_map.get("development_prior_v1", (0.5,))[0]
+    logistic = artifact.baseline_map.get("regularized_logistic_v1")
+    for row in rows:
+        feature = FeatureWindow.from_record(row["feature"])
+        buy = int(row["buy_count"])
+        total = int(row["total_count"])
+        if total <= 0:
+            continue
+        forecast = model.predict(feature, artifact)
+        born_p = min(1.0 - 1e-9, max(1e-9, forecast.probability_buy))
+        flow_p = min(1.0 - 1e-9, max(1e-9, float(feature.buy_ratio)))
+        prior_p = min(1.0 - 1e-9, max(1e-9, float(prior)))
+        if logistic:
+            logistic_p = min(
+                1.0 - 1e-9,
+                max(1e-9, NormalizedBornModel._logistic_probability(feature, logistic)),
+            )
+        else:
+            logistic_p = prior_p
+        sell = total - buy
+        scores["born_nll"] += -(buy * math.log(born_p) + sell * math.log(1.0 - born_p))
+        scores["flow_persistence_nll"] += -(
+            buy * math.log(flow_p) + sell * math.log(1.0 - flow_p)
+        )
+        scores["development_prior_nll"] += -(
+            buy * math.log(prior_p) + sell * math.log(1.0 - prior_p)
+        )
+        scores["regularized_logistic_nll"] += -(
+            buy * math.log(logistic_p) + sell * math.log(1.0 - logistic_p)
+        )
+        scores["total_trades"] += total
+    if scores["total_trades"] <= 0:
+        raise ValueError("holdout split contained no trades")
+    for key in (
+        "born_nll",
+        "flow_persistence_nll",
+        "development_prior_nll",
+        "regularized_logistic_nll",
+    ):
+        scores[key] = scores[key] / scores["total_trades"]
+    return scores
+
+
+def _doctor_holdout_gate(artifact, dataset_path: str) -> dict:
+    with open(dataset_path, encoding="utf-8") as handle:
+        payload = json.load(handle)
+    rows = payload["rows"] if isinstance(payload, dict) and "rows" in payload else payload
+    if len(rows) < PRIMARY_MIN_ROWS:
+        return {
+            "passed": False,
+            "reason": f"holdout dataset has {len(rows)} rows; need {PRIMARY_MIN_ROWS}",
+        }
+    split_index = max(1, int(len(rows) * 0.8))
+    calibration_rows = rows[split_index:]
+    try:
+        scores = _holdout_baseline_scores(artifact, calibration_rows)
+    except ValueError as exc:
+        return {"passed": False, "reason": str(exc)}
+    beats_prior = scores["born_nll"] <= scores["development_prior_nll"]
+    beats_flow = scores["born_nll"] <= scores["flow_persistence_nll"]
+    return {
+        "passed": beats_prior and beats_flow,
+        "scores": scores,
+        "beats_development_prior": beats_prior,
+        "beats_flow_persistence": beats_flow,
+        "reason": (
+            None
+            if beats_prior and beats_flow
+            else "Born holdout NLL must beat development_prior and flow_persistence"
+        ),
+    }
+
+
+def _estimate_scoreable_fraction(
+    capture_database: str,
+    provider: str,
+    symbol: str,
+    minimum_label_trades: int,
+) -> float | None:
+    store = V7Store(capture_database)
+    try:
+        if store.schema_version < 8:
+            return None
+        cadence_ms = 60_000
+        bounds = store.connection.execute(
+            """
+            SELECT MIN(exchange_time_ms), MAX(exchange_time_ms)
+            FROM trades WHERE provider=? AND symbol=?
+            """,
+            (provider, symbol.lower()),
+        ).fetchone()
+        if not bounds or bounds[0] is None:
+            return None
+        start = ((int(bounds[0]) + cadence_ms - 1) // cadence_ms) * cadence_ms
+        end = int(bounds[1])
+        total = 0
+        scoreable = 0
+        for target_start in range(start + 300_000, end, cadence_ms):
+            target_end = target_start + cadence_ms
+            if target_end > end:
+                break
+            if store.interval_has_unresolved_gap(
+                provider, symbol.lower(), target_start - 300_000, target_end
+            ):
+                continue
+            label = store.build_label(provider, symbol.lower(), target_start, target_end)
+            total += 1
+            if label.coverage_complete and label.trade_count >= minimum_label_trades:
+                scoreable += 1
+        if total == 0:
+            return None
+        return scoreable / total
+    finally:
+        store.close()
+
 
 
 def _value_or_default(value, default):
@@ -669,6 +840,8 @@ async def _doctor(parser, args) -> int:
             "certification_exists": os.path.isfile(certification_path),
             "target_eligible": study["target_eligible"],
             "provider": provider_name,
+            "systemd_forbidden": True,
+            "foreground_only": True,
         }
         checks["ready"] = all(
             (
@@ -678,8 +851,49 @@ async def _doctor(parser, args) -> int:
             )
         )
         if checks["artifact_exists"]:
-            checks["artifact_purpose"] = load_artifact(artifact_path).purpose
-            checks["ready"] = checks["ready"] and checks["artifact_purpose"] == "primary"
+            artifact = load_artifact(artifact_path)
+            checks["artifact_purpose"] = artifact.purpose
+            checks["calibration_status"] = artifact.calibration_status
+            checks["development_rows"] = artifact.development_rows
+            checks["calibration_rows"] = artifact.calibration_rows
+            checks["ready"] = (
+                checks["ready"]
+                and artifact.purpose == "primary"
+                and artifact.calibration_status == "fitted"
+                and artifact.development_rows >= int(PRIMARY_MIN_ROWS * 0.8)
+                and artifact.calibration_rows >= PRIMARY_MIN_CALIBRATION_ROWS
+            )
+            holdout_dataset = study.get("development_dataset") or getattr(
+                args, "holdout_dataset", None
+            )
+            if holdout_dataset and os.path.isfile(holdout_dataset):
+                holdout = _doctor_holdout_gate(artifact, holdout_dataset)
+                checks["holdout"] = holdout
+                checks["ready"] = checks["ready"] and holdout.get("passed", False)
+            elif int(checks["target_eligible"]) >= 360:
+                checks["holdout"] = {
+                    "passed": False,
+                    "reason": (
+                        "six-hour soaks require study.development_dataset "
+                        "for Born vs flow_persistence holdout gating"
+                    ),
+                }
+                checks["ready"] = False
+        capture_database = study.get("reference_capture_database") or getattr(
+            args, "capture_database", None
+        )
+        if capture_database and os.path.isfile(capture_database):
+            fraction = _estimate_scoreable_fraction(
+                capture_database,
+                provider_name,
+                study.get("symbol") or PRIMARY_PROFILE.symbol,
+                int(study.get("minimum_label_trades") or PRIMARY_PROFILE.minimum_label_trades),
+            )
+            checks["expected_scoreable_fraction"] = fraction
+            if fraction is not None and fraction > 0:
+                checks["expected_wall_clock_hours"] = (
+                    int(checks["target_eligible"]) / 60.0
+                ) / fraction
     if args.connectivity_test:
         if provider_name == "htx-ws":
             checks["connectivity"] = {

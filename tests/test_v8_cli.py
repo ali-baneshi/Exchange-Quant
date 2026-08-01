@@ -247,7 +247,16 @@ def _write_primary_study(tmp_path, *, target_eligible=5, artifact_path=None):
         artifact_path = tmp_path / "primary-artifact.json"
         save_artifact(
             str(artifact_path),
-            ModelArtifact("normalized_born_v1", (0.1, -0.2, 0.05, 0.01, 0.3), 100, purpose="primary"),
+            ModelArtifact(
+                "normalized_born_v1",
+                (0.1, -0.2, 0.05, 0.01, 0.3),
+                400,
+                purpose="primary",
+                calibration_status="fitted",
+                calibration_rows=100,
+                calibration_intercept=0.0,
+                calibration_slope=1.0,
+            ),
         )
     certification_path = tmp_path / "certification.json"
     certification_path.write_text(
@@ -311,6 +320,16 @@ def test_run_hours_sets_target_eligible_for_60s_cadence(tmp_path, monkeypatch):
 
     _patch_run_harness(monkeypatch, cli)
     study = _write_primary_study(tmp_path, target_eligible=7)
+    dataset = tmp_path / "holdout.json"
+    dataset.write_text("{}", encoding="utf-8")
+    document = json.loads(study.read_text(encoding="utf-8"))
+    document["development_dataset"] = str(dataset)
+    study.write_text(json.dumps(document), encoding="utf-8")
+    monkeypatch.setattr(
+        cli,
+        "_doctor_holdout_gate",
+        lambda *_args, **_kwargs: {"passed": True, "reason": None},
+    )
     database = tmp_path / "hours.sqlite3"
     exit_code = cli.main(
         [
@@ -609,7 +628,7 @@ def test_stop_run_force_path_cancels_open_slots(tmp_path, monkeypatch):
         store.close()
 
 
-def _calibration_dataset_rows(count=60):
+def _calibration_dataset_rows(count=500):
     rows = []
     for index in range(count):
         group = index % 2
@@ -651,9 +670,9 @@ def test_fit_calibrates_on_split_and_analyze_reports_availability(tmp_path):
     dataset.write_text(json.dumps(_calibration_dataset_rows()), encoding="utf-8")
     output = tmp_path / "artifact.json"
     artifact, row_count = cli._fit_artifact(str(dataset), str(output), purpose="primary")
-    assert row_count == 60
+    assert row_count == 500
     assert artifact.calibration_status == "fitted"
-    assert artifact.calibration_rows == 12
+    assert artifact.calibration_rows == 100
     assert artifact.calibration_slope > 0
     assert (artifact.calibration_intercept, artifact.calibration_slope) != (0.0, 1.0)
     loaded = load_artifact(str(output))

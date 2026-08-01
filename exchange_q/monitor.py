@@ -131,6 +131,10 @@ class RunConsole:
             "clock_uncertainty_ms": health.clock_uncertainty_ms,
             "trade_watermark_ms": health.trade_watermark_ms,
             "book_watermark_ms": health.book_watermark_ms,
+            "pending_events": health.pending_events,
+            "last_ws_received_ms": getattr(health, "last_ws_received_ms", None),
+            "queue_dropped_trades": getattr(health, "queue_dropped_trades", 0),
+            "queue_dropped_books": getattr(health, "queue_dropped_books", 0),
         }
         self._previous = snapshot
         return snapshot
@@ -190,11 +194,16 @@ class RunConsole:
             or previous_health["connected"] != provider_health["connected"]
             or previous_health["reconnects"] != provider_health["reconnects"]
             or previous_health["sequence_gaps"] != provider_health["sequence_gaps"]
+            or previous_health.get("queue_dropped_trades")
+            != provider_health.get("queue_dropped_trades")
+            or previous_health.get("pending_events") != provider_health.get("pending_events")
         ):
             print(
                 f"[exchange-q] PROVIDER connected={provider_health['connected']} "
                 f"reconnects={provider_health['reconnects']} "
                 f"gaps={provider_health['sequence_gaps']} "
+                f"pending={provider_health.get('pending_events', 0)} "
+                f"drop_trades={provider_health.get('queue_dropped_trades', 0)} "
                 f"detail={provider_health['detail'] or '-'}",
                 flush=True,
             )
@@ -638,6 +647,10 @@ def format_monitor_report(
             f"CAPTURE  reconnects {provider.get('reconnects', 0)}"
             f" | detected gaps {provider.get('sequence_gaps', 0)}"
             f" | unresolved gaps {provider.get('unresolved_gaps', 0)}"
+            f" | pending {provider.get('pending_events', 0)}"
+            f" | drop trades/books "
+            f"{provider.get('queue_dropped_trades', 0)}/"
+            f"{provider.get('queue_dropped_books', 0)}"
             f" | clock uncertainty "
             f"{_format_decimal(provider.get('clock_uncertainty_ms'), 1)}ms"
         )
@@ -936,16 +949,35 @@ def _phase(run_status: str, slot: dict[str, Any] | None) -> str:
 
 
 def _estimate_remaining_seconds(snapshot: dict[str, Any]) -> float | None:
+    if snapshot["status"] != "running":
+        return None
+    manifest = snapshot["manifest"]
+    cadence_s = manifest["cadence_ms"] / 1000
+    horizon_s = manifest["horizon_ms"] / 1000
+    now = snapshot["observed_at_ms"]
+    current = snapshot["current_slot"]
+    if manifest.get("mode") == "primary":
+        scoreable = snapshot["eligible_progress"]["eligible"]
+        target = snapshot["eligible_progress"]["target"]
+        remaining_scoreable = max(0, target - scoreable)
+        if remaining_scoreable == 0:
+            return 0
+        elapsed_s = max(1.0, (snapshot["updated_at_ms"] - snapshot["created_at_ms"]) / 1000)
+        if scoreable > 0:
+            return remaining_scoreable * (elapsed_s / scoreable)
+        tally = snapshot.get("slot_tally") or _slot_tally(snapshot.get("forecast_counts", {}))
+        resolved = tally.get("scoreable", 0) + tally.get("unscoreable", 0)
+        if resolved > 0:
+            fraction = tally.get("scoreable", 0) / resolved
+            if fraction > 0:
+                return remaining_scoreable * cadence_s / fraction
+        return remaining_scoreable * cadence_s * 1.5
     limit = snapshot["terminal_slot_limit"]
-    if limit is None or snapshot["status"] != "running":
+    if limit is None:
         return None
     remaining = max(0, limit - snapshot["terminal_slots"])
     if remaining == 0:
         return 0
-    now = snapshot["observed_at_ms"]
-    current = snapshot["current_slot"]
-    cadence_s = snapshot["manifest"]["cadence_ms"] / 1000
-    horizon_s = snapshot["manifest"]["horizon_ms"] / 1000
     if current and current["status"] in {
         ForecastStatus.FORECASTED,
         ForecastStatus.AWAITING_LABEL,
@@ -976,10 +1008,22 @@ def _warning_line(snapshot: dict[str, Any], color: bool) -> str:
             f"{_integrity_label(name)}={count}" for name, count in integrity["error_codes"].items()
         )
         return f"WARN  {_style('RUN QUARANTINED', 'red', color)} | {codes}"
+    dropped_trades = int(provider.get("queue_dropped_trades") or 0)
+    if dropped_trades > 0:
+        return (
+            f"WARN  {_style('QUEUE DROP TRADES', 'red', color)}"
+            f" | dropped_trades={dropped_trades} "
+            "(continuity fail-closed; labels overlapping drops are unscoreable)"
+        )
     # Recovered sequence gaps (e.g. KuCoin depth resync that succeeded) must
     # not paint a permanent red WARN; only unresolved continuity defects do.
     if provider.get("unresolved_gaps", 0):
         return f"WARN  {_style('PROVIDER GAPS DETECTED', 'red', color)}"
+    if int(provider.get("pending_events") or 0) >= 256:
+        return (
+            f"WARN  {_style('CONSUMER BACKPRESSURE', 'yellow', color)}"
+            f" | pending={provider.get('pending_events')}"
+        )
     if snapshot["stream_state"] == "stale":
         return f"WARN  {_style('MARKET DATA IS STALE', 'red', color)}"
     if manifest.get("provider") == "htx-ws":

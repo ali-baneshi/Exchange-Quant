@@ -197,11 +197,29 @@ live dashboard/log. There is no separate systemd unit and no need to hunt for a
   Slots with fewer than `minimum_label_trades` (30) resolve as
   `insufficient_label_trades` and do **not** count toward the budget, so wall
   time can exceed six hours when trade flow is quiet.
-- Red dashboard `PROVIDER GAPS DETECTED` means **unresolved** continuity
-  defects. A recovered depth resync at connect (`sequence_gaps` with
-  `unresolved_gaps=0`) is not a red WARN.
+- Expect roughly **8–10 hours wall-clock** for a 360-scoreable soak when the
+  recent scoreable fraction is ~0.6–0.7 (see `doctor` →
+  `expected_wall_clock_hours`).
+- Red dashboard `PROVIDER GAPS DETECTED` / `QUEUE DROP TRADES` means
+  **unresolved** continuity defects. A recovered depth resync at connect
+  (`sequence_gaps` with `unresolved_gaps=0`) is not a red WARN.
+- Preflight a long soak with:
+
+```bash
+./scripts/exchange-q doctor --profile primary \
+  --study studies/btcusdt-primary-6h.json \
+  --connectivity-test
+```
 
 Six-hour primary soak (foreground, live monitor in this terminal):
+
+```bash
+./scripts/exchange-q run --profile primary --view outcome \
+  --study studies/btcusdt-primary-6h.json \
+  --refresh-s 1
+```
+
+Equivalent using the powered study plus an hours override:
 
 ```bash
 ./scripts/exchange-q run --profile primary --view outcome \

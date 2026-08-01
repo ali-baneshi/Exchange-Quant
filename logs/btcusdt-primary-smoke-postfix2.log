@@ -1,0 +1,112 @@
+[exchange-q] START run=btcusdt-primary-smoke-20260801-085051 database=runs/btcusdt-primary-smoke-20260801-085051.sqlite3 artifact=artifacts/v8/btcusdt-born.json; live monitor: this terminal (Ctrl+C stops)
+[exchange-q] EVIDENCE primary provider=kucoin-sequenced; labels scoreable only with proven capture continuity
+[exchange-q] STREAM state=no_data trades=0 books=0
+[exchange-q] PROVIDER connected=False reconnects=0 gaps=0 pending=0 drop_trades=0 detail=-
+[exchange-q] EVENT type=run_status slot=- detail=running
+[exchange-q] PROVIDER connected=True reconnects=0 gaps=0 pending=0 drop_trades=0 detail=-
+[exchange-q] STREAM state=active trades=7 books=21
+[exchange-q] EVENT type=slot_scheduled slot=1785561660000 detail={"end_ms": 1785561720000}
+[exchange-q] EVENT type=forecast_transition slot=1785561660000 detail=scheduled -> skipped
+[exchange-q] EVENT type=slot_scheduled slot=1785561720000 detail={"end_ms": 1785561780000}
+[exchange-q] EVENT type=forecast_transition slot=1785561720000 detail=scheduled -> forecasted
+[exchange-q] EVENT type=forecast_transition slot=1785561720000 detail=forecasted -> awaiting_label
+[exchange-q] EVENT type=forecast_transition slot=1785561720000 detail=awaiting_label -> resolved_unscoreable
+[exchange-q] EVENT type=slot_scheduled slot=1785561780000 detail={"end_ms": 1785561840000}
+[exchange-q] EVENT type=forecast_transition slot=1785561780000 detail=scheduled -> forecasted
+[exchange-q] EVENT type=forecast_transition slot=1785561780000 detail=forecasted -> awaiting_label
+[exchange-q] EVENT type=forecast_transition slot=1785561780000 detail=awaiting_label -> resolved_unscoreable
+[exchange-q] EVENT type=slot_scheduled slot=1785561840000 detail={"end_ms": 1785561900000}
+[exchange-q] EVENT type=forecast_transition slot=1785561840000 detail=scheduled -> forecasted
+[exchange-q] EVENT type=forecast_transition slot=1785561840000 detail=forecasted -> awaiting_label
+[exchange-q] EVENT type=forecast_transition slot=1785561840000 detail=awaiting_label -> resolved_scoreable
+[exchange-q] EVENT type=slot_scheduled slot=1785561900000 detail={"end_ms": 1785561960000}
+[exchange-q] EVENT type=forecast_transition slot=1785561900000 detail=scheduled -> forecasted
+[exchange-q] EVENT type=forecast_transition slot=1785561900000 detail=forecasted -> awaiting_label
+[exchange-q] EVENT type=forecast_transition slot=1785561900000 detail=awaiting_label -> resolved_unscoreable
+[exchange-q] EVENT type=slot_scheduled slot=1785561960000 detail={"end_ms": 1785562020000}
+[exchange-q] EVENT type=forecast_transition slot=1785561960000 detail=scheduled -> forecasted
+[exchange-q] EVENT type=forecast_transition slot=1785561960000 detail=forecasted -> awaiting_label
+[exchange-q] EVENT type=forecast_transition slot=1785561960000 detail=awaiting_label -> resolved_unscoreable
+[exchange-q] EVENT type=slot_scheduled slot=1785562020000 detail={"end_ms": 1785562080000}
+[exchange-q] EVENT type=forecast_transition slot=1785562020000 detail=scheduled -> forecasted
+[exchange-q] EVENT type=forecast_transition slot=1785562020000 detail=forecasted -> awaiting_label
+[exchange-q] EVENT type=forecast_transition slot=1785562020000 detail=awaiting_label -> resolved_unscoreable
+[exchange-q] EVENT type=slot_scheduled slot=1785562080000 detail={"end_ms": 1785562140000}
+[exchange-q] EVENT type=forecast_transition slot=1785562080000 detail=scheduled -> forecasted
+[exchange-q] EVENT type=forecast_transition slot=1785562080000 detail=forecasted -> awaiting_label
+[exchange-q] EVENT type=forecast_transition slot=1785562080000 detail=awaiting_label -> resolved_unscoreable
+[exchange-q] EVENT type=slot_scheduled slot=1785562140000 detail={"end_ms": 1785562200000}
+[exchange-q] EVENT type=forecast_transition slot=1785562140000 detail=scheduled -> forecasted
+[exchange-q] EVENT type=forecast_transition slot=1785562140000 detail=forecasted -> awaiting_label
+[exchange-q] EVENT type=forecast_transition slot=1785562140000 detail=awaiting_label -> resolved_unscoreable
+[exchange-q] EVENT type=slot_scheduled slot=1785562200000 detail={"end_ms": 1785562260000}
+[exchange-q] EVENT type=forecast_transition slot=1785562200000 detail=scheduled -> forecasted
+[exchange-q] EVENT type=forecast_transition slot=1785562200000 detail=forecasted -> awaiting_label
+[exchange-q] EVENT type=forecast_transition slot=1785562200000 detail=awaiting_label -> resolved_unscoreable
+[exchange-q] EVENT type=slot_scheduled slot=1785562260000 detail={"end_ms": 1785562320000}
+[exchange-q] EVENT type=forecast_transition slot=1785562260000 detail=scheduled -> forecasted
+[exchange-q] EVENT type=forecast_transition slot=1785562260000 detail=forecasted -> awaiting_label
+[exchange-q] EVENT type=forecast_transition slot=1785562260000 detail=awaiting_label -> resolved_unscoreable
+[exchange-q] EVENT type=slot_scheduled slot=1785562320000 detail={"end_ms": 1785562380000}
+[exchange-q] EVENT type=forecast_transition slot=1785562320000 detail=scheduled -> forecasted
+[exchange-q] EVENT type=forecast_transition slot=1785562320000 detail=forecasted -> awaiting_label
+[exchange-q] EVENT type=forecast_transition slot=1785562320000 detail=awaiting_label -> resolved_unscoreable
+[exchange-q] EVENT type=slot_scheduled slot=1785562380000 detail={"end_ms": 1785562440000}
+[exchange-q] EVENT type=forecast_transition slot=1785562380000 detail=scheduled -> forecasted
+[exchange-q] EVENT type=forecast_transition slot=1785562380000 detail=forecasted -> awaiting_label
+[exchange-q] EVENT type=forecast_transition slot=1785562380000 detail=awaiting_label -> resolved_unscoreable
+[exchange-q] EVENT type=slot_scheduled slot=1785562440000 detail={"end_ms": 1785562500000}
+[exchange-q] EVENT type=forecast_transition slot=1785562440000 detail=scheduled -> forecasted
+[exchange-q] EVENT type=forecast_transition slot=1785562440000 detail=forecasted -> awaiting_label
+[exchange-q] EVENT type=forecast_transition slot=1785562440000 detail=awaiting_label -> resolved_unscoreable
+[exchange-q] EVENT type=slot_scheduled slot=1785562500000 detail={"end_ms": 1785562560000}
+[exchange-q] EVENT type=forecast_transition slot=1785562500000 detail=scheduled -> forecasted
+[exchange-q] EVENT type=forecast_transition slot=1785562500000 detail=forecasted -> awaiting_label
+[exchange-q] EVENT type=forecast_transition slot=1785562500000 detail=awaiting_label -> resolved_unscoreable
+[exchange-q] EVENT type=slot_scheduled slot=1785562560000 detail={"end_ms": 1785562620000}
+[exchange-q] EVENT type=forecast_transition slot=1785562560000 detail=scheduled -> forecasted
+[exchange-q] EVENT type=forecast_transition slot=1785562560000 detail=forecasted -> awaiting_label
+[exchange-q] EVENT type=forecast_transition slot=1785562560000 detail=awaiting_label -> resolved_unscoreable
+[exchange-q] EVENT type=slot_scheduled slot=1785562620000 detail={"end_ms": 1785562680000}
+[exchange-q] EVENT type=forecast_transition slot=1785562620000 detail=scheduled -> forecasted
+[exchange-q] EVENT type=forecast_transition slot=1785562620000 detail=forecasted -> awaiting_label
+[exchange-q] EVENT type=forecast_transition slot=1785562620000 detail=awaiting_label -> resolved_unscoreable
+[exchange-q] EVENT type=slot_scheduled slot=1785562680000 detail={"end_ms": 1785562740000}
+[exchange-q] EVENT type=forecast_transition slot=1785562680000 detail=scheduled -> forecasted
+[exchange-q] EVENT type=forecast_transition slot=1785562680000 detail=forecasted -> awaiting_label
+[exchange-q] EVENT type=forecast_transition slot=1785562680000 detail=awaiting_label -> resolved_unscoreable
+[exchange-q] EVENT type=slot_scheduled slot=1785562740000 detail={"end_ms": 1785562800000}
+[exchange-q] EVENT type=forecast_transition slot=1785562740000 detail=scheduled -> forecasted
+[exchange-q] EVENT type=forecast_transition slot=1785562740000 detail=forecasted -> awaiting_label
+[exchange-q] PROVIDER connected=True reconnects=0 gaps=0 pending=1 drop_trades=0 detail=queue_drop books=442 trades=0 pending=1
+[exchange-q] EVENT type=forecast_transition slot=1785562740000 detail=awaiting_label -> resolved_scoreable
+[exchange-q] PROVIDER connected=False reconnects=0 gaps=0 pending=2 drop_trades=0 detail=queue_drop books=442 trades=0 pending=1
+[exchange-q] EVENT type=run_status slot=- detail=completed
+[exchange-q] FINAL status=completed terminal=19 database=runs/btcusdt-primary-smoke-20260801-085051.sqlite3
+Exchange-Q primary run finished
+status:      completed
+duration:    19m 22s
+progress:    19
+scoreable:   2/2
+slot tally:  awaiting 0 | scoreable 2 | unscoreable 16 | skipped 1 | cancelled 0
+exclusions:  insufficient_label_trades=16 | insufficient_feature_data=1
+integrity:   valid (0 errors)
+capture:     certified
+evidence:    scoreable
+run ID:      btcusdt-primary-smoke-20260801-085051
+database:    runs/btcusdt-primary-smoke-20260801-085051.sqlite3
+artifact:    artifacts/v8/btcusdt-born.json
+
+VERDICT: COMPARATIVE EVIDENCE AVAILABLE (n=2)
+  mode=primary provider=kucoin-sequenced scoreable=2/19
+  model (Born) NLL=0.720684  Brier=0.101691  MAE=0.226903
+  baselines:
+    development_prior_v1  NLL=0.763462  Brier=0.133934  ΔNLL=-0.042778
+    flow_persistence_v1  NLL=0.775722  Brier=0.132971  ΔNLL=-0.0550382
+    regularized_logistic_v1  NLL=0.765887  Brier=0.137453  ΔNLL=-0.0452036
+  sanity vs flow_persistence_v1: beats  ΔNLL=-0.0550382
+  paired inference: unavailable (requires at least three scoreable labels)
+  calibration: fitted (available=True)
+status cmd:  ./scripts/exchange-q status --database runs/btcusdt-primary-smoke-20260801-085051.sqlite3 --run-id btcusdt-primary-smoke-20260801-085051 --json
+analyze cmd: ./scripts/exchange-q analyze --database runs/btcusdt-primary-smoke-20260801-085051.sqlite3 --run-id btcusdt-primary-smoke-20260801-085051
+report cmd:  ./scripts/exchange-q report --database runs/btcusdt-primary-smoke-20260801-085051.sqlite3 --run-id btcusdt-primary-smoke-20260801-085051

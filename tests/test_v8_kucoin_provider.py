@@ -192,24 +192,75 @@ class _ClosingSocket:
 
 def test_pump_handles_connection_closed():
     provider = KucoinSequencedProvider()
-    queue = asyncio.Queue()
-    asyncio.run(provider._pump(_ClosingSocket(), queue))
-    assert queue.get_nowait() == {"type": "provider_stream_end"}
-    assert queue.empty()
+    provider._trade_queue = asyncio.Queue()
+    provider._wake = asyncio.Event()
+    asyncio.run(provider._pump(_ClosingSocket()))
+    assert provider._trade_queue.get_nowait() == {"type": "provider_stream_end"}
+    assert provider._trade_queue.empty()
 
 
-def test_offer_drops_instead_of_blocking():
+def test_books_coalesce_instead_of_blocking_trades():
     provider = KucoinSequencedProvider()
-    queue: asyncio.Queue = asyncio.Queue(maxsize=1)
-    assert provider._offer(queue, {"type": "a"}) is True
-    assert provider._offer(queue, {"type": "b"}) is False
-    assert provider._dropped_queue_messages == 1
-    assert queue.qsize() == 1
+    provider._trade_queue = asyncio.Queue(maxsize=1)
+    provider._wake = asyncio.Event()
+    provider._symbol = "btcusdt"
+    first = {"type": "book_ready", "event": object(), "received_ms": 1}
+    second = {"type": "book_ready", "event": object(), "received_ms": 2}
+    provider._offer_book(first)
+    provider._offer_book(second)
+    assert provider._queue_dropped_books == 1
+    assert provider._book_slot is second
+    provider._offer_trade_message(
+        {
+            "type": "message",
+            "topic": "/market/match:BTC-USDT",
+            "data": {"sequence": "1", "time": 100},
+        }
+    )
+    assert provider._queue_dropped_trades == 0
+    assert provider._trade_queue.qsize() == 1
+
+
+def test_trade_queue_drop_records_pending_gap():
+    provider = KucoinSequencedProvider()
+    provider._trade_queue = asyncio.Queue(maxsize=1)
+    provider._wake = asyncio.Event()
+    provider._symbol = "btcusdt"
+    provider._trade_watermark_ms = 50
+    provider._offer_trade_message(
+        {
+            "type": "message",
+            "topic": "/market/match:BTC-USDT",
+            "data": {"sequence": "1", "time": 100},
+        }
+    )
+    provider._offer_trade_message(
+        {
+            "type": "message",
+            "topic": "/market/match:BTC-USDT",
+            "data": {"sequence": "2", "time": 110},
+        }
+    )
+    assert provider._queue_dropped_trades == 1
+    assert provider._unresolved_gaps == 1
+    assert len(provider._pending_trade_gaps) == 1
+    gaps: list[tuple] = []
+
+    def _record(stream_kind, start_ms, end_ms, *, complete, first_sequence, last_sequence, reasons):
+        gaps.append((stream_kind, start_ms, end_ms, complete, reasons))
+
+    from exchange_q.capture import CaptureHooks
+
+    provider.set_capture_hooks(CaptureHooks(record_continuity_gap=_record))
+    provider._flush_pending_trade_gaps()
+    assert gaps == [("trades", 50, gaps[0][2], False, ("queue_drop_trade",))]
+    assert provider._pending_trade_gaps == []
 
 
 def test_depth_bootstrap_applies_buffered_updates_without_startup_gap():
     provider = KucoinSequencedProvider()
     provider._symbol = "btcusdt"
+    provider._wake = asyncio.Event()
     provider._depth_ready = False
     provider._depth_bootstrap_buffer = [
         {
@@ -225,13 +276,12 @@ def test_depth_bootstrap_applies_buffered_updates_without_startup_gap():
     provider._depth.load_snapshot(
         {"sequence": 100, "bids": [["99", "1"]], "asks": [["101", "1"]]}
     )
-    queue: asyncio.Queue = asyncio.Queue()
-    asyncio.run(provider._finish_depth_bootstrap(queue, "sess"))
+    asyncio.run(provider._finish_depth_bootstrap("sess"))
     assert provider._depth_ready is True
     assert provider._sequence_gaps == 0
     assert provider._unresolved_gaps == 0
     assert provider._depth.last_sequence == 102
-    assert queue.get_nowait()["type"] == "book_ready"
+    assert provider._book_slot["type"] == "book_ready"
 
 
 def test_events_reconnects_after_connection_closed(monkeypatch):

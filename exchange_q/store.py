@@ -1035,6 +1035,42 @@ class V7Store:
             }
         return summary
 
+    def set_live_capture_durability(self, enabled: bool) -> None:
+        """Use NORMAL sync while soaking; restore FULL at terminal boundaries."""
+        self._require_writable()
+        mode = "NORMAL" if enabled else "FULL"
+        self.connection.execute(f"PRAGMA synchronous={mode}")
+        if not enabled:
+            try:
+                self.connection.execute("PRAGMA wal_checkpoint(PASSIVE)")
+            except sqlite3.Error:
+                pass
+
+    def end_capture_session(self, session_id: str, status: str = "ended") -> None:
+        if status not in {"ended", "failed"}:
+            raise ValueError("capture session status must be ended or failed")
+        self.connection.execute(
+            """
+            UPDATE capture_sessions
+            SET status = ?, ended_at_ms = COALESCE(ended_at_ms, ?)
+            WHERE session_id = ? AND status = 'running'
+            """,
+            (status, int(time.time() * 1000), session_id),
+        )
+
+    def end_open_capture_sessions(self, status: str = "ended") -> int:
+        if status not in {"ended", "failed"}:
+            raise ValueError("capture session status must be ended or failed")
+        cursor = self.connection.execute(
+            """
+            UPDATE capture_sessions
+            SET status = ?, ended_at_ms = COALESCE(ended_at_ms, ?)
+            WHERE status = 'running'
+            """,
+            (status, int(time.time() * 1000)),
+        )
+        return int(cursor.rowcount)
+
     def start_capture_session(
         self,
         session_id: str,

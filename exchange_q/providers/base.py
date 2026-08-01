@@ -27,6 +27,9 @@ class ProviderHealth:
     clock_uncertainty_ms: float | None = None
     trade_watermark_ms: int | None = None
     book_watermark_ms: int | None = None
+    last_ws_received_ms: int | None = None
+    queue_dropped_trades: int = 0
+    queue_dropped_books: int = 0
 
 
 class MarketDataProvider(Protocol):

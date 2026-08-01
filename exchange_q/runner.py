@@ -25,9 +25,12 @@ class LiveRunner:
     HEARTBEAT_INTERVAL_S = 5.0
     FIRST_EVENT_TIMEOUT_MS = 60_000
     STALL_TIMEOUT_MS = 120_000
+    BACKPRESSURE_TIMEOUT_MS = 120_000
     EVENT_POLL_TIMEOUT_S = 5.0
     STATUS_CHECK_EVENT_INTERVAL = 200
     BOOK_CHECKPOINT_INTERVAL = 100
+    WRITE_BATCH_MAX_EVENTS = 64
+    WRITE_BATCH_MAX_MS = 50.0
 
     def __init__(
         self,
@@ -52,6 +55,9 @@ class LiveRunner:
         self._events_since_status_check = 0
         self._work_since_status_check = False
         self._books_since_checkpoint = 0
+        self._write_batch: list[TradeEvent | BookEvent] = []
+        self._write_batch_started_mono: float | None = None
+        self._last_consumer_progress_ms: int | None = None
         self._install_capture_hooks()
 
     def _install_capture_hooks(self) -> None:
@@ -126,6 +132,7 @@ class LiveRunner:
             ttl_ms=self.LEASE_TTL_MS,
         )
         self.store.set_run_status(self.manifest.run_id, "running")
+        self.store.set_live_capture_durability(True)
         self._restore_progress()
         self._install_signal_handlers()
         terminal_status = "stopped"
@@ -133,14 +140,10 @@ class LiveRunner:
         stream_exhausted = False
         heartbeat_task = asyncio.create_task(self._heartbeat_loop())
         run_started_ms = int(time.time() * 1000)
+        self._last_consumer_progress_ms = run_started_ms
         next_event: asyncio.Task | None = None
         try:
             events = self.provider.events(self.manifest.symbol)
-            # wait_for() cancels its awaitable on timeout. Cancelling
-            # events.__anext__() destroys the async generator, so the next
-            # pull raises StopAsyncIteration and the soak dies after any
-            # quiet spell longer than EVENT_POLL_TIMEOUT_S. Shield a durable
-            # next-event task so timeouts only wake the stall watchdog.
             next_event = asyncio.create_task(events.__anext__())
             while not self._stopping.is_set():
                 try:
@@ -149,66 +152,38 @@ class LiveRunner:
                         timeout=self.EVENT_POLL_TIMEOUT_S,
                     )
                 except StopAsyncIteration:
-                    # stop() closes the provider, which ends the generator.
-                    # Only treat a natural provider exit as stream exhaustion.
                     if not self._stopping.is_set():
                         stream_exhausted = True
                     next_event = None
                     break
                 except asyncio.TimeoutError:
-                    if self._stream_start_ms is None:
-                        elapsed_ms = int(time.time() * 1000) - run_started_ms
-                        if elapsed_ms >= self.FIRST_EVENT_TIMEOUT_MS:
-                            health = self.provider.health()
-                            if health.last_event_received_ms is None or not health.connected:
-                                raise RuntimeError(
-                                    "provider_no_events_timeout: no market events "
-                                    f"after {elapsed_ms}ms; "
-                                    f"detail={health.detail or 'none'}"
-                                )
-                    else:
-                        health = self.provider.health()
-                        last_received_ms = health.last_event_received_ms
-                        if (
-                            last_received_ms is not None
-                            and int(time.time() * 1000) - last_received_ms
-                            >= self.STALL_TIMEOUT_MS
-                        ):
-                            raise RuntimeError(
-                                "provider_stalled: no market events for "
-                                f"{int(time.time() * 1000) - last_received_ms}ms "
-                                "after stream start; "
-                                f"detail={health.detail or 'none'}"
-                            )
+                    if self._write_batch:
+                        await self._flush_write_batch()
+                    self._check_stream_watchdog(run_started_ms)
                     continue
                 next_event = asyncio.create_task(events.__anext__())
+                self._last_consumer_progress_ms = int(time.time() * 1000)
                 if self._stream_start_ms is None:
                     self._stream_start_ms = event.exchange_time_ms
-                # Raw persistence is lossless: every accepted event is stored
-                # before any scheduling decision. Boundary violations are
-                # recorded as continuity evidence, never dropped.
-                if isinstance(event, TradeEvent):
-                    with self.store.transaction():
-                        self.store.save_trade(event)
-                        self._checkpoint_event(event, "trades")
-                    self._record_boundary_violations(event)
-                elif isinstance(event, BookEvent):
-                    with self.store.transaction():
-                        self.store.save_book(event)
-                        self._books_since_checkpoint += 1
-                        if self._books_since_checkpoint >= self.BOOK_CHECKPOINT_INTERVAL:
-                            self._checkpoint_event(event, "books")
-                            self._books_since_checkpoint = 0
-                # Exchange-clock watermark only. Advancing on received time in
-                # diagnostic mode resolved labels before late exchange-time
-                # trades arrived, creating retroactive_label_trade gaps that
-                # poisoned capture databases used for dataset build.
-                await self._advance(event.exchange_time_ms)
+                self._write_batch.append(event)
+                if self._write_batch_started_mono is None:
+                    self._write_batch_started_mono = time.monotonic()
+                should_flush = (
+                    len(self._write_batch) >= self.WRITE_BATCH_MAX_EVENTS
+                    or (
+                        time.monotonic() - self._write_batch_started_mono
+                        >= self.WRITE_BATCH_MAX_MS / 1000.0
+                    )
+                )
+                if should_flush:
+                    await self._flush_write_batch()
                 self._events_since_status_check += 1
                 if (
                     self._work_since_status_check
                     or self._events_since_status_check >= self.STATUS_CHECK_EVENT_INTERVAL
                 ):
+                    if self._write_batch:
+                        await self._flush_write_batch()
                     self._work_since_status_check = False
                     self._events_since_status_check = 0
                     self.store.heartbeat(self.manifest.run_id, self.owner_id)
@@ -238,6 +213,33 @@ class LiveRunner:
                     ):
                         terminal_status = "diagnostic_limit"
                         break
+            if self._write_batch:
+                await self._flush_write_batch()
+            if terminal_status == "stopped":
+                status = self.store.status(self.manifest.run_id)
+                eligible = status["forecast_counts"].get(
+                    ForecastStatus.RESOLVED_SCOREABLE.value, 0
+                )
+                if eligible >= self.manifest.target_eligible:
+                    terminal_status = "completed"
+                    stream_exhausted = False
+                elif self.manifest.terminal_slot_limit is not None:
+                    terminal_slots = sum(
+                        status["forecast_counts"].get(slot_status, 0)
+                        for slot_status in (
+                            ForecastStatus.SKIPPED,
+                            ForecastStatus.RESOLVED_SCOREABLE,
+                            ForecastStatus.RESOLVED_UNSCOREABLE,
+                            ForecastStatus.CANCELLED,
+                            ForecastStatus.RESOLVED_ELIGIBLE,
+                            ForecastStatus.RESOLVED_INELIGIBLE,
+                            ForecastStatus.EXPIRED,
+                            ForecastStatus.FAILED,
+                        )
+                    )
+                    if terminal_slots >= self.manifest.terminal_slot_limit:
+                        terminal_status = "diagnostic_limit"
+                        stream_exhausted = False
         except Exception as exc:
             terminal_status = "failed"
             detail = f"{type(exc).__name__}: {exc}"
@@ -250,6 +252,11 @@ class LiveRunner:
                 except (asyncio.CancelledError, StopAsyncIteration):
                     pass
             self._stopping.set()
+            try:
+                if self._write_batch:
+                    await self._flush_write_batch()
+            except Exception:  # noqa: BLE001
+                pass
             await self.provider.close()
             heartbeat_task.cancel()
             heartbeat_error = None
@@ -261,6 +268,9 @@ class LiveRunner:
                 heartbeat_error = exc
                 terminal_status = "failed"
                 detail = f"{type(exc).__name__}: {exc}"
+            session_status = "ended" if terminal_status != "failed" else "failed"
+            self.store.end_open_capture_sessions(session_status)
+            self.store.set_live_capture_durability(False)
             if terminal_status in {"stopped", "failed", "completed", "diagnostic_limit"}:
                 reason = {
                     "stopped": "operator_stop_before_slot_completion",
@@ -275,6 +285,79 @@ class LiveRunner:
             self.store.release_lease(self.manifest.run_id, self.owner_id)
             if heartbeat_error is not None:
                 raise heartbeat_error
+
+    def _check_stream_watchdog(self, run_started_ms: int) -> None:
+        now_ms = int(time.time() * 1000)
+        health = self.provider.health()
+        if self._stream_start_ms is None:
+            elapsed_ms = now_ms - run_started_ms
+            if elapsed_ms >= self.FIRST_EVENT_TIMEOUT_MS:
+                if health.last_event_received_ms is None or not health.connected:
+                    raise RuntimeError(
+                        "provider_no_events_timeout: no market events "
+                        f"after {elapsed_ms}ms; "
+                        f"detail={health.detail or 'none'}"
+                    )
+            return
+        pending = int(health.pending_events or 0)
+        dropped_trades = int(getattr(health, "queue_dropped_trades", 0) or 0)
+        last_ws_ms = getattr(health, "last_ws_received_ms", None)
+        last_consumer_ms = health.last_event_received_ms or self._last_consumer_progress_ms
+        if pending > 0 or dropped_trades > 0:
+            progress_ms = self._last_consumer_progress_ms or run_started_ms
+            if now_ms - progress_ms >= self.BACKPRESSURE_TIMEOUT_MS:
+                raise RuntimeError(
+                    "consumer_backpressure: consumer idle for "
+                    f"{now_ms - progress_ms}ms with pending={pending} "
+                    f"dropped_trades={dropped_trades}; "
+                    f"detail={health.detail or 'none'}"
+                )
+            return
+        reference_ms = last_ws_ms if last_ws_ms is not None else last_consumer_ms
+        if reference_ms is not None and now_ms - reference_ms >= self.STALL_TIMEOUT_MS:
+            raise RuntimeError(
+                "provider_stalled: no market events for "
+                f"{now_ms - reference_ms}ms after stream start; "
+                f"detail={health.detail or 'none'}"
+            )
+
+    async def _flush_write_batch(self) -> None:
+        batch = self._write_batch
+        if not batch:
+            return
+        self._write_batch = []
+        self._write_batch_started_mono = None
+        book_group: list[BookEvent] = []
+
+        async def flush_books() -> None:
+            nonlocal book_group
+            if not book_group:
+                return
+            with self.store.transaction():
+                for book in book_group:
+                    self.store.save_book(book)
+                    self._books_since_checkpoint += 1
+                    if self._books_since_checkpoint >= self.BOOK_CHECKPOINT_INTERVAL:
+                        self._checkpoint_event(book, "books")
+                        self._books_since_checkpoint = 0
+            for book in book_group:
+                await self._advance(book.exchange_time_ms)
+            book_group = []
+
+        for event in batch:
+            if isinstance(event, BookEvent):
+                book_group.append(event)
+                if len(book_group) >= self.WRITE_BATCH_MAX_EVENTS:
+                    await flush_books()
+                continue
+            await flush_books()
+            if isinstance(event, TradeEvent):
+                with self.store.transaction():
+                    self.store.save_trade(event)
+                    self._checkpoint_event(event, "trades")
+                self._record_boundary_violations(event)
+                await self._advance(event.exchange_time_ms)
+        await flush_books()
 
     async def _advance(self, observed_time_ms: int) -> None:
         current_slot = self.scheduler.slot_at_or_before(observed_time_ms)

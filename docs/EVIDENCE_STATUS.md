@@ -1,27 +1,31 @@
-# Evidence Status — July 28, 2026
+# Evidence Status — August 1, 2026
 
-Exchange-Q currently has **no valid schema-v8 primary corpus**.
+Exchange-Q now has a schema-v8 primary comparative corpus, but **no proven Born
+superiority** on the pre-fix artifact.
 
-The repository now contains a schema-v8 implementation with:
+## Latest powered soak (historical)
 
-- normalized signed-imbalance Born-inspired probabilities;
-- frozen model artifacts;
-- causal half-open windows;
-- transactional forecast state;
-- fixed non-overlapping scheduling;
-- proper probabilistic scoring;
-- fail-closed provider coverage.
+Run `btcusdt-primary-20260731-123411-03adade7` (target_eligible=360):
 
-Passing tests establish software invariants, not empirical superiority.
+- wall-clock ≈ 8.5h, status=`failed` near the end (`provider_stalled` while the
+  consumer queue was full — later diagnosed as consumer backpressure + silent
+  trade drops)
+- scoreable n=329 / 506 terminal slots
+- integrity valid; capture marked certified at the time
+- Born lost to all baselines on proper scores (flow_persistence best)
+- calibration on that artifact was `uncalibrated` (14-row fit)
 
-The bundled HTX adapter is diagnostic-only because it cannot prove uninterrupted
-trade capture from the consumed stream. A primary run requires a provider adapter
-with certifiable continuity and replay fixtures validating its semantics.
+That run is comparative evidence that the previous primary artifact was not
+competitive. It is **not** a clean training corpus for future fits because trade
+queue drops were not recorded as continuity gaps in that revision.
 
-All schema-v7 and earlier results are historical diagnostics. They cannot be
-combined with schema-v8 data or used to validate the new model.
+## Current artifact gate (post-fix)
 
-No project result proves trading profitability, quantum advantage, or superiority
-over strong frozen conventional baselines. A primary run also requires a fresh,
-symbol-matched provider certification whose replay, fault, and live-soak sections
-all pass.
+- development dataset rebuilt with ≥500 certified rows
+- primary artifact must be `purpose=primary`, `calibration_status=fitted`,
+  with ≥50 calibration rows
+- `doctor --profile primary` (and six-hour runs) require a holdout gate where
+  Born NLL beats `development_prior` and `flow_persistence`
+- primary soaks are foreground-only; systemd units are forbidden by the runbook
+
+Passing unit tests establish software invariants, not trading profitability.
