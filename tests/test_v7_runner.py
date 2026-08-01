@@ -160,11 +160,11 @@ def test_terminal_slot_limit_is_a_hard_bound_during_catch_up(tmp_path):
         store.close()
 
 
-def test_live_scheduling_uses_receipt_time_to_avoid_stale_slot_catch_up(tmp_path):
+def test_live_scheduling_uses_exchange_clock_not_receipt_time(tmp_path):
     model = NormalizedBornModel()
     artifact = ModelArtifact(model.model_id, (0.0, 0.5, 1.0, 0.0, 1.0), 10)
     manifest = RunManifest(
-        run_id="receipt-clock-run",
+        run_id="exchange-clock-run",
         symbol="btcusdt",
         provider="replay",
         model_artifact_hash=artifact.artifact_hash,
@@ -198,7 +198,7 @@ def test_live_scheduling_uses_receipt_time_to_avoid_stale_slot_catch_up(tmp_path
         price=Decimal(100),
         quantity=Decimal(1),
     )
-    store = V7Store(str(tmp_path / "receipt-clock.sqlite3"))
+    store = V7Store(str(tmp_path / "exchange-clock.sqlite3"))
     store.create_run(manifest)
     try:
         asyncio.run(
@@ -216,7 +216,11 @@ def test_live_scheduling_uses_receipt_time_to_avoid_stale_slot_catch_up(tmp_path
             """,
             (manifest.run_id,),
         ).fetchall()
-        assert [(row["slot_start_ms"], row["status"]) for row in slots] == [(11_000, "skipped")]
+        # Late receipt times must not advance the watermark; only exchange
+        # time schedules the slot, which is cancelled when the short stream ends.
+        assert [(row["slot_start_ms"], row["status"]) for row in slots] == [
+            (1000, "cancelled")
+        ]
     finally:
         store.close()
 

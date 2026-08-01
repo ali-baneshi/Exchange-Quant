@@ -14,23 +14,22 @@ from typing import Any
 
 from exchange_q import IMPLEMENTATION_REVISION, SCHEMA_VERSION
 from exchange_q.domain import (
+    OPEN_SLOT_STATUSES,
+    SCOREABLE_STATUSES,
+    TERMINAL_FORECAST_STATUSES,
     BookEvent,
     EvidenceSummary,
     FeatureWindow,
     Forecast,
     ForecastStatus,
     Label,
-    OPEN_SLOT_STATUSES,
     RunManifest,
-    SCOREABLE_STATUSES,
-    TERMINAL_FORECAST_STATUSES,
     TradeEvent,
     compute_capture_quality,
     compute_evidence_status,
     forecast_created_statuses,
     resolution_statuses,
 )
-
 
 ALLOWED_TRANSITIONS = {
     ForecastStatus.SCHEDULED: {

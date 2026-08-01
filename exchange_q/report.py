@@ -3,7 +3,12 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from exchange_q.analysis import paired_block_bootstrap_test, paired_hac_test, score_baselines, score_rows
+from exchange_q.analysis import (
+    paired_block_bootstrap_test,
+    paired_hac_test,
+    score_baselines,
+    score_rows,
+)
 from exchange_q.domain import SCOREABLE_STATUSES, ForecastStatus
 from exchange_q.store import V7Store
 
@@ -236,8 +241,6 @@ def _blocked_why_lines(document: dict[str, Any]) -> list[str]:
     exclusions = document.get("exclusions") or {}
     if provider == _HTX_PROVIDER:
         lines.append("why: HTX cannot certify capture continuity")
-    elif reason and "timing integrity" in reason:
-        lines.append(f"why: {reason}")
     elif reason:
         lines.append(f"why: {reason}")
     else:

@@ -230,12 +230,12 @@ class KucoinSequencedProvider:
             # cannot hang on queue.get() after the socket is closed.
             try:
                 queue.put_nowait({"type": "provider_close"})
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001, S110
                 pass
         if self._socket is not None:
             try:
                 await asyncio.wait_for(self._socket.close(), timeout=5.0)
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001, S110
                 pass
             self._socket = None
 
@@ -377,7 +377,7 @@ class KucoinSequencedProvider:
             # until the runner stall watchdog.
             try:
                 queue.put_nowait({"type": "provider_stream_end"})
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001, S110
                 pass
 
     async def _finish_depth_bootstrap(self, queue: asyncio.Queue, session_id: str) -> None:

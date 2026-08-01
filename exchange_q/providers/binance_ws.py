@@ -149,12 +149,12 @@ class BinanceSequencedProvider:
         if queue is not None:
             try:
                 queue.put_nowait({"type": "provider_close"})
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001, S110
                 pass
         if self._socket is not None:
             try:
                 await asyncio.wait_for(self._socket.close(), timeout=5.0)
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001, S110
                 pass
             self._socket = None
 

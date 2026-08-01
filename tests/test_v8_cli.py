@@ -3,9 +3,9 @@ import json
 from argparse import Namespace
 
 from exchange_q.cli import _analysis_document, _doctor, _parser
-from exchange_q.report import _slot_summary
 from exchange_q.domain import ForecastStatus
 from exchange_q.providers.base import ProviderHealth
+from exchange_q.report import _slot_summary
 from exchange_q.store import V7Store
 
 
@@ -644,7 +644,6 @@ def test_fit_calibrates_on_split_and_analyze_reports_availability(tmp_path):
     from exchange_q import cli
     from exchange_q.artifacts import load_artifact
     from exchange_q.domain import BookEvent, RunManifest, TradeEvent
-    from exchange_q.models import NormalizedBornModel
     from exchange_q.providers.replay import ReplayProvider
     from exchange_q.runner import LiveRunner
 

@@ -465,12 +465,13 @@ async def _run_foreground(runner: LiveRunner, console: RunConsole) -> None:
                 f"{console_error}); leaving runner active",
                 flush=True,
             )
-            await runner_task
         else:
             runner.stop()
-            await runner_task
-    if runner_task in done:
-        await console_task
+        # Wait without re-raising so failed runs can surface as status=failed
+        # and exit code 2 from _run_command.
+        await asyncio.wait({runner_task})
+    elif runner_task in done and not console_task.done():
+        await asyncio.wait({console_task})
     for task in (runner_task, console_task):
         try:
             task.result()
@@ -761,7 +762,7 @@ async def _certify_provider(parser, args) -> int:
         health = provider.health()
     except asyncio.TimeoutError:
         health = provider.health()
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         health = provider.health()
         collection_error = f"{type(exc).__name__}: {exc}"
     finally:
@@ -772,7 +773,7 @@ async def _certify_provider(parser, args) -> int:
             await asyncio.wait_for(task, timeout=10.0)
         except (asyncio.TimeoutError, asyncio.CancelledError):
             pass
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             collection_error = f"{type(exc).__name__}: {exc}"
     live_soak = {
         "duration_s": args.duration_s,
